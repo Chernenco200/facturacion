@@ -1,0 +1,91 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Buscar Producto</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+<div class="container mt-4">
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productoModal">
+        Buscar Producto
+    </button>
+
+    <!-- Modal -->
+    <div class="modal fade" id="productoModal" tabindex="-1" aria-labelledby="productoModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="productoModalLabel">Buscar y Rellenar Producto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="mb-3">
+                            <label for="cod" class="form-label">Código</label>
+                            <input type="text" class="form-control" id="cod" name="cod" autocomplete="off">
+                            <div id="cod-suggestions" class="list-group mt-1"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="descripcion" class="form-label">Descripción</label>
+                            <input type="text" class="form-control" id="descripcion" name="descripcion">
+                        </div>
+                        <div class="mb-3">
+                            <label for="precio_venta" class="form-label">Precio Venta</label>
+                            <input type="number" step="0.01" class="form-control" id="precio_venta" name="precio_venta">
+                        </div>
+                        <div class="mb-3">
+                            <label for="stock" class="form-label">Stock</label>
+                            <input type="number" class="form-control" id="stock" name="stock">
+                        </div>
+                        <div class="mb-3">
+                            <label for="tipo" class="form-label">Tipo</label>
+                            <input type="text" class="form-control" id="tipo" name="tipo">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#cod').on('input', function() {
+        const query = $(this).val();
+        if (query.length > 0) {
+            $.ajax({
+                url: '/buscar-producto/',
+                method: 'GET',
+                data: { cod: query },
+                success: function(data) {
+                    let list = '';
+                    data.forEach(function(prod) {
+                        list += `<button type="button" class="list-group-item list-group-item-action" data-cod="${prod.cod}" data-descripcion="${prod.descripcion}" data-precio_venta="${prod.precio_venta}" data-stock="${prod.stock}" data-tipo="${prod.tipo}">${prod.cod} - ${prod.descripcion}</button>`;
+                    });
+                    $('#cod-suggestions').html(list);
+                }
+            });
+        } else {
+            $('#cod-suggestions').empty();
+        }
+    });
+
+    $('#cod-suggestions').on('click', '.list-group-item', function() {
+        $('#cod').val($(this).data('cod'));
+        $('#descripcion').val($(this).data('descripcion'));
+        $('#precio_venta').val($(this).data('precio_venta'));
+        $('#stock').val($(this).data('stock'));
+        $('#tipo').val($(this).data('tipo'));
+        $('#cod-suggestions').empty();
+    });
+});
+</script>
+</body>
+</html>
+

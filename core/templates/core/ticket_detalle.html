@@ -1,0 +1,71 @@
+{% extends "core/base.html" %}
+
+{% block title %}Detalle Ticket {{ ticket.numero }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <strong>Ticket N° {{ ticket.numero }}</strong>
+  </div>
+
+  <div class="card-body">
+    <div class="row mb-2">
+      <div class="col-md-6">
+        <p><strong>Cliente:</strong> {{ ticket.cliente }}</p>
+        <p><strong>Fecha:</strong> {{ ticket.fecha_emision }}</p>
+        <p><strong>Entrega:</strong> {{ ticket.fecha_entrega }}</p>
+        <p><strong>Vendedor:</strong> {{ ticket.vendedor }}</p>
+      </div>
+      <div class="col-md-6 text-end">
+        <p><strong>Total:</strong> S/ {{ ticket.total }}</p>
+        <p><strong>A cuenta:</strong> S/ {{ ticket.a_cuenta }}</p>
+        <p><strong>Saldo:</strong> S/ {{ ticket.saldo }}</p>
+        <p><strong>Puntos IC:</strong> {{ ticket.puntos_ic }}</p>
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Descripción</th>
+            <th class="text-end">Cantidad</th>
+            <th class="text-end">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in detalles %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ d.descripcion }}</td>
+            <td class="text-end">{{ d.cantidad }}</td>
+            <td class="text-end">{{ d.precio }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="text-center">
+              No hay detalles registrados
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="text-end mt-3">
+      <a href="javascript:history.back()" class="btn btn-secondary">
+        Volver
+      </a>
+      <a href="{% url 'imprimir_ticket_pdf' %}?numero={{ ticket.numero }}"
+        target="_blank"
+        class="btn btn-primary">
+        Imprimir Ticket
+      </a>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,283 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Registro de Cliente{% endblock %}
+
+{% block content %}
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<!-- jQuery UI (JS + CSS) -->
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.3/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/ui/1.13.3/jquery-ui.min.js"></script>
+
+
+
+<div class="container py-4">
+
+    <!-- Título -->
+    <div class="mb-4">
+        <h1 class="h4 mb-0">Registro de cliente y receta</h1>
+    </div>
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" id="cliente_id" name="cliente_id">
+
+        <div class="row g-4">
+
+            <!-- Columna izquierda: Datos del cliente -->
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-primary text-white py-2">
+                        <strong>Datos del cliente</strong>
+                    </div>
+                    <div class="card-body">
+
+                        {{ cliente_form.as_p }}
+
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button"
+                                    class="btn btn-outline-info btn-sm"
+                                    id="btn-buscar-dni">
+                                Buscar por DNI
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna derecha: Visión de lejos y cerca -->
+            <div class="col-lg-8">
+
+                <!-- Visión de lejos -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-light py-2">
+                        <strong>Visión de lejos</strong>
+                    </div>
+                    <div class="card-body">
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered text-center align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 8%;"></th>
+                                        <th>Esf</th>
+                                        <th>Cil</th>
+                                        <th>Eje</th>
+                                        <th>DIP</th>
+                                        <th>Add</th>
+                                        <th>AV</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>OD</strong></td>
+                                        <td>{{ medida_form.esf_lejos_OD }}</td>
+                                        <td>{{ medida_form.cil_lejos_OD }}</td>
+                                        <td>{{ medida_form.eje_lejos_OD }}</td>
+                                        <td>{{ medida_form.DIP_lejos_OD }}</td>
+                                        <td>{{ medida_form.Add_lejos_OD }}</td>
+                                        <td>{{ medida_form.AV_lejos_OD }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>OI</strong></td>
+                                        <td>{{ medida_form.esf_lejos_OI }}</td>
+                                        <td>{{ medida_form.cil_lejos_OI }}</td>
+                                        <td>{{ medida_form.eje_lejos_OI }}</td>
+                                        <td>{{ medida_form.DIP_lejos_OI }}</td>
+                                        <td>{{ medida_form.Add_lejos_OI }}</td>
+                                        <td>{{ medida_form.AV_lejos_OI }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Visión de cerca -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-light py-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="" id="Cerca">
+                            <label class="form-check-label" for="Cerca">
+                                Visión de Cerca
+                            </label>
+                        </div>
+                    </div>
+                    <div class="card-body">
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered text-center align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 8%;"></th>
+                                        <th>Esf</th>
+                                        <th>Cil</th>
+                                        <th>Eje</th>
+                                        <th>DIP</th>
+                                        <th>AV</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>OD</strong></td>
+                                        <td>{{ medida_form.esf_cerca_OD }}</td>
+                                        <td>{{ medida_form.cil_cerca_OD }}</td>
+                                        <td>{{ medida_form.eje_cerca_OD }}</td>
+                                        <td>{{ medida_form.DIP_cerca_OD }}</td>
+                                        <td>{{ medida_form.AV_cerca_OD }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>OI</strong></td>
+                                        <td>{{ medida_form.esf_cerca_OI }}</td>
+                                        <td>{{ medida_form.cil_cerca_OI }}</td>
+                                        <td>{{ medida_form.eje_cerca_OI }}</td>
+                                        <td>{{ medida_form.DIP_cerca_OI }}</td>
+                                        <td>{{ medida_form.AV_cerca_OI }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Observaciones / Detalle -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-light py-2">
+                        <strong>Observaciones / Detalle</strong>
+                    </div>
+                    <div>
+                        {{ medida_form.descripcion }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón guardar -->
+        <div class="text-end mt-4">
+            <button type="submit" name="guardar_cliente" class="btn btn-success">
+                Guardar cliente y receta
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+    /* Ajustes finos para inputs de receta */
+    table.table-bordered td input,
+    table.table-bordered td select {
+        width: 70px;
+        text-align: center;
+        padding: 2px 4px;
+        font-size: 0.8rem;
+    }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+        opacity: 1;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dniInput = document.getElementById('id_DNI');
+    const nombreInput = document.getElementById('id_nombre');
+    const btnBuscarDni = document.getElementById('btn-buscar-dni');
+
+    function buscarPorDni() {
+        const dni = dniInput ? dniInput.value.trim() : '';
+        if (!dni) {
+            alert('Ingrese un DNI primero.');
+            return;
+        }
+
+        // Llamamos a la vista consulta_dni
+        fetch("{% url 'consulta_dni' %}?dni=" + encodeURIComponent(dni))
+            .then(response => response.json())
+            .then(data => {
+                if (data.nombre) {
+                    if (nombreInput) nombreInput.value = data.nombre;
+                } else {
+                    alert(data.error || 'No se encontró información para ese DNI.');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Error consultando el DNI.');
+            });
+    }
+
+    if (btnBuscarDni) {
+        btnBuscarDni.addEventListener('click', buscarPorDni);
+    }
+
+    // opcional: también al salir del input DNI
+    // if (dniInput) {
+    //     dniInput.addEventListener('blur', buscarPorDni);
+    // }
+});
+</script>
+
+
+<script>
+    $(function() {
+        // Usamos el campo DNI como "código"
+        $("#id_DNI").autocomplete({
+            source: "/buscar-clientes/",      // luego te dejo cómo hacerlo en Django
+            minLength: 2,
+            select: function(event, ui) {
+                console.log("Seleccionado:", ui.item);  // DEBUG
+                // Rellenar los campos del formulario
+                $("#id_DNI").val(ui.item.value);        // DNI o código
+                $("#id_nombre").val(ui.item.nombre);    // Nombre del cliente
+                $("#id_telefono").val(ui.item.telefono); // Teléfono
+                return false;
+            }
+        });
+    });
+</script>
+
+<script>
+    // Copiar OI (izquierdo) de lejos → cerca
+document.addEventListener("DOMContentLoaded", function () {
+    const checkbox = document.getElementById("Cerca");
+
+    checkbox.addEventListener("change", function () {
+        if (checkbox.checked) {
+            // Copiar OD (derecho) de lejos → cerca
+
+const esfLejosOD = parseFloat(document.getElementById("id_esf_lejos_OD").value) || 0;
+const addLejosOD = parseFloat(document.getElementById("id_Add_lejos_OD").value) || 0;
+const diplejos_OD = parseFloat(document.getElementById("id_DIP_lejos_OD").value) || 0;
+
+            document.getElementById("id_esf_cerca_OD").value = (esfLejosOD + addLejosOD).toFixed(2);
+            document.getElementById("id_cil_cerca_OD").value = document.getElementById("id_cil_lejos_OD").value;
+            document.getElementById("id_eje_cerca_OD").value = document.getElementById("id_eje_lejos_OD").value;
+            document.getElementById("id_DIP_cerca_OD").value = diplejos_OD - 1;
+            document.getElementById("id_AV_cerca_OD").value = document.getElementById("id_AV_lejos_OD").value;
+
+            // Copiar OI (izquierdo) de lejos → cerca
+const esfLejosOI = parseFloat(document.getElementById("id_esf_lejos_OI").value) || 0;
+const addLejosOI = parseFloat(document.getElementById("id_Add_lejos_OI").value) || 0;
+const diplejos_OI = parseFloat(document.getElementById("id_DIP_lejos_OI").value) || 0;
+
+            document.getElementById("id_esf_cerca_OI").value = (esfLejosOI + addLejosOI).toFixed(2);
+            document.getElementById("id_cil_cerca_OI").value = document.getElementById("id_cil_lejos_OI").value;
+            document.getElementById("id_eje_cerca_OI").value = document.getElementById("id_eje_lejos_OI").value;
+            document.getElementById("id_DIP_cerca_OI").value = diplejos_OI - 1;
+            document.getElementById("id_AV_cerca_OI").value = document.getElementById("id_AV_lejos_OI").value;
+        }
+    });
+});
+</script>
+
+
+
+
+{% endblock %}

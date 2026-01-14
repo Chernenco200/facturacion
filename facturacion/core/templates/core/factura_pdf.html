@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Factura</title>
+    <style>
+        @page {
+            size: 80mm 270mm;
+            margin: 5mm;
+        }
+
+        body {
+            font-family: DejaVu Sans, sans-serif;
+            font-size: 11px;
+            text-align: center;
+            margin: 0;
+        }
+
+        .separador {
+            margin: 5px 0;
+            border-top: 1px dashed black;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 5px;
+        }
+
+        th, td {
+            padding: 2px 0;
+            text-align: center;
+            font-weight: normal;
+        }
+
+        th {
+            font-weight: bold;
+        }
+
+        .bold {
+            font-weight: bold;
+        }
+
+        .alineado-izq {
+            text-align: left;
+        }
+
+        .alineado-der {
+            text-align: right;
+        }
+
+        .total {
+            margin-top: 8px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <p><strong>RUC:</strong> 10429550101</p>
+    <p>Jr. Camaná 560</p>
+    <p>Cel: 952305913 - 914300701</p>
+    <p><strong>RECIBO N°{{ num_ticket }}</strong></p>
+
+    <p>Fecha y hora: {{ fecha }} {{ hora }}</p>
+    <div class="separador"></div>
+---------------------------------------------------
+    <p><strong>Cliente:</strong> {{ cliente }}</p>
+    <p>Teléfono: {{ telefono }}</p>
+    <p>Vendedor: {{ vendedor }}</p>
+    <div class="separador"></div>
+---------------------------------------------------
+    <table>
+        <thead>
+            <tr>
+                <th>Cant.</th>
+                <th>Producto</th>
+                <th>Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in items %}
+            <tr>
+                <td>{{ i.cantidad }}</td>
+                <td class="alineado-izq">{{ i.producto.descripcion }}</td>
+                <td class="alineado-der">{{ i.total }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="separador"></div>
+    <p class="total">Total: S/ {{ total }}</p>
+    <p>A cuenta: S/ {{ A_cuenta }}</p>
+    <p>Saldo: S/ {{ Saldo }}</p>
+    <div class="separador"></div>
+
+    <p><strong>GRACIAS POR SU</strong><br><strong>PREFERENCIA</strong></p>
+    <p>Hora de entrega: {{ Hora_entrega }}</p>
+</body>
+</html>

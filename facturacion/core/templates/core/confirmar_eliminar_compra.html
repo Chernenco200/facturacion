@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Eliminar Compra</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-4">
+    <h3>¿Eliminar Compra #{{ compra.id }}?</h3>
+
+    <p>
+        Proveedor: <strong>{{ compra.proveedor }}</strong><br>
+        Comprobante: <strong>{{ compra.tipo_comprobante }}-{{ compra.serie }}-{{ compra.numero }}</strong><br>
+        Fecha: <strong>{{ compra.fecha }}</strong><br>
+        Total: <strong>{{ compra.total }}</strong>
+    </p>
+
+    <p>Esta acción ajustará el stock de los productos y eliminará definitivamente la compra.</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <a href="{% url 'lista_compras' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+</div>
+</body>
+</html>

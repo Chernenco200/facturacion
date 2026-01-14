@@ -1,0 +1,108 @@
+{% extends 'core/base.html' %}
+
+{% load static %}
+
+{% block title %}Registro de Compras{% endblock %}
+
+{% block content %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Registrar Compra</title>
+    <link rel="stylesheet" href="{% static 'core/css/style.css' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-4">
+    <h3>Registro de Compras</h3>
+
+    <form method="post">
+        {% csrf_token %}
+        <fieldset class="border p-3 mb-3">
+            <legend class="w-auto">Datos de la Compra</legend>
+            {{ compra_form.as_p }}
+            <a href="{% url 'crear_proveedor' %}" class="btn btn-secondary btn-sm">Nuevo proveedor</a>
+        </fieldset>
+
+        <fieldset class="border p-3 mb-3">
+            <legend class="w-auto">Detalle de Productos</legend>
+
+            <table class="table table-bordered" id="tabla-detalle">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Descripción</th>
+                        <th>Tipo</th>
+                        <th>Precio Compra</th>
+                        <th>Precio Venta</th>
+                        <th>Cantidad</th>
+                        <th>Subtotal</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input name="cod[]" class="form-control"></td>
+                        <td><input name="descripcion[]" class="form-control"></td>
+                        <td><input name="tipo[]" class="form-control"></td>
+                        <td><input name="precio_compra[]" type="number" step="0.01" class="form-control"></td>
+                        <td><input name="precio_venta[]" type="number" step="0.01" class="form-control"></td>
+                        <td><input name="cantidad[]" type="number" step="0.01" class="form-control"></td>
+                        <td><input name="subtotal[]" type="number" step="0.01" class="form-control" readonly></td>
+                        <td><button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this)">X</button></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <button type="button" class="btn btn-primary btn-sm" onclick="agregarFila()">Agregar fila</button>
+        </fieldset>
+
+        <div class="text-end mb-3">
+            <label>Total: </label>
+            <input id="total" name="total" type="number" step="0.01" class="form-control d-inline-block" style="width:150px;" readonly>
+        </div>
+
+        <button type="submit" class="btn btn-success">Guardar Compra</button>
+    </form>
+</div>
+
+<script>
+function agregarFila() {
+    const tbody = document.querySelector('#tabla-detalle tbody');
+    const fila = tbody.rows[0].cloneNode(true);
+    fila.querySelectorAll('input').forEach(input => input.value = '');
+    tbody.appendChild(fila);
+}
+
+function eliminarFila(boton) {
+    const tbody = document.querySelector('#tabla-detalle tbody');
+    if (tbody.rows.length > 1) {
+        boton.closest('tr').remove();
+        calcularTotal();
+    }
+}
+
+document.addEventListener('input', function(e){
+    if (e.target.name === 'precio_compra[]' || e.target.name === 'cantidad[]') {
+        const fila = e.target.closest('tr');
+        const pc = parseFloat(fila.querySelector('input[name="precio_compra[]"]').value) || 0;
+        const cant = parseFloat(fila.querySelector('input[name="cantidad[]"]').value) || 0;
+        const subtotal = pc * cant;
+        fila.querySelector('input[name="subtotal[]"]').value = subtotal.toFixed(2);
+        calcularTotal();
+    }
+});
+
+function calcularTotal() {
+    let total = 0;
+    document.querySelectorAll('input[name="subtotal[]"]').forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+    document.getElementById('total').value = total.toFixed(2);
+}
+</script>
+
+</body>
+</html>
+{% endblock %}

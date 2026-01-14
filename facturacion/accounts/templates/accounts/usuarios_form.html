@@ -1,0 +1,59 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h4 class="mb-3">{{ title }}</h4>
+
+<form method="post" class="card card-body" style="max-width:640px;">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+
+  {% if form.username %}
+  <div class="mb-2">
+    <label class="form-label">Username</label>
+    {{ form.username }} {{ form.username.errors }}
+  </div>
+  {% endif %}
+
+  <div class="row">
+    <div class="col-md-6 mb-2">
+      <label class="form-label">Nombres</label>
+      {{ form.first_name }} {{ form.first_name.errors }}
+    </div>
+    <div class="col-md-6 mb-2">
+      <label class="form-label">Apellidos</label>
+      {{ form.last_name }} {{ form.last_name.errors }}
+    </div>
+  </div>
+
+  <div class="mb-2">
+    <label class="form-label">Email</label>
+    {{ form.email }} {{ form.email.errors }}
+  </div>
+
+  <div class="mb-2">
+    <label class="form-label">Rol</label>
+    {{ form.rol }} {{ form.rol.errors }}
+  </div>
+
+  <div class="form-check mb-3">
+    {{ form.is_active }} <label class="form-check-label">Activo</label>
+  </div>
+
+  {% if form.password1 %}
+  <div class="row">
+    <div class="col-md-6 mb-2">
+      <label class="form-label">Contraseña</label>
+      {{ form.password1 }} {{ form.password1.errors }}
+    </div>
+    <div class="col-md-6 mb-2">
+      <label class="form-label">Repetir contraseña</label>
+      {{ form.password2 }} {{ form.password2.errors }}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" type="submit">Guardar</button>
+    <a class="btn btn-secondary" href="{% url 'accounts:usuarios_list' %}">Volver</a>
+  </div>
+</form>
+{% endblock %}
