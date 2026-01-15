@@ -1,2 +1,0 @@
-web: gunicorn facturacion.wsgi:application
-release: python manage.py migrate --noinput
