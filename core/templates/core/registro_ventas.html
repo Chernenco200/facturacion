@@ -6,6 +6,13 @@
 
 {% block content %}
 
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Registro de Cliente{% endblock %}
+
+{% block content %}
+
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
@@ -13,508 +20,544 @@
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.3/themes/base/jquery-ui.css">
 <script src="https://code.jquery.com/ui/1.13.3/jquery-ui.min.js"></script>
 
+<link rel="stylesheet" href="{% static 'core/css/style.css' %}">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
-<head>
-    <title>Registro de Cliente</title>
-    <link rel="stylesheet" href="{% static 'core/css/style.css' %}">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <style>
-        fieldset {
-            overflow: hidden;
-        }
-        table.table-bordered td input {
-            width: 60px;
-            text-align: center;
-            padding: 2px;
-        }
-        table.table-bordered th, table.table-bordered td {
-            padding: 3px;
-        }
-        input[type=number] {
-            -moz-appearance: textfield;
-        }
-        input[type=number]::-webkit-inner-spin-button, 
-        input[type=number]::-webkit-outer-spin-button {
-            opacity: 1;
-        }
-    </style>
-</head>
+<style>
+  /* ====== IMPORTANTES ====== */
+  /* Antes tenías overflow:hidden en fieldset y eso recorta dropdowns (modales, sugerencias, etc.) */
+  fieldset { overflow: visible; }
 
+  /* Tabla Rx: mejor responsive real (en móvil no forzar ancho fijo) */
+  table.table-bordered td input {
+    width: 100%;
+    min-width: 58px;   /* base */
+    text-align: center;
+    padding: 4px;
+  }
+  table.table-bordered th, table.table-bordered td { padding: 6px; }
 
-    
-    
-    <div class="container-fluid px-2 px-md-3">
+  /* Sugerencias por código dentro del modal */
+  #sugerencias-cod{
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 3000;     /* alto para Bootstrap modal */
+    max-height: 220px;
+    overflow-y: auto;
+    cursor: pointer;
+    background: #fff;
+  }
 
-        <div class="row">
+  /* Sidebar sticky en desktop (opcional) */
+  @media (min-width: 992px){
+    .sidebar-sticky{
+      position: sticky;
+      top: 80px;
+    }
+  }
 
-                <div class="col - 12 col-lg-5">
+  /* ====== Mobile UX ====== */
+  @media (max-width: 768px){
+    .container-fluid { padding-left: 10px; padding-right: 10px; }
 
-                    <form method="post" novalidate>
-                        {% csrf_token %}
+    label{ font-size: .88rem; }
+    input, select, button { font-size: .95rem; }
 
-                        <!-- IDs que usaremos en JS y para enviar al backend -->
-                        <input type="hidden" id="cliente_id" name="cliente_id">
-                        <input type="hidden" id="medida_id" name="medida_id">
+    /* Inputs más "tocables" */
+    table.table-bordered td input{
+      min-width: 70px;
+      padding: 8px;
+      font-size: .95rem;
+    }
 
-                        <!-- ================= DATOS DEL COMPRADOR ================= -->
-                        <fieldset class="border p-3">
-                            <legend class="w-auto">Datos del comprador</legend>
+    /* Botones full width en móvil */
+    .btn-w-100-mobile{ width: 100%; }
 
-                        <!-- Buscador de comprador/receta -->
-                        <div class="mb-3">
+    /* Evitar que el modal recorte cosas */
+    .modal, .modal-dialog, .modal-content, .modal-body { overflow: visible !important; }
+  }
+</style>
 
-                           <select id="lista_medidas_recientes" class="form-control">
-                                <option value="">-- Selecciona una receta reciente --</option>
-                                <!-- Las opciones se llenan por JS -->
-                           </select>
+<div class="container-fluid px-2 px-md-3 mt-3">
 
-                            <input type="text"
-                                id="buscar_comprador"
-                                class="form-control"
-                                placeholder="Escribe DNI o nombre (se cargan las últimas recetas)">
-                            <!-- Lista desplegable con las últimas 10 medidas -->
+  <!-- GRID PRINCIPAL: en móvil se apila / en desktop 2 columnas -->
+  <div class="row g-3">
+
+    <!-- =================== MAIN (FORM + MEDIDAS) =================== -->
+    <div class="col-12 col-lg-8 order-1">
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <!-- IDs que usaremos en JS y para enviar al backend -->
+        <input type="hidden" id="cliente_id" name="cliente_id">
+        <input type="hidden" id="medida_id" name="medida_id">
+
+        <!-- ================= DATOS DEL COMPRADOR ================= -->
+        <fieldset class="border rounded-3 p-3">
+          <legend class="w-auto px-2">Datos del comprador</legend>
+
+          <div class="mb-3">
+            <select id="lista_medidas_recientes" class="form-control">
+              <option value="">-- Selecciona una receta reciente --</option>
+              <!-- JS llena -->
+            </select>
+
+            <input
+              type="text"
+              id="buscar_comprador"
+              class="form-control mt-2"
+              placeholder="Escribe DNI o nombre (se cargan las últimas recetas)">
+          </div>
+
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label">Nombre</label>
+              <input type="text" id="id_nombre" name="nombre" class="form-control" readonly>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Telefono</label>
+              <input type="text" id="id_telefono" name="telefono" class="form-control" readonly>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- ================= VISIÓN DE LEJOS ================= -->
+        <fieldset class="border rounded-3 p-3 mt-3">
+          <legend class="w-auto px-2">Visión de lejos</legend>
+          <div class="table-responsive">
+            <table class="table table-bordered table-sm text-center align-middle">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Esf</th>
+                  <th>Cil</th>
+                  <th>Eje</th>
+                  <th>DIP</th>
+                  <th>Add</th>
+                  <th>AV</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>OD</strong></td>
+                  <td><input type="number" step="0.25" id="id_esf_lejos_OD" name="esf_lejos_OD"></td>
+                  <td><input type="number" step="0.25" id="id_cil_lejos_OD" name="cil_lejos_OD"></td>
+                  <td><input type="number" step="1" id="id_eje_lejos_OD" name="eje_lejos_OD"></td>
+                  <td><input type="number" step="1" id="id_DIP_lejos_OD" name="DIP_lejos_OD"></td>
+                  <td><input type="number" step="0.25" id="id_Add_lejos_OD" name="Add_lejos_OD"></td>
+                  <td><input type="text" id="id_AV_lejos_OD" name="AV_lejos_OD"></td>
+                </tr>
+                <tr>
+                  <td><strong>OI</strong></td>
+                  <td><input type="number" step="0.25" id="id_esf_lejos_OI" name="esf_lejos_OI"></td>
+                  <td><input type="number" step="0.25" id="id_cil_lejos_OI" name="cil_lejos_OI"></td>
+                  <td><input type="number" step="1" id="id_eje_lejos_OI" name="eje_lejos_OI"></td>
+                  <td><input type="number" step="1" id="id_DIP_lejos_OI" name="DIP_lejos_OI"></td>
+                  <td><input type="number" step="0.25" id="id_Add_lejos_OI" name="Add_lejos_OI"></td>
+                  <td><input type="text" id="id_AV_lejos_OI" name="AV_lejos_OI"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </fieldset>
+
+        <!-- ================= VISIÓN DE CERCA ================= -->
+        <fieldset class="border rounded-3 p-3 mt-3">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" value="" id="Cerca">
+            <label class="form-check-label" for="Cerca">Visión de Cerca</label>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-bordered table-sm text-center align-middle">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Esf</th>
+                  <th>Cil</th>
+                  <th>Eje</th>
+                  <th>DIP</th>
+                  <th>AV</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>OD</strong></td>
+                  <td><input type="number" step="0.25" id="id_esf_cerca_OD" name="esf_cerca_OD"></td>
+                  <td><input type="number" step="0.25" id="id_cil_cerca_OD" name="cil_cerca_OD"></td>
+                  <td><input type="number" step="1" id="id_eje_cerca_OD" name="eje_cerca_OD"></td>
+                  <td><input type="number" step="1" id="id_DIP_cerca_OD" name="DIP_cerca_OD"></td>
+                  <td><input type="text" id="id_AV_cerca_OD" name="AV_cerca_OD"></td>
+                </tr>
+                <tr>
+                  <td><strong>OI</strong></td>
+                  <td><input type="number" step="0.25" id="id_esf_cerca_OI" name="esf_cerca_OI"></td>
+                  <td><input type="number" step="0.25" id="id_cil_cerca_OI" name="cil_cerca_OI"></td>
+                  <td><input type="number" step="1" id="id_eje_cerca_OI" name="eje_cerca_OI"></td>
+                  <td><input type="number" step="1" id="id_DIP_cerca_OI" name="DIP_cerca_OI"></td>
+                  <td><input type="text" id="id_AV_cerca_OI" name="AV_cerca_OI"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </fieldset>
+
+      </form>
+
+      <!-- ================= BLOQUE MONTURAS (lo dejo abajo para móvil) ================= -->
+      <div class="mt-3">
+        <fieldset class="border rounded-3 p-3">
+          <legend class="w-auto px-2">Monturas</legend>
+
+          <div class="mb-3">
+            <label id="descripcion-label" for="id_descripcion" class="form-label">Descripción</label>
+            {{ tipo_lunas_form.descripcion }}
+          </div>
+
+          <div class="mb-2 d-flex flex-wrap gap-3">
+            <div><label id="serie-label-od">Serie OD</label></div>
+            <div><label id="serie-label-oi">Serie OI</label></div>
+          </div>
+
+          <div class="mb-2 d-flex flex-wrap gap-3">
+            <div><label id="precio-label-od">Precio OD</label></div>
+            <div><label id="precio-label-oi">Precio OI</label></div>
+          </div>
+
+          <p class="mb-1"><label id="precio-final-label">Precio Final</label></p>
+          <p class="mb-1"><label id="cantidad">0</label></p>
+
+          <input type="hidden" name="precio_final" id="id_precio_final" value="">
+        </fieldset>
+      </div>
+
+    </div>
+
+    <!-- =================== SIDEBAR (ACCIONES + TOTALES) =================== -->
+    <div class="col-12 col-lg-4 order-2">
+      <div class="sidebar-sticky">
+
+        <!-- Acciones -->
+        <fieldset class="border rounded-3 p-3">
+          <legend class="w-auto px-2">Seleccionar Productos</legend>
+
+          <div class="d-grid gap-2">
+            <button type="button" class="btn btn-success btn-w-100-mobile" data-bs-toggle="modal" data-bs-target="#modalLunas">
+              Seleccionar Lunas
+            </button>
+
+            <button type="button" class="btn btn-success btn-w-100-mobile" data-bs-toggle="modal" data-bs-target="#modalProducto">
+              Agregar Producto
+            </button>
+          </div>
+        </fieldset>
+
+        <!-- Detalle preventa -->
+        <div class="mt-3">
+          <h5 class="mb-2">Detalle de Productos Agregados</h5>
+
+          <div class="table-responsive">
+            <table class="table table-bordered table-sm" id="tabla-preventa">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Descripción</th>
+                  <th>Cant</th>
+                  <th>Precio Total</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="d-flex justify-content-end mt-2">
+            <strong>Total General: S/ <span id="total-general">0.00</span></strong>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Medio de pago (A cuenta)</label>
+            <select id="medio_pago" class="form-select">
+              <option value="EFECTIVO">Efectivo</option>
+              <option value="YAPE">Yape</option>
+              <option value="TARJETA">Tarjeta</option>
+              <option value="TRANSFERENCIA">Transferencia</option>
+            </select>
+          </div>
+
+          <button class="btn btn-success mt-3 btn-w-100-mobile" id="emitir-factura">
+            Emitir Factura
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================= MODAL LUNAS (mantengo tu estructura; solo mejoro responsive) ================= -->
+<div class="modal fade" id="modalLunas" tabindex="-1" aria-labelledby="modalLunasLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down" style="max-width: 900px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalLunasLabel">Selección de Lunas</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="row g-3">
+          <!-- Izquierda -->
+          <div class="col-12 col-md-4">
+            <div class="mb-3" id="enfoque">
+              <label for="{{ tipo_lunas_form.enfoque.id_for_label }}" class="form-label">Enfoque</label>
+              {{ tipo_lunas_form.enfoque }}
+            </div>
+
+            <div class="mb-3" id="tipo_multifocal_container" style="display: none;">
+              <label for="{{ tipo_lunas_form.tipo_multifocal.id_for_label }}" class="form-label">Tipo Multifocal</label>
+              {{ tipo_lunas_form.tipo_multifocal }}
+            </div>
+
+            <div class="mb-3" id="marca_multifocal_container" style="display: none;">
+              <label for="{{ tipo_lunas_form.marca_multifocal.id_for_label }}" class="form-label">Marca Multifocal</label>
+              {{ tipo_lunas_form.marca_multifocal }}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ tipo_lunas_form.material.id_for_label }}" class="form-label">Material</label>
+              {{ tipo_lunas_form.material }}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ tipo_lunas_form.tratamiento.id_for_label }}" class="form-label">Tratamiento</label>
+              {{ tipo_lunas_form.tratamiento }}
+            </div>
+
+            <div class="mb-3" id="colorfotosensible_container" style="display: none;">
+              <label for="{{ tipo_lunas_form.colorfotosensible.id_for_label }}" class="form-label">Color</label>
+              {{ tipo_lunas_form.colorfotosensible }}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ tipo_lunas_form.fabricacion.id_for_label }}" class="form-label">Fabricación</label>
+              {{ tipo_lunas_form.fabricacion }}
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label form-label-sm mb-1">Nombre</label>
+              <input type="text" id="id_producto_libre_nombre" class="form-control form-control-sm"
+                     placeholder="Ej: Biselado, Garantía, Clip-on, etc.">
+            </div>
+          </div>
+
+          <!-- Derecha -->
+          <div class="col-12 col-md-8">
+            <fieldset class="border rounded-3 p-2">
+              <legend class="w-auto px-2">Precios de Lunas</legend>
+
+              <div class="mb-2 d-flex gap-3 flex-wrap">
+                <label class="form-check-label">
+                  <input type="radio" name="tipo_luna" value="Lejos:" id="radio-lejos"> Lejos
+                </label>
+                <label class="form-check-label">
+                  <input type="radio" name="tipo_luna" value="Cerca:" id="radio-cerca"> Cerca
+                </label>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-bordered text-center table-sm align-middle">
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th>P. Mínimo</th>
+                      <th>P. Promedio</th>
+                      <th>P. Máximo</th>
+                      <th>P. Venta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <div class="form-check">
+                          <input type="checkbox" id="checkbox-od">
+                          <label class="form-check-label" for="checkbox-od">OD</label>
                         </div>
-
-
-                            <!-- Datos básicos del comprador (solo lectura, vienen de MedidaVista/Cliente) -->
-                            <div class="mb-2">
-                                <label class="form-label">Nombre</label>
-                                <!-- id_nombre e id_telefono se usan luego en el JS de Emitir factura -->
-                                <input type="text" id="id_nombre" name="nombre" class="form-control" readonly>
-                                
-                                <label class="form-label">Telefono</label>
-                                <!-- id_nombre e id_telefono se usan luego en el JS de Emitir factura -->
-                                <input type="text" id="id_telefono" name="telefono" class="form-control" readonly>
-                            </div>
-                        </fieldset>
-
-                        <!-- ================= VISIÓN DE LEJOS ================= -->
-                        <fieldset class="border p-3 mt-3">
-                            <legend class="w-auto">Visión de lejos</legend>
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-sm text-center">
-                                    <thead>
-                                        <tr>
-                                            <th></th>
-                                            <th>Esf</th>
-                                            <th>Cil</th>
-                                            <th>Eje</th>
-                                            <th>DIP</th>
-                                            <th>Add</th>
-                                            <th>AV</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td><strong>OD</strong></td>
-                                            <td><input type="number" step="0.25" id="id_esf_lejos_OD" name="esf_lejos_OD"></td>
-                                            <td><input type="number" step="0.25" id="id_cil_lejos_OD" name="cil_lejos_OD"></td>
-                                            <td><input type="number" step="1" id="id_eje_lejos_OD" name="eje_lejos_OD"></td>
-                                            <td><input type="number" step="1" id="id_DIP_lejos_OD" name="DIP_lejos_OD"></td>
-                                            <td><input type="number" step="0.25" id="id_Add_lejos_OD" name="Add_lejos_OD"></td>
-                                            <td><input type="text" id="id_AV_lejos_OD" name="AV_lejos_OD"></td>
-                                        </tr>
-                                        <tr>
-                                            <td><strong>OI</strong></td>
-                                            <td><input type="number" step="0.25" id="id_esf_lejos_OI" name="esf_lejos_OI"></td>
-                                            <td><input type="number" step="0.25" id="id_cil_lejos_OI" name="cil_lejos_OI"></td>
-                                            <td><input type="number" step="1" id="id_eje_lejos_OI" name="eje_lejos_OI"></td>
-                                            <td><input type="number" step="1" id="id_DIP_lejos_OI" name="DIP_lejos_OI"></td>
-                                            <td><input type="number" step="0.25" id="id_Add_lejos_OI" name="Add_lejos_OI"></td>
-                                            <td><input type="text" id="id_AV_lejos_OI" name="AV_lejos_OI"></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </fieldset>
-
-                        <!-- ================= VISIÓN DE CERCA ================= -->
-                        <fieldset class="border p-3 mt-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="" id="Cerca">
-                                <label class="form-check-label" for="Cerca">
-                                    Visión de Cerca
-                                </label>
-                            </div>
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-sm text-center">
-                                    <thead>
-                                        <tr>
-                                            <th></th>
-                                            <th>Esf</th>
-                                            <th>Cil</th>
-                                            <th>Eje</th>
-                                            <th>DIP</th>
-                                            <th>AV</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td><strong>OD</strong></td>
-                                            <td><input type="number" step="0.25" id="id_esf_cerca_OD" name="esf_cerca_OD"></td>
-                                            <td><input type="number" step="0.25" id="id_cil_cerca_OD" name="cil_cerca_OD"></td>
-                                            <td><input type="number" step="1" id="id_eje_cerca_OD" name="eje_cerca_OD"></td>
-                                            <td><input type="number" step="1" id="id_DIP_cerca_OD" name="DIP_cerca_OD"></td>
-                                            <td><input type="text" id="id_AV_cerca_OD" name="AV_cerca_OD"></td>
-                                        </tr>
-                                        <tr>
-                                            <td><strong>OI</strong></td>
-                                            <td><input type="number" step="0.25" id="id_esf_cerca_OI" name="esf_cerca_OI"></td>
-                                            <td><input type="number" step="0.25" id="id_cil_cerca_OI" name="cil_cerca_OI"></td>
-                                            <td><input type="number" step="1" id="id_eje_cerca_OI" name="eje_cerca_OI"></td>
-                                            <td><input type="number" step="1" id="id_DIP_cerca_OI" name="DIP_cerca_OI"></td>
-                                            <td><input type="text" id="id_AV_cerca_OI" name="AV_cerca_OI"></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </fieldset>
-
-                    </form>
-
-                </div>
-
-
-            <div class="col - 12 col-lg-7">
-                    <fieldset class="border p-3 mt-3">
-                    <legend class="w-auto">Seleccionar Productos</legend>
-                    <p>
-                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalLunas">
-                        Seleccionar Lunas
-                    </button>
-
-                    <!-- Modal Bootstrap -->
-                    <div class="modal fade" id="modalLunas" tabindex="-1" aria-labelledby="modalLunasLabel" aria-hidden="true">
-                        <div class="modal-dialog modal-dialog-centered" style="max-width: 800px;"> <!-- Un poco más ancho -->
-                        <div class="modal-content">
-                            <div class="modal-header">
-                            <h5 class="modal-title" id="modalLunasLabel">Selección de Lunas</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-
-                            <div class="modal-body">
-                            <div class="row">
-                                <!-- Columna izquierda -->
-                                <div class="col-md-4">
-                                <div class="mb-3" id="enfoque">
-                                    <label for="{{ tipo_lunas_form.enfoque.id_for_label }}" class="form-label">Enfoque</label>
-                                    {{ tipo_lunas_form.enfoque }}
-                                </div>
-                                <div class="mb-3" id="tipo_multifocal_container" style="display: none;">
-                                    <label for="{{ tipo_lunas_form.tipo_multifocal.id_for_label }}" class="form-label">Tipo Multifocal</label>
-                                    {{ tipo_lunas_form.tipo_multifocal }}
-                                </div>
-
-                                <div class="mb-3" id="marca_multifocal_container" style="display: none;">
-                                    <label for="{{ tipo_lunas_form.marca_multifocal.id_for_label }}" class="form-label">Marca Multifocal</label>
-                                    {{ tipo_lunas_form.marca_multifocal }}
-                                </div>
-
-                                <div class="mb-3">
-                                    <label for="{{ tipo_lunas_form.material.id_for_label }}" class="form-label">Material</label>
-                                    {{ tipo_lunas_form.material }}
-                                </div>
-
-                                <div class="mb-3">
-                                    <label for="{{ tipo_lunas_form.tratamiento.id_for_label }}" class="form-label">Tratamiento</label>
-                                    {{ tipo_lunas_form.tratamiento }}
-                                </div>
-
-                                <div class="mb-3" id="colorfotosensible_container" style="display: none;">
-                                    <label for="{{ tipo_lunas_form.colorfotosensible.id_for_label }}" class="form-label">Color</label>
-                                    {{ tipo_lunas_form.colorfotosensible }}
-                                </div>
-                                <div class="mb-3">
-                                    <label for="{{ tipo_lunas_form.fabricacion.id_for_label }}" class="form-label">Fabricación</label>
-                                    {{ tipo_lunas_form.fabricacion }}
-                                </div>
-
-                                <div class="mb-3">
-                                <label class="form-label form-label-sm mb-1">Nombre</label>
-                                <input type="text" id="id_producto_libre_nombre" class="form-control form-control-sm"
-                                        placeholder="Ej: Biselado, Garantía, Clip-on, etc.">
-                                </div>
-
-                                </div>
-                                <!-- Columna derecha -->
-                                <div class="col-md-8">
-                                <fieldset class="border p-2">
-                                    <legend class="w-auto">Precios de Lunas</legend>
-
-                                    <div class="mb-2">
-                                    <input type="radio" name="tipo_luna" value="Lejos:" id="radio-lejos"> Lejos
-                                    <input type="radio" name="tipo_luna" value="Cerca:" id="radio-cerca"> Cerca
-                                    <!-- <input type="radio" name="tipo_luna" value=""> Bif -->
-                                    <!-- <input type="radio" name="tipo_luna" value=""> Multi -->
-                                    </div>
-
-                                    <div class="table-responsive">
-                                    <table class="table table-bordered table-sm text-center">
-                                        <thead>
-                                        <tr>
-                                            <th></th>
-                                            <th>P. Mínimo</th>
-                                            <th>P. Promedio</th>
-                                            <th>P. Máximo</th>
-                                            <th>P. Venta</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody>
-                                        <tr>
-                                            <td>
-                                            <div class="form-check">
-                                                <input type="checkbox" id="checkbox-od">
-                                                <label class="form-check-label" for="checkbox-od">OD</label>
-                                            </div>
-                                            </td>
-                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmin-od">S/</button></td>
-                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmean-od">S/</button></td>
-                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmax-od">S/</button></td>
-                                            <td><input name="p_venta_od" class="form-control form-control-sm"></td>
-                                        </tr>
-                                        <tr>
-                                            <td>
-                                            <div class="form-check">
-                                                <input type="checkbox" id="checkbox-oi">
-                                                <label class="form-check-label" for="checkbox-oi">OI</label>
-                                            </div>
-                                            </td>
-                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmin-oi">Pmin</button></td>
-                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmean-oi">Pmean</button></td>
-                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmax-oi">S/</button></td>
-                                            <td><input name="p_venta_oi" class="form-control form-control-sm"></td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
-                                    </div>
-                                </fieldset>
-
-                                <fieldset class="border p-2">              
-                                            <div class="row mt-5">
-                                    <div class="col-4">
-                                        <div class="input-group">
-                                            <div class="input-group-append pr-1">
-                                                    <h7>Vendedor:</h7>
-                                                </div>
-                                                <select required name="vendedor" class="form-control border border-dark text-blue"
-                                                    id="id_vendedor">
-                                                    <option value="Hellen" selected>Hellen</option>
-                                                    <option value="Rosmery">Rosmery</option>
-                                                    <option value="Grecia">Grecia</option>
-                                                    <option value="Ana">Ana</option>
-                                                    <option value="Lucita">Lucita</option>
-                                                    <option value="Jerry">Jerry</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    </fieldset>
-                                </div>
-                            </div>
-                            </div>
-                          
-                            <button type="button" class="btn btn-primary mt-2" data-bs-dismiss="modal">Agregar Lunas</button>
-                    
+                      </td>
+                      <td><button type="button" class="btn btn-secondary btn-sm" id="pmin-od">S/</button></td>
+                      <td><button type="button" class="btn btn-secondary btn-sm" id="pmean-od">S/</button></td>
+                      <td><button type="button" class="btn btn-secondary btn-sm" id="pmax-od">S/</button></td>
+                      <td><input name="p_venta_od" class="form-control form-control-sm"></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div class="form-check">
+                          <input type="checkbox" id="checkbox-oi">
+                          <label class="form-check-label" for="checkbox-oi">OI</label>
                         </div>
-                        </div>
-                    </div>
+                      </td>
+                      <td><button type="button" class="btn btn-secondary btn-sm" id="pmin-oi">Pmin</button></td>
+                      <td><button type="button" class="btn btn-secondary btn-sm" id="pmean-oi">Pmean</button></td>
+                      <td><button type="button" class="btn btn-secondary btn-sm" id="pmax-oi">S/</button></td>
+                      <td><input name="p_venta_oi" class="form-control form-control-sm"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </fieldset>
 
-                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalProducto">
-                    Agregar Producto
-                    </button>
-
-                    <!-- Modal Bootstrap Monturas-->
-                    <div class="modal fade" id="modalProducto" tabindex="-1" aria-labelledby="modalProductoLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                        <form method="post" action="{% url 'crear_producto' %}">
-                            {% csrf_token %}
-                            <div class="modal-header">
-                            <h5 class="modal-title" id="modalProductoLabel">Agregar Producto</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                            <div class="mb-3 position-relative">
-                                <label for="id_cod" class="form-label">Código</label>
-                                <input type="text" name="cod" class="form-control" id="id_cod" autocomplete="off">
-                                <ul id="sugerencias-cod" class="list-group position-absolute w-100" style="z-index: 1000;"></ul>
-                            </div>
-                            <p>
-                            {{ producto_form.descripcion.label_tag }} {{ producto_form.descripcion }}
-                            <p>
-                            {{ producto_form.precio_venta.label_tag }} {{ producto_form.precio_venta }}
-                            <p>
-                            <div style="display: none;">
-                            {{ producto_form.precio_compra.label_tag }} {{ producto_form.precio_compra }}
-                            </div>
-                            <p>
-
-                            
-                            
-                            {{ producto_form.stock.label_tag }} {{ producto_form.stock }}
-                            <p>
-                            {{ producto_form.tipo.label_tag }} {{ producto_form.tipo }}
-                            </p>
-                            </div>
-                            <div class="mb-3 row" style="max-width: 270px;">
-                                <label for="id_tipo" class="col-sm-3 col-form-label text-end">Cantidad:</label>
-                                <div class="col-sm-9">
-                                <input type="number" name="cantidad" id="id_cantidad" class="form-control" value="1" min="1">
-                                </div>
-                            </div>  
-                            <div class="modal-footer">
-                            <button type="button" class="btn btn-primary mt-2" data-bs-dismiss="modal" id="agregarProductoTabla">Agregar a tabla</button>
-
-                            </div>
-                        </form>
-                        </div>
-                    </div>
-                    </div>                         
-
-                    </fieldset>
-
-                 <div class="container-fluid px-2 px-md-3">
-
-                    <h4>Detalle de Productos Agregados</h4>
-                    <div class="table-responsive">
-                    <table class="table table-bordered table-sm text-center" id="tabla-preventa>
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Descripción</th>
-                                <th>Cant</th>
-                                <th>Precio Total </th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                    </div>
-                    <div class="text-end mt-2" style="margin-right: 110px;">
-                    <strong>Total General: S/ <span id="total-general">0.00</span></strong>
-                    </div>
-
-
-                    <div class="col-md-3">
-                    <label class="form-label">Medio de pago (A cuenta)</label>
-                    <select id="medio_pago" class="form-select">
-                    <option value="EFECTIVO">Efectivo</option>
-                    <option value="YAPE">Yape</option>
-                    <option value="TARJETA">Tarjeta</option>
-                    <option value="TRANSFERENCIA">Transferencia</option>
+            <fieldset class="border rounded-3 p-2 mt-3">
+              <div class="row g-2 align-items-center">
+                <div class="col-12 col-md-6">
+                  <div class="input-group">
+                    <span class="input-group-text">Vendedor</span>
+                    <select required name="vendedor" class="form-control border border-dark text-blue" id="id_vendedor">
+                      <option value="Hellen" selected>Hellen</option>
+                      <option value="Rosmery">Rosmery</option>
+                      <option value="Grecia">Grecia</option>
+                      <option value="Ana">Ana</option>
+                      <option value="Lucita">Lucita</option>
+                      <option value="Jerry">Jerry</option>
                     </select>
-                    </div>
+                  </div>
+                </div>
+              </div>
+            </fieldset>
 
+          </div>
+        </div>
+      </div>
 
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Agregar Lunas</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-
-                    <button class="btn btn-success mt-2" id="emitir-factura">Emitir Factura</button>
-                    </div>
-
-            </div>
-
+<!-- ================= MODAL PRODUCTO (alineado + fullscreen en móvil) ================= -->
+<div class="modal fade" id="modalProducto" tabindex="-1" aria-labelledby="modalProductoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <form method="post" action="{% url 'crear_producto' %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalProductoLabel">Agregar Producto</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
 
-        <div class="row">
-            
-
-            <div class="container-fluid px-2 px-md-3">
-
-                    <div class="mb-3">
-                        <label id="descripcion-label" for="id_descripcion" for="{{ tipo_lunas_form.descripcion.id_for_label }}" class="form-label">Descripción</label>
-                        {{ tipo_lunas_form.descripcion }}
-                    </div>
-                    <div class="mb-3">
-                        <label id="serie-label-od">Serie OD</label>
-                        <label id="serie-label-oi">Serie OI</label>
-                        
-                    </div>
-                        <div class="mb-3">
-                        <label id="precio-label-od">Precio OD</label>
-                        <label id="precio-label-oi">Precio OI</label> 
-                        <p><label id="precio-final-label">Precio Final</label></p>
-                        <p><label id="cantidad">0</label></p>
-
-                        <!-- Este input oculto enviará el precio final al servidor -->
-                        <input type="hidden" name="precio_final" id="id_precio_final" value="">
-
-                    </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12 position-relative">
+              <label for="id_cod" class="form-label">Código</label>
+              <input type="text" name="cod" class="form-control" id="id_cod" autocomplete="off">
+              <ul id="sugerencias-cod" class="list-group w-100"></ul>
             </div>
 
-        <!-- Scripts necesarios -->
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-       
+            <div class="col-12">
+              {{ producto_form.descripcion.label_tag }} {{ producto_form.descripcion }}
+            </div>
 
-                </div>            
+            <div class="col-12 col-md-4">
+              {{ producto_form.precio_venta.label_tag }} {{ producto_form.precio_venta }}
+            </div>
+
+            <div class="col-12 col-md-4" style="display:none;">
+              {{ producto_form.precio_compra.label_tag }} {{ producto_form.precio_compra }}
+            </div>
+
+            <div class="col-12 col-md-4">
+              {{ producto_form.stock.label_tag }} {{ producto_form.stock }}
+            </div>
+
+            <div class="col-12 col-md-6">
+              {{ producto_form.tipo.label_tag }} {{ producto_form.tipo }}
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label for="id_cantidad" class="form-label">Cantidad</label>
+              <input type="number" name="cantidad" id="id_cantidad" class="form-control" value="1" min="1">
+            </div>
+          </div>
         </div>
 
-   
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" data-bs-dismiss="modal" id="agregarProductoTabla">
+            Agregar a tabla
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
+<!-- Bootstrap -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
+<!-- ====== TUS SCRIPTS (los dejo igual; pegados tal cual del archivo) ====== -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    var enfoqueField = document.getElementById("id_enfoque");
+    var tipoMultifocalContainer = document.getElementById("tipo_multifocal_container");
+    var tipoMultifocalField = document.getElementById("id_tipo_multifocal");
+    var marcaMultifocalContainer = document.getElementById("marca_multifocal_container");
+    var tratamientoField = document.getElementById("id_tratamiento");
+    var colorFotosensibleContainer = document.getElementById("colorfotosensible_container");
+    var materialField = document.getElementById("id_material");
 
+    function toggleTipoMultifocal() {
+      if (enfoqueField.value === "Multifocal") {
+        tipoMultifocalContainer.style.display = "block";
+      } else {
+        tipoMultifocalContainer.style.display = "none";
+        marcaMultifocalContainer.style.display = "none";
+      }
+      toggleMarcaMultifocal();
+    }
 
+    function toggleMarcaMultifocal() {
+      if (enfoqueField.value === "Multifocal" && tipoMultifocalField.value === "Digital") {
+        marcaMultifocalContainer.style.display = "block";
+      } else {
+        marcaMultifocalContainer.style.display = "none";
+      }
+    }
 
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            var enfoqueField = document.getElementById("id_enfoque");
-            var tipoMultifocalContainer = document.getElementById("tipo_multifocal_container");
-            var tipoMultifocalField = document.getElementById("id_tipo_multifocal");
-            var marcaMultifocalContainer = document.getElementById("marca_multifocal_container");
-            var tratamientoField = document.getElementById("id_tratamiento");
-            var colorFotosensibleContainer = document.getElementById("colorfotosensible_container");
-            var materialField = document.getElementById("id_material");
+    function toggleColorFotosensible() {
+      if (tratamientoField.value === "Fotocromatico" || tratamientoField.value === "Blue" || tratamientoField.value === "FotoBlue" || tratamientoField.value === "Transition") {
+        colorFotosensibleContainer.style.display = "block";
+      } else {
+        colorFotosensibleContainer.style.display = "none";
+      }
+    }
 
-            function toggleTipoMultifocal() {
-                if (enfoqueField.value === "Multifocal") {
-                    tipoMultifocalContainer.style.display = "block";
-                } else {
-                    tipoMultifocalContainer.style.display = "none";
-                    marcaMultifocalContainer.style.display = "none";
-                }
-                toggleMarcaMultifocal();
-            }
+    function filterTratamientoOptions() {
+      var selectedMaterial = materialField.value;
+      var options = tratamientoField.options;
 
-            function toggleMarcaMultifocal() {
-                if (enfoqueField.value === "Multifocal" && tipoMultifocalField.value === "Digital") {
-                    marcaMultifocalContainer.style.display = "block";
-                } else {
-                    marcaMultifocalContainer.style.display = "none";
-                }
-            }
+      for (var i = 0; i < options.length; i++) {
+        if (selectedMaterial === "Vidrio" && (options[i].value === "Blue" || options[i].value === "FotoBlue" || options[i].value === "Transition")) {
+          options[i].style.display = "none";
+        } else {
+          options[i].style.display = "block";
+        }
+      }
+    }
 
-            function toggleColorFotosensible() {
-                if (tratamientoField.value === "Fotocromatico" || tratamientoField.value === "Blue" || tratamientoField.value === "FotoBlue" || tratamientoField.value === "Transition") {
-                    colorFotosensibleContainer.style.display = "block";
-                } else {
-                    colorFotosensibleContainer.style.display = "none";
-                }
-            }
+    toggleTipoMultifocal();
+    toggleMarcaMultifocal();
+    toggleColorFotosensible();
+    filterTratamientoOptions();
 
-            function filterTratamientoOptions() {
-                var selectedMaterial = materialField.value;
-                var options = tratamientoField.options;
-                
-                for (var i = 0; i < options.length; i++) {
-                    if (selectedMaterial === "Vidrio" && (options[i].value === "Blue" || options[i].value === "FotoBlue" || options[i].value === "Transition")) {
-                        options[i].style.display = "none";
-                    } else {
-                        options[i].style.display = "block";
-                    }
-                }
-            }
-
-            toggleTipoMultifocal();
-            toggleMarcaMultifocal();
-            toggleColorFotosensible();
-            filterTratamientoOptions();
-
-            enfoqueField.addEventListener("change", toggleTipoMultifocal);
-            tipoMultifocalField.addEventListener("change", toggleMarcaMultifocal);
-            tratamientoField.addEventListener("change", toggleColorFotosensible);
-            materialField.addEventListener("change", filterTratamientoOptions);
-        });
-    </script>
+    enfoqueField.addEventListener("change", toggleTipoMultifocal);
+    tipoMultifocalField.addEventListener("change", toggleMarcaMultifocal);
+    tratamientoField.addEventListener("change", toggleColorFotosensible);
+    materialField.addEventListener("change", filterTratamientoOptions);
+  });
+</script>
 
     <script>function buscarCliente() {
         const dniInput = document.getElementById('id_DNI');
