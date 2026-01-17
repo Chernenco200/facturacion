@@ -1,0 +1,8 @@
+[33m5970659[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m responsive
+[33mec8a126[m make pywin322 windows-only
+[33m4929a9c[m cambio2
+[33m2ea7931[m cambio
+[33m77beb46[m fix gunicorn log-file in Procfile
+[33m9c532b9[m make pywin32 windows-only
+[33mafb1469[m mensaje
+[33m99abab8[m ready for heroku
