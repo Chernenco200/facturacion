@@ -26,11 +26,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 #SECRET_KEY = 'django-insecure-*zzv0o!3&v6a3&uubdz!uo*s$329+wq9@c(49_ki&+mq%u@z2('
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-secret")
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG") == "1"
 
-hosts = os.environ.get("ALLOWED_HOSTS", "")
-ALLOWED_HOSTS = hosts.split(",") if hosts else []
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
 
 CSRF_TRUSTED_ORIGINS = [
     "https://facturacion-d28198aaf688.herokuapp.com",
