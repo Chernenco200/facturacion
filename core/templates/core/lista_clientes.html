@@ -1,0 +1,134 @@
+{% extends 'core/base.html' %}
+
+{% load static %}
+
+{% block title %}Lista de Clientes{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lista de Clientes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="container mt-4">
+    <h3>Lista de Clientes</h3>
+
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-md-3">
+            <input type="text" name="dni" class="form-control"
+                placeholder="Buscar por DNI" value="{{ request.GET.dni }}">
+        </div>
+
+        <div class="col-md-3">
+            <input type="text" name="nombre" class="form-control"
+                placeholder="Buscar por Nombre" value="{{ request.GET.nombre }}">
+        </div>
+
+        <div class="col-md-3">
+            <input type="date" name="fecha" class="form-control"
+                value="{{ request.GET.fecha }}">
+        </div>
+
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+        </div>
+    </form>
+
+
+    <table class="table table-striped table-bordered table-sm">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Fecha Registro</th>
+                <th>DNI</th>
+                <th>Nombre</th>
+                <th>Teléfono</th>
+                <th>Edad</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for c in clientes %}
+            <tr>
+                <td>{{ c.id }}</td>
+                <td>{{ c.fecha_registro|date:"d/m/Y" }}</td>
+                <td>{{ c.DNI }}</td>
+                <td>{{ c.nombre }}</td>
+                <td>{{ c.telefono }}</td>
+                <td>{{ c.Edad|floatformat:0 }}</td>
+                <td>
+                    <button type="button"
+                            class="btn btn-info btn-sm btn-historial"
+                            data-cliente-id="{{ c.id }}"
+                            data-cliente-nombre="{{ c.nombre }}">
+                        Historial
+                    </button>
+
+                    <a href="{% url 'editar_cliente' c.id %}" class="btn btn-warning btn-sm">Editar</a>
+
+                    <a href="{% url 'eliminar_cliente' c.id %}" class="btn btn-danger btn-sm">
+                        Eliminar
+                    </a>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="7" class="text-center">No hay clientes registrados.</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal Historial Cliente -->
+<div class="modal fade" id="historialModal" tabindex="-1" aria-labelledby="historialModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="historialModalLabel">Historial del Cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="historialModalBody">
+        <!-- Aquí se cargará el historial via AJAX -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const historialModal = new bootstrap.Modal(document.getElementById('historialModal'));
+    const modalBody = document.getElementById('historialModalBody');
+    const modalTitle = document.getElementById('historialModalLabel');
+
+    document.querySelectorAll('.btn-historial').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const clienteId = this.getAttribute('data-cliente-id');
+            const clienteNombre = this.getAttribute('data-cliente-nombre');
+
+            modalTitle.textContent = 'Historial de ' + clienteNombre;
+            modalBody.innerHTML = '<p>Cargando...</p>';
+
+            fetch(`/clientes/${clienteId}/historial/`)
+                .then(response => response.text())
+                .then(html => {
+                    modalBody.innerHTML = html;
+                })
+                .catch(err => {
+                    console.error(err);
+                    modalBody.innerHTML = '<p>Error al cargar el historial.</p>';
+                });
+
+            historialModal.show();
+        });
+    });
+});
+</script>
+
+</body>
+</html>
+{% endblock %}

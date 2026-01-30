@@ -1,0 +1,108 @@
+{% load roles %}
+
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+
+        <a class="navbar-brand" href="/">Óptica IC</a>
+                <span class="navbar-text">
+                    👤 {{ request.user.first_name|default:request.user.username }}
+                </span>
+
+                <form method="post" action="{% url 'logout' %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-light btn-sm"> Cerrar sesión
+                    </button>
+                </form>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarNav" aria-controls="navbarNav"
+                aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+
+            <ul class="navbar-nav ms-auto">
+
+                <li class="nav-item">
+                    {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
+                    <a class="nav-link" href="{% url 'accounts:usuarios_list' %}">Usuarios</a>
+                    {% endif %}
+                </li>                
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA" %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'registrar_cliente' %}">Registrar Clientes</a>
+                    {% endif %}
+                </li>
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA" %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'registrar_venta' %}">Registrar Venta</a>
+                </li>
+                {% endif %}                
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA" %}
+                <li class="nav-item">
+                   <a class="nav-link" href="{% url 'lista_clientes' %}">Lista de Clientes</a>
+                </li>
+                {% endif %}                
+                
+                {% if request.user|has_role:"ADMIN,SUPERVISOR, CAJA" %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'saldos_pendientes' %}">Saldos</a>
+                </li>
+                {% endif %}               
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'registrar_compra' %}">Registro de Compras</a>
+                </li>
+                {% endif %}
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'lista_compras' %}">Lista de Compras</a>
+                </li>
+                {% endif %}
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'lista_detalles_compra' %}">Detalle de Compras</a>
+                </li>
+                {% endif %}
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
+                <li class="nav-item">
+                <a class="nav-link" href="{% url 'kardex_resumen' %}">Kardex</a>
+                </li>
+                {% endif %}
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,CAJA" %}
+                <li class="nav-item">
+                <a class="nav-link" href="{% url 'caja_hoy' %}">Caja</a>
+                </li>
+                {% endif %}
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA, TALLER" %}
+                <li class="nav-item">
+                <a class="nav-link" href="{% url 'operador_ordenes' %}">Operador</a>
+                </li>
+                {% endif %}
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR, CAJA" %}
+                <li class="nav-item">
+                <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
+                </li>
+                {% endif %}                
+
+                    </ul>
+                </li>
+
+            </ul>
+
+        </div>
+    </div>
+</nav>
+

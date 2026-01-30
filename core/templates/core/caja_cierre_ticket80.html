@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    @page {
+    size: 80mm 270mm;
+    margin: 3mm;
+    }
+
+    body {
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.15;
+    width: 74mm;
+    }
+
+    .center { text-align: center; }
+    .right { text-align: right; }
+    .bold { font-weight: bold; }
+
+    .hr {
+      border-top: 1px dashed #000;
+      margin: 6px 0;
+    }
+
+    .small { font-size: 8pt; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    td, th {
+      padding: 2px 0;
+      vertical-align: top;
+    }
+
+    .k { width: 45%; }
+    .v { width: 55%; }
+
+    .mov th {
+      font-size: 8pt;
+      border-bottom: 1px solid #000;
+      padding-bottom: 3px;
+    }
+    .mov td {
+      font-size: 8pt;
+      padding: 2px 0;
+      border-bottom: 0.5px dotted #999;
+    }
+
+    .wrap {
+      word-wrap: break-word;
+      white-space: normal;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="center bold" style="font-size: 11pt;">CIERRE DE CAJA</div>
+  <div class="center small">Fecha: {{ caja.fecha|date:"d/m/Y" }}</div>
+  {% if caja.fecha_cierre %}
+    <div class="center small">Cerrada: {{ caja.fecha_cierre|date:"d/m/Y H:i" }}</div>
+  {% endif %}
+  <div class="center small">Estado: {% if caja.cerrada %}CERRADA{% else %}ABIERTA{% endif %}</div>
+
+  <div class="hr"></div>
+
+  <table>
+    <tr><td class="k">Saldo inicial</td><td class="v right">S/ {{ caja.saldo_inicial|floatformat:2 }}</td></tr>
+    <tr><td class="k">Ingresos</td><td class="v right">S/ {{ caja.total_ingresos|floatformat:2 }}</td></tr>
+    <tr><td class="k">Egresos</td><td class="v right">S/ {{ caja.total_egresos|floatformat:2 }}</td></tr>
+    <tr><td class="k bold">Saldo final</td><td class="v right bold">S/ {{ caja.saldo_final|floatformat:2 }}</td></tr>
+  </table>
+
+  <div class="hr"></div>
+
+  <div class="bold">ARQUEO (Esperado / Arqueo / Dif.)</div>
+
+  <table>
+    <tr>
+      <td class="k">Efectivo</td>
+      <td class="v right">
+        {{ esperado_efectivo|floatformat:2 }} /
+        {{ caja.arqueo_efectivo|default_if_none:"0.00" }} /
+        {{ caja.dif_efectivo|default_if_none:"0.00" }}
+      </td>
+    </tr>
+    <tr>
+      <td class="k">Yape</td>
+      <td class="v right">
+        {{ esperado_yape|floatformat:2 }} /
+        {{ caja.arqueo_yape|default_if_none:"0.00" }} /
+        {{ caja.dif_yape|default_if_none:"0.00" }}
+      </td>
+    </tr>
+    <tr>
+      <td class="k">Tarjeta</td>
+      <td class="v right">
+        {{ esperado_tarjeta|floatformat:2 }} /
+        {{ caja.arqueo_tarjeta|default_if_none:"0.00" }} /
+        {{ caja.dif_tarjeta|default_if_none:"0.00" }}
+      </td>
+    </tr>
+    <tr>
+      <td class="k">Transfer.</td>
+      <td class="v right">
+        {{ esperado_transferencia|floatformat:2 }} /
+        {{ caja.arqueo_transferencia|default_if_none:"0.00" }} /
+        {{ caja.dif_transferencia|default_if_none:"0.00" }}
+      </td>
+    </tr>
+  </table>
+
+  {% if caja.observacion %}
+    <div class="hr"></div>
+    <div class="bold">OBS:</div>
+    <div class="wrap">{{ caja.observacion }}</div>
+  {% endif %}
+
+  <div class="hr"></div>
+
+  <div class="center bold">MOVIMIENTOS</div>
+
+  <table class="mov">
+    <thead>
+      <tr>
+        <th style="width:18%;">Hora</th>
+        <th style="width:10%;">T</th>
+        <th style="width:18%;">Medio</th>
+        <th style="width:22%;">Cat.</th>
+        <th style="width:32%;" class="right">Monto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in movs %}
+      <tr>
+        <td>{{ m.fecha_hora|date:"H:i" }}</td>
+        <td class="center">{{ m.tipo }}</td>
+        <td>{{ m.medio_pago }}</td>
+        <td>{{ m.categoria }}</td>
+        <td class="right">S/ {{ m.monto|floatformat:2 }}</td>
+      </tr>
+      <tr>
+        <td colspan="5" class="wrap small">
+          {{ m.descripcion }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="hr"></div>
+  <div class="center small">Gracias • Óptica IC</div>
+
+</body>
+</html>

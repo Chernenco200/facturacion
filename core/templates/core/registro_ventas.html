@@ -1,0 +1,1615 @@
+{% extends 'core/base.html' %}
+
+{% load static %}
+
+{% block title %}Registro de Cliente{% endblock %}
+
+{% block content %}
+
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<!-- jQuery UI (JS + CSS) -->
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.3/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/ui/1.13.3/jquery-ui.min.js"></script>
+
+
+<head>
+    <title>Registro de Cliente</title>
+    <link rel="stylesheet" href="{% static 'core/css/style.css' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        fieldset {
+            overflow: hidden;
+        }
+        table.table-bordered td input {
+            width: 60px;
+            text-align: center;
+            padding: 2px;
+        }
+        table.table-bordered th, table.table-bordered td {
+            padding: 3px;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+
+    
+    
+
+    <div class="container mt-4">
+        <div class="row">
+
+                <div class="col-md-5">
+
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+
+                        <!-- IDs que usaremos en JS y para enviar al backend -->
+                        <input type="hidden" id="cliente_id" name="cliente_id">
+                        <input type="hidden" id="medida_id" name="medida_id">
+
+                        <!-- ================= DATOS DEL COMPRADOR ================= -->
+                        <fieldset class="border p-3">
+                            <legend class="w-auto">Datos del comprador</legend>
+
+                        <!-- Buscador de comprador/receta -->
+                        <div class="mb-3">
+
+                           <select id="lista_medidas_recientes" class="form-control">
+                                <option value="">-- Selecciona una receta reciente --</option>
+                                <!-- Las opciones se llenan por JS -->
+                           </select>
+
+                            <input type="text"
+                                id="buscar_comprador"
+                                class="form-control"
+                                placeholder="Escribe DNI o nombre (se cargan las últimas recetas)">
+                            <!-- Lista desplegable con las últimas 10 medidas -->
+                        </div>
+
+
+                            <!-- Datos básicos del comprador (solo lectura, vienen de MedidaVista/Cliente) -->
+                            <div class="mb-2">
+                                <label class="form-label">Nombre</label>
+                                <!-- id_nombre e id_telefono se usan luego en el JS de Emitir factura -->
+                                <input type="text" id="id_nombre" name="nombre" class="form-control" readonly>
+                                
+                                <label class="form-label">Telefono</label>
+                                <!-- id_nombre e id_telefono se usan luego en el JS de Emitir factura -->
+                                <input type="text" id="id_telefono" name="telefono" class="form-control" readonly>
+                            </div>
+                        </fieldset>
+
+                        <!-- ================= VISIÓN DE LEJOS ================= -->
+                        <fieldset class="border p-3 mt-3">
+                            <legend class="w-auto">Visión de lejos</legend>
+                            <div class="table-responsive">
+                                <table class="table table-bordered text-center">
+                                    <thead>
+                                        <tr>
+                                            <th></th>
+                                            <th>Esf</th>
+                                            <th>Cil</th>
+                                            <th>Eje</th>
+                                            <th>DIP</th>
+                                            <th>Add</th>
+                                            <th>AV</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>OD</strong></td>
+                                            <td><input type="number" step="0.25" id="id_esf_lejos_OD" name="esf_lejos_OD"></td>
+                                            <td><input type="number" step="0.25" id="id_cil_lejos_OD" name="cil_lejos_OD"></td>
+                                            <td><input type="number" step="1" id="id_eje_lejos_OD" name="eje_lejos_OD"></td>
+                                            <td><input type="number" step="1" id="id_DIP_lejos_OD" name="DIP_lejos_OD"></td>
+                                            <td><input type="number" step="0.25" id="id_Add_lejos_OD" name="Add_lejos_OD"></td>
+                                            <td><input type="text" id="id_AV_lejos_OD" name="AV_lejos_OD"></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>OI</strong></td>
+                                            <td><input type="number" step="0.25" id="id_esf_lejos_OI" name="esf_lejos_OI"></td>
+                                            <td><input type="number" step="0.25" id="id_cil_lejos_OI" name="cil_lejos_OI"></td>
+                                            <td><input type="number" step="1" id="id_eje_lejos_OI" name="eje_lejos_OI"></td>
+                                            <td><input type="number" step="1" id="id_DIP_lejos_OI" name="DIP_lejos_OI"></td>
+                                            <td><input type="number" step="0.25" id="id_Add_lejos_OI" name="Add_lejos_OI"></td>
+                                            <td><input type="text" id="id_AV_lejos_OI" name="AV_lejos_OI"></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </fieldset>
+
+                        <!-- ================= VISIÓN DE CERCA ================= -->
+                        <fieldset class="border p-3 mt-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="" id="Cerca">
+                                <label class="form-check-label" for="Cerca">
+                                    Visión de Cerca
+                                </label>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-bordered text-center">
+                                    <thead>
+                                        <tr>
+                                            <th></th>
+                                            <th>Esf</th>
+                                            <th>Cil</th>
+                                            <th>Eje</th>
+                                            <th>DIP</th>
+                                            <th>AV</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>OD</strong></td>
+                                            <td><input type="number" step="0.25" id="id_esf_cerca_OD" name="esf_cerca_OD"></td>
+                                            <td><input type="number" step="0.25" id="id_cil_cerca_OD" name="cil_cerca_OD"></td>
+                                            <td><input type="number" step="1" id="id_eje_cerca_OD" name="eje_cerca_OD"></td>
+                                            <td><input type="number" step="1" id="id_DIP_cerca_OD" name="DIP_cerca_OD"></td>
+                                            <td><input type="text" id="id_AV_cerca_OD" name="AV_cerca_OD"></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>OI</strong></td>
+                                            <td><input type="number" step="0.25" id="id_esf_cerca_OI" name="esf_cerca_OI"></td>
+                                            <td><input type="number" step="0.25" id="id_cil_cerca_OI" name="cil_cerca_OI"></td>
+                                            <td><input type="number" step="1" id="id_eje_cerca_OI" name="eje_cerca_OI"></td>
+                                            <td><input type="number" step="1" id="id_DIP_cerca_OI" name="DIP_cerca_OI"></td>
+                                            <td><input type="text" id="id_AV_cerca_OI" name="AV_cerca_OI"></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </fieldset>
+
+                    </form>
+
+                </div>
+
+
+            <div class="col-md-7">
+                    <fieldset class="border p-3 mt-3">
+                    <legend class="w-auto">Seleccionar Productos</legend>
+                    <p>
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalLunas">
+                        Seleccionar Lunas
+                    </button>
+
+                    <!-- Modal Bootstrap -->
+                    <div class="modal fade" id="modalLunas" tabindex="-1" aria-labelledby="modalLunasLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered" style="max-width: 800px;"> <!-- Un poco más ancho -->
+                        <div class="modal-content">
+                            <div class="modal-header">
+                            <h5 class="modal-title" id="modalLunasLabel">Selección de Lunas</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+
+                            <div class="modal-body">
+                            <div class="row">
+                                <!-- Columna izquierda -->
+                                <div class="col-md-4">
+                                <div class="mb-3" id="enfoque">
+                                    <label for="{{ tipo_lunas_form.enfoque.id_for_label }}" class="form-label">Enfoque</label>
+                                    {{ tipo_lunas_form.enfoque }}
+                                </div>
+                                <div class="mb-3" id="tipo_multifocal_container" style="display: none;">
+                                    <label for="{{ tipo_lunas_form.tipo_multifocal.id_for_label }}" class="form-label">Tipo Multifocal</label>
+                                    {{ tipo_lunas_form.tipo_multifocal }}
+                                </div>
+
+                                <div class="mb-3" id="marca_multifocal_container" style="display: none;">
+                                    <label for="{{ tipo_lunas_form.marca_multifocal.id_for_label }}" class="form-label">Marca Multifocal</label>
+                                    {{ tipo_lunas_form.marca_multifocal }}
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ tipo_lunas_form.material.id_for_label }}" class="form-label">Material</label>
+                                    {{ tipo_lunas_form.material }}
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ tipo_lunas_form.tratamiento.id_for_label }}" class="form-label">Tratamiento</label>
+                                    {{ tipo_lunas_form.tratamiento }}
+                                </div>
+
+                                <div class="mb-3" id="colorfotosensible_container" style="display: none;">
+                                    <label for="{{ tipo_lunas_form.colorfotosensible.id_for_label }}" class="form-label">Color</label>
+                                    {{ tipo_lunas_form.colorfotosensible }}
+                                </div>
+                                <div class="mb-3">
+                                    <label for="{{ tipo_lunas_form.fabricacion.id_for_label }}" class="form-label">Fabricación</label>
+                                    {{ tipo_lunas_form.fabricacion }}
+                                </div>
+
+                                <div class="mb-3">
+                                <label class="form-label form-label-sm mb-1">Nombre</label>
+                                <input type="text" id="id_producto_libre_nombre" class="form-control form-control-sm"
+                                        placeholder="Ej: Biselado, Garantía, Clip-on, etc.">
+                                </div>
+
+                                </div>
+                                <!-- Columna derecha -->
+                                <div class="col-md-8">
+                                <fieldset class="border p-2">
+                                    <legend class="w-auto">Precios de Lunas</legend>
+
+                                    <div class="mb-2">
+                                    <input type="radio" name="tipo_luna" value="Lejos:" id="radio-lejos"> Lejos
+                                    <input type="radio" name="tipo_luna" value="Cerca:" id="radio-cerca"> Cerca
+                                    <!-- <input type="radio" name="tipo_luna" value=""> Bif -->
+                                    <!-- <input type="radio" name="tipo_luna" value=""> Multi -->
+                                    </div>
+
+                                    <div class="table-responsive">
+                                    <table class="table table-bordered text-center table-sm">
+                                        <thead>
+                                        <tr>
+                                            <th></th>
+                                            <th>P. Mínimo</th>
+                                            <th>P. Promedio</th>
+                                            <th>P. Máximo</th>
+                                            <th>P. Venta</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <tr>
+                                            <td>
+                                            <div class="form-check">
+                                                <input type="checkbox" id="checkbox-od">
+                                                <label class="form-check-label" for="checkbox-od">OD</label>
+                                            </div>
+                                            </td>
+                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmin-od">S/</button></td>
+                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmean-od">S/</button></td>
+                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmax-od">S/</button></td>
+                                            <td><input name="p_venta_od" class="form-control form-control-sm"></td>
+                                        </tr>
+                                        <tr>
+                                            <td>
+                                            <div class="form-check">
+                                                <input type="checkbox" id="checkbox-oi">
+                                                <label class="form-check-label" for="checkbox-oi">OI</label>
+                                            </div>
+                                            </td>
+                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmin-oi">Pmin</button></td>
+                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmean-oi">Pmean</button></td>
+                                            <td><button type="button" class="btn btn-secondary btn-sm" id="pmax-oi">S/</button></td>
+                                            <td><input name="p_venta_oi" class="form-control form-control-sm"></td>
+                                        </tr>
+                                        </tbody>
+                                    </table>
+                                    </div>
+                                </fieldset>
+
+                                <fieldset class="border p-2">              
+                                            <div class="row mt-5">
+                                    <div class="col-4">
+                                        <div class="input-group">
+                                            <div class="input-group-append pr-1">
+                                                    <h7>Vendedor:</h7>
+                                                </div>
+                                                <select required name="vendedor" class="form-control border border-dark text-blue"
+                                                    id="id_vendedor">
+                                                    <option value="Hellen" selected>Hellen</option>
+                                                    <option value="Rosmery">Rosmery</option>
+                                                    <option value="Grecia">Grecia</option>
+                                                    <option value="Ana">Ana</option>
+                                                    <option value="Lucita">Lucita</option>
+                                                    <option value="Jerry">Jerry</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    </fieldset>
+                                </div>
+                            </div>
+                            </div>
+                          
+                            <button type="button" class="btn btn-primary mt-2" data-bs-dismiss="modal">Agregar Lunas</button>
+                    
+                        </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalProducto">
+                    Agregar Producto
+                    </button>
+
+                    <!-- Modal Bootstrap Monturas-->
+                    <div class="modal fade" id="modalProducto" tabindex="-1" aria-labelledby="modalProductoLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                        <form method="post" action="{% url 'crear_producto' %}">
+                            {% csrf_token %}
+                            <div class="modal-header">
+                            <h5 class="modal-title" id="modalProductoLabel">Agregar Producto</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                            <div class="mb-3 position-relative">
+                                <label for="id_cod" class="form-label">Código</label>
+                                <input type="text" name="cod" class="form-control" id="id_cod" autocomplete="off">
+                                <ul id="sugerencias-cod" class="list-group position-absolute w-100" style="z-index: 1000;"></ul>
+                            </div>
+                            <p>
+                            {{ producto_form.descripcion.label_tag }} {{ producto_form.descripcion }}
+                            <p>
+                            {{ producto_form.precio_venta.label_tag }} {{ producto_form.precio_venta }}
+                            <p>
+                            <div style="display: none;">
+                            {{ producto_form.precio_compra.label_tag }} {{ producto_form.precio_compra }}
+                            </div>
+                            <p>
+
+                            
+                            
+                            {{ producto_form.stock.label_tag }} {{ producto_form.stock }}
+                            <p>
+                            {{ producto_form.tipo.label_tag }} {{ producto_form.tipo }}
+                            </p>
+                            </div>
+                            <div class="mb-3 row" style="max-width: 270px;">
+                                <label for="id_tipo" class="col-sm-3 col-form-label text-end">Cantidad:</label>
+                                <div class="col-sm-9">
+                                <input type="number" name="cantidad" id="id_cantidad" class="form-control" value="1" min="1">
+                                </div>
+                            </div>  
+                            <div class="modal-footer">
+                            <button type="button" class="btn btn-primary mt-2" data-bs-dismiss="modal" id="agregarProductoTabla">Agregar a tabla</button>
+
+                            </div>
+                        </form>
+                        </div>
+                    </div>
+                    </div>                         
+
+                    </fieldset>
+
+                 <div class="container mt-4">
+                    <h4>Detalle de Productos Agregados</h4>
+                    <table class="table table-bordered" id="tabla-preventa">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Descripción</th>
+                                <th>Cant</th>
+                                <th>Precio Total </th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <div class="text-end mt-2" style="margin-right: 110px;">
+                    <strong>Total General: S/ <span id="total-general">0.00</span></strong>
+                    </div>
+
+
+                    <div class="col-md-3">
+                    <label class="form-label">Medio de pago (A cuenta)</label>
+                    <select id="medio_pago" class="form-select">
+                    <option value="EFECTIVO">Efectivo</option>
+                    <option value="YAPE">Yape</option>
+                    <option value="TARJETA">Tarjeta</option>
+                    <option value="TRANSFERENCIA">Transferencia</option>
+                    </select>
+                    </div>
+
+
+
+
+                    <button class="btn btn-success mt-2" id="emitir-factura">Emitir Factura</button>
+                    </div>
+
+            </div>
+
+        </div>
+
+        <div class="row">
+            
+
+            <div class="container mt-4">
+                    <div class="mb-3">
+                        <label id="descripcion-label" for="id_descripcion" for="{{ tipo_lunas_form.descripcion.id_for_label }}" class="form-label">Descripción</label>
+                        {{ tipo_lunas_form.descripcion }}
+                    </div>
+                    <div class="mb-3">
+                        <label id="serie-label-od">Serie OD</label>
+                        <label id="serie-label-oi">Serie OI</label>
+                        
+                    </div>
+                        <div class="mb-3">
+                        <label id="precio-label-od">Precio OD</label>
+                        <label id="precio-label-oi">Precio OI</label> 
+                        <p><label id="precio-final-label">Precio Final</label></p>
+                        <p><label id="cantidad">0</label></p>
+
+                        <!-- Este input oculto enviará el precio final al servidor -->
+                        <input type="hidden" name="precio_final" id="id_precio_final" value="">
+
+                    </div>
+            </div>
+
+        <!-- Scripts necesarios -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+       
+
+                </div>            
+        </div>
+
+   
+
+
+
+
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var enfoqueField = document.getElementById("id_enfoque");
+            var tipoMultifocalContainer = document.getElementById("tipo_multifocal_container");
+            var tipoMultifocalField = document.getElementById("id_tipo_multifocal");
+            var marcaMultifocalContainer = document.getElementById("marca_multifocal_container");
+            var tratamientoField = document.getElementById("id_tratamiento");
+            var colorFotosensibleContainer = document.getElementById("colorfotosensible_container");
+            var materialField = document.getElementById("id_material");
+
+            function toggleTipoMultifocal() {
+                if (enfoqueField.value === "Multifocal") {
+                    tipoMultifocalContainer.style.display = "block";
+                } else {
+                    tipoMultifocalContainer.style.display = "none";
+                    marcaMultifocalContainer.style.display = "none";
+                }
+                toggleMarcaMultifocal();
+            }
+
+            function toggleMarcaMultifocal() {
+                if (enfoqueField.value === "Multifocal" && tipoMultifocalField.value === "Digital") {
+                    marcaMultifocalContainer.style.display = "block";
+                } else {
+                    marcaMultifocalContainer.style.display = "none";
+                }
+            }
+
+            function toggleColorFotosensible() {
+                if (tratamientoField.value === "Fotocromatico" || tratamientoField.value === "Blue" || tratamientoField.value === "FotoBlue" || tratamientoField.value === "Transition") {
+                    colorFotosensibleContainer.style.display = "block";
+                } else {
+                    colorFotosensibleContainer.style.display = "none";
+                }
+            }
+
+            function filterTratamientoOptions() {
+                var selectedMaterial = materialField.value;
+                var options = tratamientoField.options;
+                
+                for (var i = 0; i < options.length; i++) {
+                    if (selectedMaterial === "Vidrio" && (options[i].value === "Blue" || options[i].value === "FotoBlue" || options[i].value === "Transition")) {
+                        options[i].style.display = "none";
+                    } else {
+                        options[i].style.display = "block";
+                    }
+                }
+            }
+
+            toggleTipoMultifocal();
+            toggleMarcaMultifocal();
+            toggleColorFotosensible();
+            filterTratamientoOptions();
+
+            enfoqueField.addEventListener("change", toggleTipoMultifocal);
+            tipoMultifocalField.addEventListener("change", toggleMarcaMultifocal);
+            tratamientoField.addEventListener("change", toggleColorFotosensible);
+            materialField.addEventListener("change", filterTratamientoOptions);
+        });
+    </script>
+
+    <script>function buscarCliente() {
+        const dniInput = document.getElementById('id_DNI');
+        const nombreInput = document.getElementById('id_nombre');
+        const direccionInput = document.getElementById('id_direccion');
+        const telefonoInput = document.getElementById('id_telefono');
+    
+        if (!dniInput || !nombreInput || !direccionInput || !telefonoInput) {
+            alert("No se encontraron los campos del formulario.");
+            return;
+        }
+    
+        const dni = dniInput.value;
+        if (!dni) {
+            alert("Ingrese el DNI para buscar.");
+            return;
+        }
+    
+        fetch(`/clientes/buscar/?ruc_dni=${dni}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.encontrado) {
+                    nombreInput.value = data.nombre;
+                    direccionInput.value = data.direccion;
+                    telefonoInput.value = data.telefono;
+                } else {
+                    alert("Cliente no encontrado.");
+                }
+            })
+            .catch(error => {
+                console.error('Error al buscar cliente:', error);
+                alert("Ocurrió un error al buscar el cliente.");
+            });
+    }
+    </script>
+
+
+<script>
+    // Copiar OI (izquierdo) de lejos → cerca
+document.addEventListener("DOMContentLoaded", function () {
+    const checkbox = document.getElementById("Cerca");
+
+    checkbox.addEventListener("change", function () {
+        if (checkbox.checked) {
+            // Copiar OD (derecho) de lejos → cerca
+
+const esfLejosOD = parseFloat(document.getElementById("id_esf_lejos_OD").value) || 0;
+const addLejosOD = parseFloat(document.getElementById("id_Add_lejos_OD").value) || 0;
+
+            document.getElementById("id_esf_cerca_OD").value = (esfLejosOD + addLejosOD).toFixed(2);
+            document.getElementById("id_cil_cerca_OD").value = document.getElementById("id_cil_lejos_OD").value;
+            document.getElementById("id_eje_cerca_OD").value = document.getElementById("id_eje_lejos_OD").value;
+            document.getElementById("id_DIP_cerca_OD").value = document.getElementById("id_DIP_lejos_OD").value;
+            document.getElementById("id_AV_cerca_OD").value = document.getElementById("id_AV_lejos_OD").value;
+
+            // Copiar OI (izquierdo) de lejos → cerca
+const esfLejosOI = parseFloat(document.getElementById("id_esf_lejos_OI").value) || 0;
+
+
+
+            document.getElementById("id_esf_cerca_OI").value = (esfLejosOI + addLejosOD).toFixed(2);
+            document.getElementById("id_cil_cerca_OI").value = document.getElementById("id_cil_lejos_OI").value;
+            document.getElementById("id_eje_cerca_OI").value = document.getElementById("id_eje_lejos_OI").value;
+            document.getElementById("id_DIP_cerca_OI").value = document.getElementById("id_DIP_lejos_OI").value;
+            document.getElementById("id_AV_cerca_OI").value = document.getElementById("id_AV_lejos_OI").value;
+        }
+    });
+});
+</script>
+
+<script>
+    // Crea la descripción del producto
+    document.addEventListener("DOMContentLoaded", function () {
+        const campos = [
+            'id_enfoque',
+            'id_tipo_multifocal',
+            'id_marca_multifocal',
+            'id_material',
+            'id_tratamiento',
+            'id_colorfotosensible',
+            'id_fabricacion'
+        ];
+
+        const descripcionLabel = document.getElementById('descripcion-label');
+        const descripcionInput = document.getElementById('id_descripcion');
+
+        // 👇 NUEVO: input libre
+        const productoLibreInput = document.getElementById('id_producto_libre_nombre');
+
+
+
+        function construirDescripcion() {
+            const valores = [];
+
+            campos.forEach((id) => {
+                const campo = document.getElementById(id);
+                if (campo && campo.options && campo.selectedIndex >= 0) {
+                    const texto = campo.options[campo.selectedIndex].text;
+                    if (texto && texto !== '---------') {
+                        valores.push(texto);
+
+                        // Insertar tipo_luna justo después del Enfoque
+                        if (id === 'id_enfoque') {
+                            const tipoRadio = document.querySelector('input[name="tipo_luna"]:checked');
+                            if (tipoRadio && tipoRadio.value) {
+                                valores.push(tipoRadio.value); // usa el value con ":" si lo definiste así
+                            }
+                        }
+                    }
+                }
+            });
+            
+            //  2) 👇 Agrega lo escrito libremente (si existe)
+            const libre = (productoLibreInput?.value || "").trim();
+            if (libre) {
+              valores.push(libre);
+            }            
+
+            const resultado = valores.join(' ');
+            descripcionLabel.textContent = resultado;
+            if (descripcionInput) {
+                descripcionInput.value = resultado;
+            }
+        }
+
+        // Agrega listeners a los selects
+        campos.forEach(id => {
+            const campo = document.getElementById(id);
+            if (campo) {
+                campo.addEventListener('change', function () {
+                    if (id === 'id_enfoque') {
+                        // Limpiar todos los campos excepto el enfoque
+                        campos.forEach(otroId => {
+                            if (otroId !== 'id_enfoque') {
+                                const otroCampo = document.getElementById(otroId);
+                                if (otroCampo) {
+                                    otroCampo.selectedIndex = 0;
+                                }
+                            }
+                        });
+
+                    // 👇 NUEVO: al cambiar enfoque también limpio el texto libre
+                        if (productoLibreInput) productoLibreInput.value = "";                        
+                        descripcionLabel.textContent = '';
+                        if (descripcionInput) descripcionInput.value = '';
+                    }
+                    construirDescripcion();
+                });
+            }
+        });
+
+        // También actualiza al cambiar el tipo_luna (Lejos:, Cerca:, etc.)
+        document.querySelectorAll('input[name="tipo_luna"]').forEach(radio => {
+            radio.addEventListener('change', construirDescripcion);
+        });
+
+        // 👇 NUEVO: mientras escribes, se actualiza como los demás campos
+        productoLibreInput?.addEventListener('input', construirDescripcion);
+        productoLibreInput?.addEventListener('change', construirDescripcion);        
+
+        construirDescripcion();  // Ejecutar al cargar
+    });
+</script>
+
+
+
+<script>
+    // Calcular Serie OD OI 
+document.addEventListener("DOMContentLoaded", function () {
+    const cilLejosOD = document.getElementById("id_cil_lejos_OD");
+    const cilCercaOD = document.getElementById("id_cil_cerca_OD");
+    const cilLejosOI = document.getElementById("id_cil_lejos_OI");
+    const cilCercaOI = document.getElementById("id_cil_cerca_OI");
+
+    const serieOD = document.getElementById("serie-label-od");
+    const serieOI = document.getElementById("serie-label-oi");
+
+    function calcularSerie(valor) {
+        const num = Math.abs(parseFloat(valor.replace(",", ".")));
+        if (isNaN(num)) return "Serie";
+        if (num <= 2) return "1";
+        else if (num <= 4) return "2";
+        else return "3";
+    }
+
+    function getTipoSeleccionado() {
+        const seleccionado = document.querySelector('input[name="tipo_luna"]:checked');
+        return seleccionado ? seleccionado.value.trim().toLowerCase() : "";
+    }
+
+    function actualizarSeries() {
+        const tipo = getTipoSeleccionado();
+        const esCerca = tipo === "cerca:";
+        const esLejos = ["lejos:", "", ""].includes(tipo);
+
+        // Ojo derecho
+        if (esCerca && cilCercaOD) {
+            serieOD.textContent = calcularSerie(cilCercaOD.value);
+        } else if (esLejos && cilLejosOD) {
+            serieOD.textContent = calcularSerie(cilLejosOD.value);
+        } else {
+            serieOD.textContent = "Serie OD";
+        }
+
+        // Ojo izquierdo
+        if (esCerca && cilCercaOI) {
+            serieOI.textContent = calcularSerie(cilCercaOI.value);
+        } else if (esLejos && cilLejosOI) {
+            serieOI.textContent = calcularSerie(cilLejosOI.value);
+        } else {
+            serieOI.textContent = "Serie OI";
+        }
+    }
+
+    // Eventos
+    document.querySelectorAll('input[name="tipo_luna"]').forEach(radio => {
+        radio.addEventListener("change", actualizarSeries);
+    });
+
+    [cilLejosOD, cilCercaOD].forEach(input => {
+        if (input) input.addEventListener("input", actualizarSeries);
+    });
+
+    [cilLejosOI, cilCercaOI].forEach(input => {
+        if (input) input.addEventListener("input", actualizarSeries);
+    });
+
+    // Ejecutar al cargar
+    actualizarSeries();
+});
+</script>
+
+
+<script>
+    // Calcula Precios Base OD OI 
+document.addEventListener("DOMContentLoaded", function () {
+    const enfoqueField = document.getElementById("id_enfoque");
+    const materialField = document.getElementById("id_material");
+    const tratamientoField = document.getElementById("id_tratamiento");
+    const fabricacionField = document.getElementById("id_fabricacion");
+
+    const precioLabelOD = document.getElementById("precio-label-od");
+    const precioLabelOI = document.getElementById("precio-label-oi");
+
+    function actualizarPrecio() {
+        let precioBase = 0;
+
+        const enfoque = enfoqueField?.options[enfoqueField.selectedIndex]?.text.trim().toLowerCase();
+        const material = materialField?.options[materialField.selectedIndex]?.text.trim().toLowerCase();
+        const tratamiento = tratamientoField?.options[tratamientoField.selectedIndex]?.text.trim().toLowerCase();
+        const fabricacion = fabricacionField?.options[fabricacionField.selectedIndex]?.text.trim().toLowerCase();
+
+        // Precio base según enfoque
+        if (enfoque === "monofocal") {
+            precioBase = 5;
+        } else if (enfoque === "multifocal") {
+            precioBase = 20;
+        } else if (enfoque === "bifocal flat top:") {
+            precioBase = 10;
+        } else if (enfoque === "bifocal invisible:") {
+            precioBase = 15;
+        } else {
+            if (precioLabelOD) precioLabelOD.textContent = "Precio";
+            if (precioLabelOI) precioLabelOI.textContent = "Precio";
+            return;
+        }
+
+        // Recargo por material
+        const recargosMaterial = {
+            "vidrio": 10,
+            "resina": 10,
+            "policarbonato": 15,
+            "futurex": 20
+        };
+        if (recargosMaterial[material] !== undefined) {
+            precioBase += recargosMaterial[material];
+        }
+
+        // Recargo por tratamiento
+        const recargosTratamiento = {
+            "uv": 10,
+            "uv + ar": 20,
+            "uv + ar + blue protect": 35,
+            "uv + ar + fotocromático": 35,
+            "uv + ar + blue protect + fotomatic": 40,
+            "uv + ar + transition": 50
+        };
+        if (recargosTratamiento[tratamiento] !== undefined) {
+            precioBase += recargosTratamiento[tratamiento];
+        }
+
+        // Recargo por fabricación
+        const recargosFabricacion = {
+            "curva": 10,
+            "reducción": 20,
+            "alto índice": 30
+        };
+        if (recargosFabricacion[fabricacion] !== undefined) {
+            precioBase += recargosFabricacion[fabricacion];
+        }
+
+        // Mostrar en ambos labels
+        if (precioLabelOD) precioLabelOD.textContent = precioBase;
+        if (precioLabelOI) precioLabelOI.textContent = precioBase;
+    }
+
+    // Eventos
+    if (enfoqueField) enfoqueField.addEventListener("change", actualizarPrecio);
+    if (materialField) materialField.addEventListener("change", actualizarPrecio);
+    if (tratamientoField) tratamientoField.addEventListener("change", actualizarPrecio);
+    if (fabricacionField) fabricacionField.addEventListener("change", actualizarPrecio);
+
+    actualizarPrecio();  // Ejecutar al cargar
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const checkboxOD = document.getElementById("checkbox-od");
+    const checkboxOI = document.getElementById("checkbox-oi");
+
+    const precioOD = document.getElementById("precio-label-od");
+    const precioOI = document.getElementById("precio-label-oi");
+
+    const serieOD = document.getElementById("serie-label-od");
+    const serieOI = document.getElementById("serie-label-oi");
+
+    const pmeanOD = document.getElementById("pmean-od");
+    const pmeanOI = document.getElementById("pmean-oi");
+
+    const pminOD = document.getElementById("pmin-od");
+    const pminOI = document.getElementById("pmin-oi");
+
+    function calcularTotal(precio, serie) {
+        let adicional = 0;
+        if (serie === "2") adicional = 20;
+        else if (serie === "3") adicional = 40;
+        return precio + adicional;
+    }
+
+    function actualizarBotones(precioLabel, serieLabel, checkbox, pmeanBtn, pminBtn) {
+        const precio = parseFloat(precioLabel.textContent.replace(",", ".")) || 0;
+        const serie = serieLabel.textContent.trim();
+
+        if (isNaN(precio)) {
+            pmeanBtn.textContent = "Valor inválido";
+            pminBtn.textContent = "Valor inválido";
+            return;
+        }
+
+        if (checkbox.checked) {
+            const total = calcularTotal(precio, serie);
+            pmeanBtn.textContent = `S/${total}`;
+            pminBtn.textContent = `S/${total - 15}`;
+        } else {
+            pmeanBtn.textContent = "Pmean";
+            pminBtn.textContent = "Pmin";
+        }
+    }
+
+    function actualizarOD() {
+        actualizarBotones(precioOD, serieOD, checkboxOD, pmeanOD, pminOD);
+    }
+
+    function actualizarOI() {
+        actualizarBotones(precioOI, serieOI, checkboxOI, pmeanOI, pminOI);
+    }
+
+    // Eventos
+    checkboxOD.addEventListener("change", actualizarOD);
+    checkboxOI.addEventListener("change", actualizarOI);
+
+    const observer = new MutationObserver(() => {
+        actualizarOD();
+        actualizarOI();
+    });
+
+    [precioOD, serieOD, precioOI, serieOI].forEach(label => {
+        observer.observe(label, { childList: true });
+    });
+
+    // Ejecutar al cargar
+    actualizarOD();
+    actualizarOI();
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const pmeanOD = document.getElementById("pmean-od");
+    const pmeanOI = document.getElementById("pmean-oi");
+    const pminOD = document.getElementById("pmin-od");
+    const pminOI = document.getElementById("pmin-oi");
+
+    const inputVentaOD = document.querySelector('input[name="p_venta_od"]');
+    const inputVentaOI = document.querySelector('input[name="p_venta_oi"]');
+
+    const precioFinalLabel = document.getElementById("precio-final-label");
+
+    function extraerNumero(texto) {
+        const match = texto.match(/[-]?[0-9]+(?:\.[0-9]+)?/); // corregido el punto
+        return match ? parseFloat(match[0]) : null;
+    }
+
+    function actualizarPrecioFinal() {
+        const valOD = parseFloat(inputVentaOD?.value.replace(",", ".")) || 0;
+        const valOI = parseFloat(inputVentaOI?.value.replace(",", ".")) || 0;
+        const total = valOD + valOI;
+        if (precioFinalLabel) {
+            precioFinalLabel.textContent = `Precio Final: ${total.toFixed(2)}`;
+        }
+        const precioFinalInput = document.getElementById("id_precio_final");
+        if (precioFinalInput) {
+            precioFinalInput.value = total.toFixed(2);
+        }
+    }
+
+    function copiarValor(boton, input) {
+        const valor = extraerNumero(boton.textContent);
+        if (valor !== null && input) {
+            input.value = valor;
+            actualizarPrecioFinal();
+        }
+    }
+
+    // Eventos para botones
+    pmeanOD?.addEventListener("click", () => copiarValor(pmeanOD, inputVentaOD));
+    pminOD?.addEventListener("click", () => copiarValor(pminOD, inputVentaOD));
+    pmeanOI?.addEventListener("click", () => copiarValor(pmeanOI, inputVentaOI));
+    pminOI?.addEventListener("click", () => copiarValor(pminOI, inputVentaOI));
+
+    // También actualizar si el usuario edita los inputs manualmente
+    inputVentaOD?.addEventListener("input", actualizarPrecioFinal);
+    inputVentaOI?.addEventListener("input", actualizarPrecioFinal);
+
+    // Ejecutar al cargar por si hay valores precargados
+    actualizarPrecioFinal();
+});
+</script>
+
+<script>
+    // SCRIPT PARA BORRAR INPUT SI SE DESACTIVA EL CHECKBOX
+document.addEventListener("DOMContentLoaded", function () {
+    const checkboxOD = document.getElementById("checkbox-od");
+    const checkboxOI = document.getElementById("checkbox-oi");
+
+    const inputVentaOD = document.querySelector('input[name="p_venta_od"]');
+    const inputVentaOI = document.querySelector('input[name="p_venta_oi"]');
+
+    const precioFinalLabel = document.getElementById("precio-final-label");
+
+    function actualizarPrecioFinal() {
+        const valOD = parseFloat(inputVentaOD?.value.replace(",", ".")) || 0;
+        const valOI = parseFloat(inputVentaOI?.value.replace(",", ".")) || 0;
+        const total = valOD + valOI;
+        if (precioFinalLabel) {
+            precioFinalLabel.textContent = `Precio Final: ${total.toFixed(2)}`;
+        }
+       const precioFinalInput = document.getElementById("id_precio_final");
+        if (precioFinalInput) {
+            precioFinalInput.value = total.toFixed(2);
+    }
+}
+
+    checkboxOD?.addEventListener("change", function () {
+        if (!this.checked && inputVentaOD) {
+            inputVentaOD.value = "";
+            actualizarPrecioFinal();
+        }
+    });
+
+    checkboxOI?.addEventListener("change", function () {
+        if (!this.checked && inputVentaOI) {
+            inputVentaOI.value = "";
+            actualizarPrecioFinal();
+        }
+    });
+
+    inputVentaOD?.addEventListener("input", actualizarPrecioFinal);
+    inputVentaOI?.addEventListener("input", actualizarPrecioFinal);
+
+    // Ejecutar al cargar
+    actualizarPrecioFinal();
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    let contador = document.querySelectorAll("#tabla-preventa tbody tr").length + 1;
+    const tabla = document.querySelector("#tabla-preventa tbody");
+
+    // Botón "Agregar Lunas" dentro del modal
+    const btnAgregarLunas = document.querySelector("#modalLunas button.btn.btn-primary");
+
+    const inputVentaOD = document.querySelector('input[name="p_venta_od"]');
+    const inputVentaOI = document.querySelector('input[name="p_venta_oi"]');
+
+    function getTexto(id) {
+        return document.getElementById(id)?.textContent.trim() || "";
+    }
+    function getValor(id) {
+        return document.getElementById(id)?.value || "";
+    }
+
+    function esBifocalOMulti() {
+        const enfoque = (getValor("id_enfoque") || "").toLowerCase();
+        return enfoque.includes("bifocal") || enfoque.includes("multifocal");
+    }
+
+    function getTipoSeleccionado() {
+        const r = document.querySelector('input[name="tipo_luna"]:checked');
+        return r ? (r.value || "").toLowerCase() : "lejos:";
+    }
+
+    function construirMedida(ojo) {
+        const tipo = getTipoSeleccionado();
+        const esCerca = tipo === "cerca:";
+
+        const suf = ojo === "OD" ? "_OD" : "_OI";
+        const esfId = esCerca ? `id_esf_cerca${suf}` : `id_esf_lejos${suf}`;
+        const cilId = esCerca ? `id_cil_cerca${suf}` : `id_cil_lejos${suf}`;
+
+        const esf = getValor(esfId);
+        const cil = getValor(cilId);
+
+        // Add siempre desde "lejos" (como acordamos)
+        const add = getValor(`id_Add_lejos${suf}`);
+
+        let texto = `(${ojo}: Esf ${esf} Cil ${cil}`;
+        if (esBifocalOMulti() && add) texto += ` Add ${add}`;
+        texto += `)`;
+
+        return texto;
+    }
+
+    function agregarFila(descripcion, precio) {
+        const fila = document.createElement("tr");
+        fila.innerHTML = `
+            <td>${contador++}</td>
+            <td>${descripcion}</td>
+            <td>1</td>
+            <td>S/ ${precio.toFixed(2)}</td>
+            <td><button class="btn btn-sm btn-danger eliminar-fila">🗑️</button></td>
+        `;
+        tabla.appendChild(fila);
+    }
+
+    function parsePrecio(inputEl) {
+        const raw = (inputEl?.value || "").toString().trim().replace(",", ".");
+        const n = parseFloat(raw);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    btnAgregarLunas?.addEventListener("click", function () {
+
+        const descripcionBase = getTexto("descripcion-label");
+        if (!descripcionBase) {
+            alert("No se pudo generar la descripción de las lunas.");
+            return;
+        }
+
+        const odChecked = document.getElementById("checkbox-od")?.checked;
+        const oiChecked = document.getElementById("checkbox-oi")?.checked;
+
+        if (!odChecked && !oiChecked) {
+            alert("Debes seleccionar al menos OD u OI.");
+            return;
+        }
+
+        let agregado = false;
+
+        // OD
+        if (odChecked) {
+            const precioOD = parsePrecio(inputVentaOD);
+            if (precioOD <= 0) {
+                alert("Ingresa un precio válido en P. Venta OD.");
+                return;
+            }
+            const descOD = `${descripcionBase} ${construirMedida("OD")}`;
+            agregarFila(descOD, precioOD);
+            agregado = true;
+        }
+
+        // OI
+        if (oiChecked) {
+            const precioOI = parsePrecio(inputVentaOI);
+            if (precioOI <= 0) {
+                alert("Ingresa un precio válido en P. Venta OI.");
+                return;
+            }
+            const descOI = `${descripcionBase} ${construirMedida("OI")}`;
+            agregarFila(descOI, precioOI);
+            agregado = true;
+        }
+
+        if (agregado) {
+            actualizarTotalGeneral();
+        }
+    });
+
+});
+</script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const codInput = document.getElementById("id_cod");
+    const sugerencias = document.getElementById("sugerencias-cod");
+
+    const descripcionInput = document.getElementById("id_descripcion");
+    const precioVentaInput = document.getElementById("id_precio_venta");
+    const precioCompraInput = document.getElementById("id_precio_compra");
+    const stockInput = document.getElementById("id_stock");
+    const tipoInput = document.getElementById("id_tipo");
+
+    codInput.addEventListener("input", function () {
+        const query = this.value.trim();
+        sugerencias.innerHTML = "";
+
+        if (query.length > 0) {
+            fetch(`/buscar-codigos/?q=${encodeURIComponent(query)}`)
+                .then(res => res.json())
+                .then(data => {
+                    data.forEach(item => {
+                        const li = document.createElement("li");
+                        li.textContent = item.cod;
+                        li.classList.add("list-group-item", "list-group-item-action");
+                        li.addEventListener("click", function () {
+                            codInput.value = item.cod;
+                            sugerencias.innerHTML = "";
+
+                            // Obtener más datos del producto seleccionado
+                            fetch(`/producto-por-codigo/?cod=${item.cod}`)
+                                .then(res => res.json())
+                                .then(datos => {
+                                    descripcionInput.value = datos.descripcion || "";
+                                    precioVentaInput.value = datos.precio_venta || "";
+                                    precioCompraInput.value = datos.precio_compra || "";
+                                    stockInput.value = datos.stock || "";
+                                    tipoInput.value = datos.tipo || "";
+                                });
+                        });
+                        sugerencias.appendChild(li);
+                    });
+                });
+        }
+    });
+
+    document.addEventListener("click", function (e) {
+        if (!codInput.contains(e.target) && !sugerencias.contains(e.target)) {
+            sugerencias.innerHTML = "";
+        }
+    });
+});
+</script>
+
+<style>
+#sugerencias-cod {
+    max-height: 200px;
+    overflow-y: auto;
+    cursor: pointer;
+}
+</style>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    let contador = 1;
+    const tabla = document.querySelector("#tabla-preventa tbody");
+
+    document.getElementById("agregarProductoTabla")?.addEventListener("click", function () {
+        const cod        = document.getElementById("id_cod")?.value.trim();           // <- NUEVO
+        const descripcion = document.getElementById("id_descripcion")?.value.trim();
+        const precio      = parseFloat(document.getElementById("id_precio_venta")?.value || "0");
+        const cantidad    = parseInt(document.getElementById("id_cantidad")?.value || "0");
+
+        if (!descripcion || isNaN(precio) || isNaN(cantidad) || cantidad <= 0) {
+            alert("Debe ingresar descripción, precio y cantidad válidos.");
+            return;
+        }
+
+        const total = precio; // ya lo usabas así
+
+        const fila = document.createElement("tr");
+        // Guardamos el código en un data-atributo (no ocupa una columna)
+        if (cod) {
+            fila.dataset.cod = cod;
+        }
+
+        fila.innerHTML = `
+            <td>${contador++}</td>
+            <td>${descripcion}</td>
+            <td>${cantidad}</td>
+            <td>S/ ${total.toFixed(2)}</td>
+            <td><button class="btn btn-sm btn-danger eliminar-fila">🗑️</button></td>
+        `;
+        tabla.appendChild(fila);
+        actualizarTotalGeneral();
+
+        bootstrap.Modal.getInstance(document.getElementById('modalProducto')).hide();
+    });
+
+    document.getElementById("tabla-preventa").addEventListener("click", function (e) {
+        if (e.target.classList.contains("eliminar-fila")) {
+            e.target.closest("tr").remove();
+            actualizarTotalGeneral();
+        }
+    });
+});
+
+// Función que ya tienes
+function actualizarTotalGeneral() {
+    const filas = document.querySelectorAll("#tabla-preventa tbody tr");
+    let totalGeneral = 0;
+
+    filas.forEach(fila => {
+        const precioTexto = fila.children[3].textContent.replace("S/", "").trim();
+        const subtotal = parseFloat(precioTexto) || 0;
+        totalGeneral += subtotal;
+    });
+
+    document.getElementById("total-general").textContent = totalGeneral.toFixed(2);
+}
+</script>
+
+
+
+
+<script>
+    // Desactivar lejos y cerca
+document.addEventListener("DOMContentLoaded", function () {
+    const enfoqueSelect = document.getElementById("id_enfoque");
+
+    const radioLejos = document.getElementById("radio-lejos");
+    const radioCerca = document.getElementById("radio-cerca");
+
+    function actualizarRadios() {
+        const valor = enfoqueSelect.value.toLowerCase();
+
+        if (valor.includes("bifocal") || valor.includes("multifocal")) {
+            radioLejos.disabled = true;
+            radioCerca.disabled = true;
+
+            // Opcional: desmarcar si estaban seleccionados
+            if (radioLejos.checked || radioCerca.checked) {
+                radioLejos.checked = false;
+                radioCerca.checked = false;
+            }
+        } else {
+            radioLejos.disabled = false;
+            radioCerca.disabled = false;
+        }
+    }
+
+    enfoqueSelect.addEventListener("change", actualizarRadios);
+
+    // Ejecutar al cargar
+    actualizarRadios();
+});
+</script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const btnEmitir = document.getElementById("emitir-factura");
+    if (!btnEmitir) return;
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+            const cookies = document.cookie.split(";");
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + "=")) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    btnEmitir.addEventListener("click", function (e) {
+        e.preventDefault();
+
+        const nombre   = document.getElementById("id_nombre")?.value || "";
+        const telefono = document.getElementById("id_telefono")?.value || "";
+        const vendedor = document.getElementById("id_vendedor")?.value || "";
+
+        const clienteId = document.getElementById("cliente_id")?.value || "";
+        const medidaId  = document.getElementById("medida_id")?.value  || "";
+
+        // Validación mínima
+        if (!clienteId || !medidaId) {
+            if (!confirm("No se detectó cliente/receta seleccionados. ¿Emitir de todos modos?")) {
+                return;
+            }
+        }
+
+        // Detalle de productos
+        const filas = document.querySelectorAll("#tabla-preventa tbody tr");
+        if (filas.length === 0) {
+            alert("Agrega al menos un producto antes de emitir la factura.");
+            return;
+        }
+
+        let totalGeneral = 0;
+        const detalles = [];
+
+        filas.forEach(fila => {
+            const cod = fila.dataset.cod || "";  // <- NUEVO
+            const descripcion = fila.children[1].textContent.trim();
+            const cantidad = parseFloat(fila.children[2].textContent.trim());
+            const precio = parseFloat(
+                fila.children[3].textContent.replace("S/", "").trim()
+            );
+            totalGeneral += precio;
+            detalles.push({cod, descripcion, cantidad, precio });
+        });
+
+        // ====== RECETA — se arma con los campos de la izquierda ======
+        const R = id => document.getElementById(id)?.value || "";
+
+        const receta = {
+            // Lejos OD
+            esf_lejos_OD: R("id_esf_lejos_OD"),
+            cil_lejos_OD: R("id_cil_lejos_OD"),
+            eje_lejos_OD: R("id_eje_lejos_OD"),
+            DIP_lejos_OD: R("id_DIP_lejos_OD"),
+            Add_lejos_OD: R("id_Add_lejos_OD"),
+            AV_lejos_OD:  R("id_AV_lejos_OD"),
+
+            // Lejos OI
+            esf_lejos_OI: R("id_esf_lejos_OI"),
+            cil_lejos_OI: R("id_cil_lejos_OI"),
+            eje_lejos_OI: R("id_eje_lejos_OI"),
+            DIP_lejos_OI: R("id_DIP_lejos_OI"),
+            Add_lejos_OI: R("id_Add_lejos_OI"),
+            AV_lejos_OI:  R("id_AV_lejos_OI"),
+
+            // Cerca OD
+            esf_cerca_OD: R("id_esf_cerca_OD"),
+            cil_cerca_OD: R("id_cil_cerca_OD"),
+            eje_cerca_OD: R("id_eje_cerca_OD"),
+            DIP_cerca_OD: R("id_DIP_cerca_OD"),
+            AV_cerca_OD:  R("id_AV_cerca_OD"),
+
+            // Cerca OI
+            esf_cerca_OI: R("id_esf_cerca_OI"),
+            cil_cerca_OI: R("id_cil_cerca_OI"),
+            eje_cerca_OI: R("id_eje_cerca_OI"),
+            DIP_cerca_OI: R("id_DIP_cerca_OI"),
+            AV_cerca_OI:  R("id_AV_cerca_OI"),
+        };
+        // ====== RECETA — FIN ======
+
+        // Preguntar si quieres fecha/hora de entrega
+        let fechaEntrega = "";
+        let horaEntrega  = "";
+
+        const pedirFechaHora = confirm("¿Quieres registrar fecha y hora de entrega sugeridas en el ticket?");
+
+        if (pedirFechaHora) {
+            // Fecha actual DD/MM/YYYY
+            const ahora = new Date();
+            const dd = String(ahora.getDate()).padStart(2, "0");
+            const mm = String(ahora.getMonth() + 1).padStart(2, "0");
+            const yyyy = ahora.getFullYear();
+            const fechaActual = `${dd}/${mm}/${yyyy}`;
+
+            // Hora +1 (formato 12h con am/pm)
+            const horaMasUna = new Date();
+            horaMasUna.setHours(horaMasUna.getHours() + 1);
+            const horas = horaMasUna.getHours() % 12 || 12;
+            const minutos = String(horaMasUna.getMinutes()).padStart(2, "0");
+            const ampm = horaMasUna.getHours() >= 12 ? "p. m." : "a. m.";
+            const horaSugerida = `${horas}:${minutos} ${ampm}`;
+
+            fechaEntrega = prompt(
+                "Fecha de entrega (Los laboratorios no atienden domingos ni feriados):",
+                fechaActual
+            ) || "";
+            horaEntrega = prompt(
+                "Hora de entrega (hh:mm am/pm):",
+                horaSugerida
+            ) || "";
+        }
+
+        // A cuenta / saldo
+        const aCuentaStr = prompt(
+            `El total es S/ ${totalGeneral.toFixed(2)}. ¿Cuánto deja a cuenta?`, totalGeneral.toFixed(2)
+        );
+        const aCuenta = parseFloat((aCuentaStr || "0").replace(",", ".")) || 0;
+        const saldo = totalGeneral - aCuenta;
+        const puntosIC = Math.floor(totalGeneral / 20); // Puntos IC
+
+        // Enviar al backend
+        const csrftoken = getCookie("csrftoken");
+
+        const medioPago = document.getElementById("medio_pago")?.value || "EFECTIVO";
+        fetch("/guardar-ticket/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrftoken,
+            },
+            body: JSON.stringify({
+                cliente_id: clienteId || null,
+                medida_id:  medidaId  || null,
+                cliente: nombre,
+                telefono: telefono,
+                vendedor: vendedor,
+                total: totalGeneral.toFixed(2),
+                a_cuenta: aCuenta.toFixed(2),
+                //saldo: saldo.toFixed(2),
+                detalles: detalles,
+                pedirFechaHora: pedirFechaHora,
+                fecha_entrega: fechaEntrega,
+                hora_entrega: horaEntrega,
+                receta: receta,
+
+                puntos_ic: puntosIC,
+                medio_pago: medioPago,
+            }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            // data.numero_ticket o similar (ajusta a tu vista guardar-ticket)
+            alert("Ticket guardado correctamente.");
+
+            // Abrir PDF
+            const params = new URLSearchParams();
+            params.set("cliente_id", clienteId);
+            params.set("medida_id", medidaId);
+            params.set("cliente", nombre);
+            params.set("telefono", telefono);
+            params.set("vendedor", vendedor);
+            params.set("total", totalGeneral.toFixed(2));
+            params.set("a_cuenta", aCuenta.toFixed(2));
+            params.set("saldo", saldo.toFixed(2));
+            params.set("fecha_entrega", fechaEntrega);
+            params.set("hora_entrega", horaEntrega);
+            params.set("detalles", JSON.stringify(detalles));
+            params.set("receta", JSON.stringify(receta));
+
+            params.set("puntos_ic", puntosIC.toFixed(2));
+            window.open(`/ticket-pdf/?${params.toString()}`, "_blank");
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Error al guardar el ticket.");
+        });
+    });
+});
+</script>
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const inputBuscar = document.getElementById("buscar_comprador");
+    const inputDni = document.getElementById("id_DNI");
+    const inputNombre = document.getElementById("id_nombre");
+    const inputTelefono = document.getElementById("id_telefono");
+    const inputEdad = document.getElementById("id_Edad");
+    const inputDescripcionReceta = document.getElementById("id_descripcion_receta");
+
+    const inputClienteId = document.getElementById("cliente_id");
+    const inputMedidaId  = document.getElementById("medida_id");
+
+    const selectRecientes = document.getElementById("lista_medidas_recientes");
+
+    // ================== AUTOCOMPLETE EXISTENTE ==================
+    if (inputBuscar) {
+        $("#buscar_comprador").autocomplete({
+            source: "/buscar-medidas/",
+            minLength: 2,
+            select: function (event, ui) {
+                $("#buscar_comprador").val(ui.item.label || ui.item.value || "");
+
+                if (inputClienteId) inputClienteId.value = ui.item.cliente_id || "";
+                if (inputMedidaId)  inputMedidaId.value  = ui.item.medida_id  || "";
+
+                if (inputDni)       inputDni.value       = ui.item.dni       || "";
+                if (inputNombre)    inputNombre.value    = ui.item.nombre    || "";
+                if (inputTelefono)  inputTelefono.value  = ui.item.telefono  || "";
+                if (inputEdad)      inputEdad.value      = ui.item.edad      || "";
+                if (inputDescripcionReceta) inputDescripcionReceta.value = ui.item.descripcion || "";
+
+                if (ui.item.medida_id) {
+                    cargarMedida(ui.item.medida_id);
+                }
+
+                // Sin recargar el select, pero podrías marcar la opción equivalente si quisieras
+                return false;
+            }
+        });
+    }
+
+    // ================== LLENAR LISTA DE ÚLTIMOS 10 ==================
+    if (selectRecientes) {
+        fetch("/ultimas-medidas/")
+            .then(response => response.json())
+            .then(data => {
+                // data es una lista de objetos {medida_id, label, ...}
+                data.forEach(item => {
+                    const opt = document.createElement("option");
+                    opt.value = item.medida_id;
+                    opt.textContent = item.label;
+                    opt.dataset.clienteId = item.cliente_id;
+                    opt.dataset.dni       = item.dni || "";
+                    opt.dataset.nombre    = item.nombre || "";
+                    opt.dataset.telefono  = item.telefono || "";
+                    opt.dataset.edad      = item.edad || "";
+                    opt.dataset.descripcion = item.descripcion || "";
+                    selectRecientes.appendChild(opt);
+                });
+            })
+            .catch(err => {
+                console.error("Error cargando últimas medidas:", err);
+            });
+
+        // Cuando el usuario selecciona una receta de la lista
+        selectRecientes.addEventListener("change", function () {
+            const medidaId = this.value;
+            if (!medidaId) {
+                return;
+            }
+            const opt = this.options[this.selectedIndex];
+            if (inputClienteId) inputClienteId.value = opt.dataset.clienteId || "";
+            if (inputMedidaId)  inputMedidaId.value  = medidaId;
+
+            if (inputDni)       inputDni.value       = opt.dataset.dni || "";
+            if (inputNombre)    inputNombre.value    = opt.dataset.nombre || "";
+            if (inputTelefono)  inputTelefono.value  = opt.dataset.telefono || "";
+            if (inputEdad)      inputEdad.value      = opt.dataset.edad || "";
+            if (inputDescripcionReceta) inputDescripcionReceta.value = opt.dataset.descripcion || "";
+
+            // Carga completa de la receta en la tabla de medidas
+            cargarMedida(medidaId);
+        });
+    }
+
+    // ================== FUNCIÓN COMPARTIDA PARA CARGAR MEDIDA ==================
+    function cargarMedida(medidaId) {
+        fetch(`/api/medidas/${medidaId}/`)
+            .then(response => response.json())
+            .then(data => {
+                const setVal = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = (value !== null && value !== undefined) ? value : "";
+                };
+
+                // Lejos OD
+                setVal("id_esf_lejos_OD", data.esf_lejos_OD);
+                setVal("id_cil_lejos_OD", data.cil_lejos_OD);
+                setVal("id_eje_lejos_OD", data.eje_lejos_OD);
+                setVal("id_DIP_lejos_OD", data.DIP_lejos_OD);
+                setVal("id_Add_lejos_OD", data.Add_lejos_OD);
+                setVal("id_AV_lejos_OD",  data.AV_lejos_OD);
+
+                // Lejos OI
+                setVal("id_esf_lejos_OI", data.esf_lejos_OI);
+                setVal("id_cil_lejos_OI", data.cil_lejos_OI);
+                setVal("id_eje_lejos_OI", data.eje_lejos_OI);
+                setVal("id_DIP_lejos_OI", data.DIP_lejos_OI);
+                setVal("id_Add_lejos_OI", data.Add_lejos_OI);
+                setVal("id_AV_lejos_OI",  data.AV_lejos_OI);
+
+                // Cerca OD
+                setVal("id_esf_cerca_OD", data.esf_cerca_OD);
+                setVal("id_cil_cerca_OD", data.cil_cerca_OD);
+                setVal("id_eje_cerca_OD", data.eje_cerca_OD);
+                setVal("id_DIP_cerca_OD", data.DIP_cerca_OD);
+                setVal("id_AV_cerca_OD",  data.AV_cerca_OD);
+
+                // Cerca OI
+                setVal("id_esf_cerca_OI", data.esf_cerca_OI);
+                setVal("id_cil_cerca_OI", data.cil_cerca_OI);
+                setVal("id_eje_cerca_OI", data.eje_cerca_OI);
+                setVal("id_DIP_cerca_OI", data.DIP_cerca_OI);
+                setVal("id_AV_cerca_OI",  data.AV_cerca_OI);
+
+                if (inputDescripcionReceta && data.descripcion) {
+                    inputDescripcionReceta.value = data.descripcion;
+                }
+            })
+            .catch(err => {
+                console.error("Error cargando medida:", err);
+                alert("No se pudo cargar la medida seleccionada.");
+            });
+    }
+});
+</script>
+
+
+
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "core/base.html" %}
+{% block title %}Kardex - {{ producto.descripcion }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h3 class="mb-0">Kardex - Detalle</h3>
+    <div class="text-muted">
+      <strong>{{ producto.cod }}</strong> — {{ producto.descripcion }}
+    </div>
+  </div>
+
+  <a class="btn btn-secondary" href="{% url 'kardex_resumen' %}">← Volver</a>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-bordered table-hover align-middle">
+    <thead class="table-dark">
+      <tr>
+        <th style="width: 170px;">Fecha</th>
+        <th style="width: 90px;" class="text-center">Tipo</th>
+        <th style="width: 120px;" class="text-end">Cantidad</th>
+        <th style="width: 160px;" class="text-end">Costo Unit.</th>
+        <th style="width: 170px;" class="text-end">Costo Total</th>
+        <th style="width: 120px;" class="text-end">Stock</th>
+        <th style="width: 160px;" class="text-end">Costo Prom.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in movimientos %}
+      <tr>
+        <td>{{ m.fecha|date:"d/m/Y H:i" }}</td>
+        <td class="text-center">
+          {% if m.tipo == "IN" %}
+            <span class="badge bg-success">IN</span>
+          {% else %}
+            <span class="badge bg-danger">OUT</span>
+          {% endif %}
+        </td>
+        <td class="text-end">{{ m.cantidad|floatformat:2 }}</td>
+        <td class="text-end">{{ m.costo_unitario|floatformat:2 }}</td>
+        <td class="text-end">{{ m.costo_total|floatformat:2 }}</td>
+        <td class="text-end">{{ m.stock_actual|floatformat:2 }}</td>
+        <td class="text-end">{{ m.costo_promedio|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7" class="text-center">No hay movimientos para este producto.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

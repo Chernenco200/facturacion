@@ -1,0 +1,282 @@
+{% extends "core/base.html" %}
+
+{% block title %}Caja del día{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- CABECERA -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>
+      Caja del día: {{ caja.fecha }}
+      {% if caja.cerrada %}
+        <span class="badge bg-danger">CERRADA</span>
+      {% else %}
+        <span class="badge bg-success">ABIERTA</span>
+      {% endif %}
+    </h3>
+
+    <a href="{% url 'caja_importar_ventas' caja.fecha|date:'Y-m-d' %}"
+       class="btn btn-primary">
+      Importar cobros del día
+    </a>
+      {% if caja.cerrada %}
+    <a href="{% url 'caja_reporte_pdf' caja.fecha|date:'Y-m-d' %}"
+      class="btn btn-outline-primary"
+      target="_blank">
+      Imprimir cierre
+    </a>
+
+      {% endif %}
+
+  </div>
+
+  <!-- RESUMEN -->
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <h6>Saldo inicial</h6>
+          <h4>S/ {{ caja.saldo_inicial|floatformat:2 }}</h4>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <h6>Ingresos</h6>
+          <h4 class="text-success">S/ {{ caja.total_ingresos|floatformat:2 }}</h4>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <h6>Egresos</h6>
+          <h4 class="text-danger">S/ {{ caja.total_egresos|floatformat:2 }}</h4>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <h6>Saldo final</h6>
+          <h4>S/ {{ caja.saldo_final|floatformat:2 }}</h4>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REGISTRAR MOVIMIENTO MANUAL -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <strong>Registrar movimiento manual</strong>
+    </div>
+    <div class="card-body">
+      <form method="post" action="{% url 'caja_agregar_movimiento' caja.fecha|date:'Y-m-d' %}" class="row g-2">
+        {% csrf_token %}
+
+        <div class="col-md-2">
+          <select name="tipo" class="form-select" required>
+            <option value="IN">Ingreso</option>
+            <option value="OUT">Egreso</option>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <select name="medio_pago" class="form-select" required>
+            <option value="EFECTIVO">Efectivo</option>
+            <option value="YAPE">Yape</option>
+            <option value="TARJETA">Tarjeta</option>
+            <option value="TRANSFERENCIA">Transferencia</option>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <select name="categoria" class="form-select" required>
+            <option value="VENTA">Venta</option>
+            <option value="COMPRA">Compra</option>
+            <option value="GASTO">Gasto</option>
+            <option value="AJUSTE">Ajuste</option>
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <input type="text" name="descripcion" class="form-control" placeholder="Descripción">
+        </div>
+
+        <div class="col-md-2">
+          <input type="number" step="0.01" name="monto" class="form-control" placeholder="Monto" required>
+        </div>
+
+        <div class="col-12">
+          <button class="btn btn-success"
+                  {% if caja.cerrada %}disabled{% endif %}>
+            Guardar movimiento
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- DETALLE DE MOVIMIENTOS -->
+  <div class="card">
+    <div class="card-header">
+      <strong>Movimientos del día</strong>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>Fecha/Hora</th>
+            <th>Tipo</th>
+            <th>Medio</th>
+            <th>Categoría</th>
+            <th>Descripción</th>
+            <th class="text-end">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in movs %}
+          <tr>
+            <td>{{ m.fecha_hora|date:"d/m/Y H:i" }}</td>
+            <td>
+              {% if m.tipo == "IN" %}
+                <span class="badge bg-success">IN</span>
+              {% else %}
+                <span class="badge bg-danger">OUT</span>
+              {% endif %}
+            </td>
+            <td>{{ m.get_medio_pago_display }}</td>
+            <td>{{ m.get_categoria_display }}</td>
+            <td>{{ m.descripcion }}</td>
+            <td class="text-end">S/ {{ m.monto|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center">No hay movimientos</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+
+<div class="card mt-4">
+  <div class="card-header">
+    <strong>Arqueo y cierre de caja</strong>
+    {% if caja.cerrada %}
+      <span class="badge bg-danger ms-2">CERRADA</span>
+    {% endif %}
+  </div>
+
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="border rounded p-2">
+          <div class="text-muted">Esperado Efectivo</div>
+          <strong>S/ {{ esperado_efectivo|floatformat:2 }}</strong>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="border rounded p-2">
+          <div class="text-muted">Esperado Yape</div>
+          <strong>S/ {{ esperado_yape|floatformat:2 }}</strong>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="border rounded p-2">
+          <div class="text-muted">Esperado Tarjeta</div>
+          <strong>S/ {{ esperado_tarjeta|floatformat:2 }}</strong>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="border rounded p-2">
+          <div class="text-muted">Esperado Transferencia</div>
+          <strong>S/ {{ esperado_transferencia|floatformat:2 }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <form method="post" action="{% url 'caja_cerrar' caja.fecha|date:'Y-m-d' %}">
+      {% csrf_token %}
+
+      <div class="row g-2">
+        <div class="col-md-3">
+          <label class="form-label">Arqueo Efectivo</label>
+          <input class="form-control" type="number" step="0.01" name="arqueo_efectivo"
+                 value="{{ caja.arqueo_efectivo|default_if_none:'' }}"
+                 {% if caja.cerrada %}disabled{% endif %}>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Arqueo Yape</label>
+          <input class="form-control" type="number" step="0.01" name="arqueo_yape"
+                 value="{{ caja.arqueo_yape|default_if_none:'' }}"
+                 {% if caja.cerrada %}disabled{% endif %}>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Arqueo Tarjeta</label>
+          <input class="form-control" type="number" step="0.01" name="arqueo_tarjeta"
+                 value="{{ caja.arqueo_tarjeta|default_if_none:'' }}"
+                 {% if caja.cerrada %}disabled{% endif %}>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Arqueo Transferencia</label>
+          <input class="form-control" type="number" step="0.01" name="arqueo_transferencia"
+                 value="{{ caja.arqueo_transferencia|default_if_none:'' }}"
+                 {% if caja.cerrada %}disabled{% endif %}>
+        </div>
+
+        <div class="col-12 mt-2">
+          <label class="form-label">Observación</label>
+          <input class="form-control" name="observacion"
+                 value="{{ caja.observacion }}"
+                 {% if caja.cerrada %}disabled{% endif %}>
+        </div>
+
+        <div class="col-12 mt-3">
+          <button class="btn btn-danger"
+                  {% if caja.cerrada %}disabled{% endif %}>
+            Cerrar caja
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {% if caja.cerrada %}
+      <hr>
+      <h6>Diferencias registradas</h6>
+      <ul class="mb-0">
+        <li>Efectivo: S/ {{ caja.dif_efectivo|floatformat:2 }}</li>
+        <li>Yape: S/ {{ caja.dif_yape|floatformat:2 }}</li>
+        <li>Tarjeta: S/ {{ caja.dif_tarjeta|floatformat:2 }}</li>
+        <li>Transferencia: S/ {{ caja.dif_transferencia|floatformat:2 }}</li>
+      </ul>
+    {% endif %}
+  </div>
+    {% if caja.cerrada and request.user.is_authenticated and request.user.is_superuser %}
+     <form method="post"
+        action="{% url 'caja_reabrir' caja.fecha|date:'Y-m-d' %}"
+        class="mt-3">
+        {% csrf_token %}
+        <button class="btn btn-warning">
+         Reabrir caja (Admin)
+        </button>
+      </form>
+    {% endif %}
+</div>
+
+
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "core/base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4>Usuarios</h4>
+  <a class="btn btn-success btn-sm" href="{% url 'accounts:usuarios_create' %}">Nuevo</a>
+</div>
+
+{% if messages %}
+  {% for m in messages %}
+    <div class="alert alert-info">{{ m }}</div>
+  {% endfor %}
+{% endif %}
+
+<table class="table table-sm table-striped">
+  <thead>
+    <tr>
+      <th>Usuario</th><th>Nombre</th><th>Rol</th><th>Activo</th><th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.username }}</td>
+      <td>{{ u.first_name }} {{ u.last_name }}</td>
+      <td>{{ u.profile.rol }}</td>
+      <td>{{ u.is_active|yesno:"Sí,No" }}</td>
+      <td class="d-flex gap-2">
+        <a class="btn btn-outline-primary btn-sm" href="{% url 'accounts:usuarios_update' u.id %}">Editar</a>
+        <a class="btn btn-outline-warning btn-sm" href="{% url 'accounts:usuarios_reset_password' u.id %}">Reset pass</a>
+        <a class="btn btn-outline-danger btn-sm" href="{% url 'accounts:usuarios_toggle_active' u.id %}">
+          {% if u.is_active %}Desactivar{% else %}Activar{% endif %}
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+

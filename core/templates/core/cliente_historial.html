@@ -1,0 +1,93 @@
+<h5>Medidas de Vista</h5>
+{% if medidas %}
+<table class="table table-bordered table-sm">
+    <thead class="table-light">
+        <tr>
+            <th>Fecha</th>
+            <th>OD (Esf - Cil - Eje)</th>
+            <th>OI (Esf - Cil - Eje)</th>
+            <th>Adición</th>
+            <th>Dip (OD/OI)</th>
+            <th>AV (OD/OI)</th>
+            <th>Descripción</th>
+            <th>Optometra</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for m in medidas %}
+        <tr>
+            <td>{{ m.fecha_registro|date:"d/m/Y" }}</td>
+            <td>{{ m.esf_lejos_OD }} / {{ m.cil_lejos_OD }} X {{ m.eje_lejos_OD }}</td>
+            <td>{{ m.esf_lejos_OI }} / {{ m.cil_lejos_OI }} X {{ m.eje_lejos_OI }}</td>
+            <td>{{ m.Add_lejos_OD }}</td>
+            <td>{{ m.DIP_lejos_OD|floatformat:0 }} / {{ m.DIP_lejos_OI|floatformat:0 }}</td>
+            <td>{{ m.AV_cerca_OD }}    {{m.AV_cerca_OI }} </td>
+
+            <td>{{ m.descripcion }}</td>
+            <td>{{ m.Optometra }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No hay medidas registradas para este cliente.</p>
+{% endif %}
+
+<hr>
+
+<h5>Historial de Compras (TicketVenta)</h5>
+{% if ticket_ventas %}
+<table class="table table-bordered table-sm">
+    <thead class="table-light">
+        <tr>
+            <th>N° Recibo</th>
+            <th>Fecha</th>
+            <th>Total</th>
+            <th>A cuenta</th>
+            <th>Saldo</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for t in ticket_ventas %}
+        <tr>
+            <td>
+                <a href="{% url 'ticket_detalle' t.numero %}">
+                    {{ t.numero }}
+                </a>
+            </td>
+            <td>{{ t.fecha_emision }}</td>
+            <td>{{ t.total }}</td>
+            <td>{{ t.a_cuenta }}</td>
+            <td>{{ t.saldo }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No hay tickets de venta registrados para este cliente.</p>
+{% endif %}
+
+{% if ventas %}
+<hr>
+<h5>Historial de Ventas (tabla Venta)</h5>
+<table class="table table-bordered table-sm">
+    <thead class="table-light">
+        <tr>
+            <th>ID Venta</th>
+            <th>Fecha</th>
+            <th>Descripción</th>
+            <th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for v in ventas %}
+        <tr>
+            <td>{{ v.id }}</td>
+            <td>{{ v.fecha }}</td>
+            <td>{{ v.descripcion }}</td>
+            <td>{{ v.total }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}

@@ -1,0 +1,124 @@
+{% extends "core/base.html" %}
+{% block title %}Saldos pendientes{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Saldos pendientes</h3>
+
+    <form method="get" class="d-flex gap-2" style="max-width: 420px;">
+      <input type="text" name="q" class="form-control" placeholder="Buscar: N° ticket o cliente" value="{{ q }}">
+      <button class="btn btn-outline-primary" type="submit">Buscar</button>
+    </form>
+  </div>
+
+  {% if messages %}
+    {% for m in messages %}
+      <div class="alert alert-{{ m.tags }} mb-2">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th style="width:110px;">Ticket</th>
+          <th style="width:160px;">Fecha</th>
+          <th>Cliente</th>
+          <th style="width:120px;" class="text-end">Total</th>
+          <th style="width:120px;" class="text-end">A cuenta</th>
+          <th style="width:120px;" class="text-end">Saldo</th>
+          <th style="width:130px;" class="text-center">Acción</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for t in tickets %}
+        <tr>
+          <td>#{{ t.numero }}</td>
+          <td>{{ t.fecha_emision|date:"d/m/Y" }} {{ t.hora_emision|time:"H:i" }}</td>
+          <td>{{ t.cliente.nombre|default:"Sin cliente" }}</td>
+          <td class="text-end">S/ {{ t.total|floatformat:2 }}</td>
+          <td class="text-end">S/ {{ t.a_cuenta|floatformat:2 }}</td>
+          <td class="text-end">
+            <span class="badge bg-warning text-dark">S/ {{ t.saldo|floatformat:2 }}</span>
+          </td>
+          <td class="text-center">
+            <button
+              type="button"
+              class="btn btn-sm btn-success"
+              data-bs-toggle="modal"
+              data-bs-target="#modalPago{{ t.id }}">
+              Pagar saldo
+            </button>
+          </td>
+        </tr>
+
+        <!-- ✅ MODAL DENTRO DEL LOOP (por ticket) -->
+        <div class="modal fade" id="modalPago{{ t.id }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+
+              <form method="post" action="{% url 'registrar_pago_ticket' t.id %}">
+                {% csrf_token %}
+
+                <div class="modal-header">
+                  <h5 class="modal-title">Registrar pago - Ticket #{{ t.numero }}</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                  <div><strong>Cliente:</strong> {{ t.cliente.nombre|default:"Sin cliente" }}</div>
+
+                  <div class="alert alert-info mt-2 mb-2">
+                    Saldo actual: <strong>S/ {{ t.saldo|floatformat:2 }}</strong>
+                  </div>
+
+                  <div class="mb-3">
+                    <label class="form-label">Medio de pago</label>
+                    <select name="medio_pago" class="form-select" required>
+                      <option value="EFECTIVO">Efectivo</option>
+                      <option value="YAPE">Yape</option>
+                      <option value="TARJETA">Tarjeta</option>
+                      <option value="TRANSFERENCIA">Transferencia</option>
+                    </select>
+                  </div>
+
+                  <div class="mb-3">
+                    <label class="form-label">Monto</label>
+                    <input
+                      type="number"
+                      name="monto"
+                      class="form-control"
+                      step="0.01"
+                      min="0.01"
+                      max="{{ t.saldo }}"
+                      required>
+                    <small class="text-muted">No puede exceder el saldo.</small>
+                  </div>
+                </div>
+
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                  <button type="submit" class="btn btn-success">Guardar pago</button>
+                </div>
+
+              </form>
+
+            </div>
+          </div>
+        </div>
+        <!-- ✅ FIN MODAL -->
+
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center">No hay saldos pendientes.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "core/base.html" %}
+{% block title %}Estado de Órdenes{% endblock %}
+{% block content %}
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="tv-title">Estado de tus Lentes</div>
+
+    <div class="text-end">
+      <div class="fw-bold" style="font-size:20px;">Puntualidad de hoy</div>
+      <div class="tv-kpi">
+        <span id="kpi_ontime">0</span> / <span id="kpi_total">0</span> a tiempo ✅
+      </div>
+      <div class="tv-sub" id="last_update"></div>
+    </div>
+  </div>
+
+
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle" style="font-size: 24px;">
+     <thead class="table-dark">
+      <tr>
+         <th style="width:12%;">Ticket</th>
+         <th style="width:22%;">Cliente</th>
+         <th style="width:30%;">Estado</th>
+         <th style="width:18%;">Entrega</th>
+         <th style="width:18%;" class="text-center">SLA</th>
+      </tr>
+     </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  /* Look más “pantalla TV” */
+  .tv-title { font-size: 64px; font-weight: 800; letter-spacing: .5px; }
+  .tv-kpi { font-size: 34px; font-weight: 800; }
+  .tv-sub { font-size: 16px; opacity: .75; }
+
+  /* Semáforo */
+  .dot {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  .dot.green { background: #22c55e; }   /* verde */
+  .dot.yellow { background: #f59e0b; }  /* amarillo */
+  .dot.red { background: #ef4444; }     /* rojo */
+
+  /* Estados visuales */
+  .row-red { background: rgba(239, 68, 68, 0.12) !important; }
+  .row-yellow { background: rgba(245, 158, 11, 0.12) !important; }
+  .row-green { background: rgba(34, 197, 94, 0.10) !important; }
+
+  /* Tablas grandes */
+  .tv-table { font-size: 28px; }
+  .tv-table td, .tv-table th { padding: 18px 14px; }
+</style>
+
+
+
+
+<script>
+async function loadTV(){
+  const res = await fetch("{% url 'tv_ordenes_data' %}");
+  const json = await res.json();
+
+  document.getElementById("kpi_total").textContent = json.kpi.entregados_hoy;
+  document.getElementById("kpi_ontime").textContent = json.kpi.a_tiempo_hoy;
+  document.getElementById("last_update").textContent = "Actualizado: " + new Date().toLocaleTimeString();
+
+  const tbody = document.getElementById("rows");
+  tbody.innerHTML = "";
+
+  for(const it of json.items){
+
+    // Texto SLA
+    let slaText = "-";
+    if(it.estado_code === "ENTREGADO"){
+      slaText = it.semaforo === "green" ? "A tiempo ✅" : ("Tarde +" + it.min_atraso + " min ⛔");
+    } else {
+      if(it.vencido){
+        slaText = "RETRASO +" + it.min_atraso + " min ⛔";
+      } else {
+        slaText = "En proceso";
+      }
+    }
+
+    const tr = document.createElement("tr");
+
+    // Clases por semáforo
+    tr.classList.add(it.semaforo === "red" ? "row-red" : it.semaforo === "yellow" ? "row-yellow" : "row-green");
+
+    tr.innerHTML = `
+      <td class="fw-bold">#${it.ticket}</td>
+      <td class="fw-bold">${it.cliente}</td>
+      <td class="fw-bold">
+        <span class="dot ${it.semaforo}"></span>${it.estado}
+      </td>
+      <td class="fw-bold">${it.due_str || "-"}</td>
+      <td class="text-center fw-bold">${slaText}</td>
+    `;
+
+    tbody.appendChild(tr);
+  }
+}
+
+loadTV();
+setInterval(loadTV, 5000);
+</script>
+
+
+{% endblock %}
