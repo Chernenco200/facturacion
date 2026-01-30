@@ -1,3 +1,5 @@
+from django.contrib.staticfiles import finders
+
 from .models import OrdenTrabajo
 from .utils_pdf import render_to_pdf
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -348,7 +350,7 @@ def generar_ticket_pdf(request):
     y = 257  # base (luego * mm)
 
     # ====== LOGO ======
-    ruta_logo = os.path.join(settings.MEDIA_ROOT, 'img', 'logo.png')
+    ruta_logo = finders.find("core/img/logo.png")
     if os.path.exists(ruta_logo):
         logo = ImageReader(ruta_logo)
         ancho_logo = 90  # puntos
@@ -1688,7 +1690,7 @@ def imprimir_ticket_pdf(request):
         y -= 5 * mm
 
     # ====== LOGO ======
-    ruta_logo = os.path.join(settings.MEDIA_ROOT, "img", "logo.png")
+    ruta_logo = finders.find("core/img/logo.png")
     if os.path.exists(ruta_logo):
         logo = ImageReader(ruta_logo)
         ancho_logo = 45 * mm
