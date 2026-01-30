@@ -29,13 +29,11 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-secret")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG") == "1"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
-
-if DEBUG:
-    ALLOWED_HOSTS = ["*"]
+hosts = os.environ.get("ALLOWED_HOSTS", "")
+ALLOWED_HOSTS = hosts.split(",") if hosts else []
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://tu-app.herokuapp.com",
+    "https://facturacion-d28198aaf688.herokuapp.com",
 ]
 
 # Application definition
