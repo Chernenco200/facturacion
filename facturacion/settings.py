@@ -27,11 +27,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-secret")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG", "0") == "1"
+DEBUG = os.environ.get("DEBUG") == "1"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",") if not DEBUG else ["*"]
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
 
+if DEBUG:
+    ALLOWED_HOSTS = ["*"]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://tu-app.herokuapp.com",
+]
 
 # Application definition
 
