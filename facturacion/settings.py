@@ -28,6 +28,10 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-secret")
 
 DEBUG = os.environ.get("DEBUG") == "1"
 
+if not DEBUG:
+    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+
+
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
 
 CSRF_TRUSTED_ORIGINS = [
@@ -47,7 +51,16 @@ INSTALLED_APPS = [
 
     "accounts.apps.AccountsConfig",
 
+    "cloudinary",
+    "cloudinary_storage",
 ]
+
+
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME"),
+    "API_KEY": os.environ.get("CLOUDINARY_API_KEY"),
+    "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET"),
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
