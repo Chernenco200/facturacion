@@ -1034,7 +1034,6 @@ def registrar_compra(request):
                     continue  # fila vacía
 
                 descripcion = descripciones[i].strip()
-                tipo = tipos[i].strip()
                 pc = float(precios_compra[i] or 0)
                 pv = float(precios_venta[i] or 0)
                 cant = float(cantidades[i] or 0)
@@ -1048,7 +1047,6 @@ def registrar_compra(request):
                         'precio_compra': pc,
                         'precio_venta': pv,
                         'stock': cant,
-                        'tipo': tipo,
                     }
                 )
 
@@ -1057,7 +1055,6 @@ def registrar_compra(request):
                     producto.descripcion = descripcion or producto.descripcion
                     producto.precio_compra = pc
                     producto.precio_venta = pv
-                    producto.tipo = tipo or producto.tipo
                     producto.stock = (producto.stock or 0) + cant
                     producto.save()
                 else:

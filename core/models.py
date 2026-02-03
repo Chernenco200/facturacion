@@ -47,18 +47,64 @@ class DetalleCompra(models.Model):
 
 
 class Producto(models.Model):
-    cod = models.CharField(max_length=50, null=False)  # por ej. COD-001
+    TIPO_CHOICES = [
+        ('Monturas oftálimcas', 'Monturas oftálimcas'),
+        ('Monturas Solares', 'Monturas Solares'),
+        ('Lentes de Contacto', 'Lentes de Contacto'),
+        ('Monturas de Marca', 'Monturas de Marca'),
+        ('Líquidos', 'Líquidos'),
+        ('Accesorios', 'Accesorios'),  
+    ]
+
+    CATEGORIA_CHOICES = [
+        ('Mujer', 'Mujer'),
+        ('Hombre', 'Hombre'),
+        ('Niño', 'Niño'), 
+    ]
+
+    FORMA_CHOICES = [
+        ('Agatado', 'Agatado'),
+        ('Almendra', 'Almendra'),
+        ('Aviador', 'Aviador'),
+        ('Cuadrado', 'Cuadrado'),
+        ('Redondo', 'Redondo'),
+        ('Exagonal', 'Exagonal'),
+        ('Otros', 'Otros'),  
+    ]
+
+    MATERIAL_CHOICES = [
+        ('Fibra de carbono', 'Fibra de carbono'),
+        ('Acetato', 'Acetato'),
+        ('Carey', 'Carey'),
+        ('TR90', 'TR90'),
+        ('Aluminium', 'Aluminium'),
+        ('Engomado', 'Engomado'),
+        ('Otros', 'Otros'),  
+    ]
+
+
+    cod = models.CharField(max_length=20, unique=True)  # por ej. COD-001
+    tipo= models.CharField(max_length=50, choices=TIPO_CHOICES, null=True, blank=True)
+    marca = models.CharField(max_length=20)
+    categoria= models.CharField(max_length=20, choices=CATEGORIA_CHOICES, null=True, blank=True)
+    material = models.CharField(max_length=20, choices=MATERIAL_CHOICES, null=True, blank=True)
+    forma = models.CharField(max_length=20)
+    color = models.CharField(max_length=20)    
+    talla = models.CharField(max_length=5)    
+    puente = models.CharField(max_length=5)
+    largo = models.CharField(max_length=5)
+    ancho = models.CharField(max_length=5)
+    altura = models.CharField(max_length=5)    
     descripcion = models.CharField(max_length=200)              # ej. LUNA BLANCA 1.56
-    tipo = models.CharField(max_length=100, choices=[('Monturas oftálimcas', 'Monturas oftálimcas'), ('Monturas de sol', 'Monturas de sol'), ('Lectores', 'Lectores'), ('Lentes de Contacto', 'Lentes de Contacto'), ('Lentes de Contacto', 'Lentes de Contacto'), ('Accesorios', 'Accesorios')])  # Lunas, Monturas, Accesorios
     precio_compra = models.DecimalField(max_digits=10, decimal_places=2)
     precio_venta = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.IntegerField(default=0)                 # stock actual
     talla = models.CharField(max_length=50, blank=True, null=True)       # si aplica
     activo = models.BooleanField(default=True)             # por si luego das de baja productos   
-    costo_promedio = models.DecimalField(max_digits=10, decimal_places=4, default=0
-)
-
-
+    costo_promedio = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    imagenF = models.ImageField(upload_to="productos/", blank=True, null=True)
+    imagenD = models.ImageField(upload_to="productos/", blank=True, null=True)
+    imagenL = models.ImageField(upload_to="productos/", blank=True, null=True)    
 
     def __str__(self):
         return f"{self.cod} - {self.descripcion}"
