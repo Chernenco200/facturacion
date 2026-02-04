@@ -75,7 +75,7 @@ def index(request):
 
     return render(request, "core/index.html", {"form": form})
 
-@role_required("ADMIN", "SUPERVISOR", "VENDEDOR")
+@role_required("ADMIN", "SUPERVISOR", "VENDEDOR", "CAJA")
 def registrar_venta(request):
     """
     Vista integral:
@@ -166,7 +166,7 @@ def registrar_venta(request):
     })
 
 @transaction.atomic
-@role_required("ADMIN", "SUPERVISOR", "VENDEDOR" "CAJA")
+@role_required("ADMIN", "SUPERVISOR", "VENDEDOR", "CAJA")
 def registrar_cliente(request):
     cliente = None
 
@@ -1990,7 +1990,7 @@ def recalcular_kardex_producto2(producto: Producto):
 
 from .caja import get_or_create_caja
 
-@role_required("ADMIN", "SUPERVISOR", "CAJA")
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def caja_cobrar_saldo(request, fecha, ticket_id):
     fecha_dt = datetime.strptime(fecha, "%Y-%m-%d").date()
     caja = get_or_create_caja(fecha_dt)
@@ -2025,13 +2025,13 @@ def caja_cobrar_saldo(request, fecha, ticket_id):
 
 from .caja import importar_cobros_a_caja
 
-@role_required("ADMIN", "SUPERVISOR", "CAJA")
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def caja_importar_ventas(request, fecha):
     fecha_dt = datetime.strptime(fecha, "%Y-%m-%d").date()
     importar_cobros_a_caja(fecha_dt)
     return redirect("caja_detalle", fecha=fecha)
 
-@role_required("ADMIN", "CAJA")
+@role_required("ADMIN", "CAJA", "VENDEDOR")
 @role_required("ADMIN", "SUPERVISOR", "CAJA")
 def caja_hoy(request):
     """
@@ -2040,7 +2040,7 @@ def caja_hoy(request):
     hoy = timezone.localdate()
     return redirect("caja_detalle", fecha=hoy.strftime("%Y-%m-%d"))
 
-@role_required("ADMIN", "SUPERVISOR", "CAJA")
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def caja_detalle(request, fecha):
     """
     Muestra la caja de una fecha específica
@@ -2076,7 +2076,7 @@ def caja_detalle(request, fecha):
     })
 
 
-@role_required("ADMIN", "SUPERVISOR", "CAJA")
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def caja_agregar_movimiento(request, fecha):
     """
     Movimiento manual (ingreso / egreso)
@@ -2107,7 +2107,7 @@ def caja_agregar_movimiento(request, fecha):
 
     return redirect("caja_detalle", fecha=fecha)
 
-@role_required("ADMIN", "SUPERVISOR", "CAJA")
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def registrar_pago_ticket(request, ticket_id):
     ticket = get_object_or_404(TicketVenta, pk=ticket_id)
 
@@ -2145,7 +2145,7 @@ def registrar_pago_ticket(request, ticket_id):
     messages.success(request, f"Pago registrado para Ticket #{ticket.numero}.")
     return redirect("saldos_pendientes")
 
-@role_required("ADMIN", "SUPERVISOR", "CAJA")
+@role_required("ADMIN", "SUPERVISOR", "CAJA" ,"VENDEDOR")
 def saldos_pendientes(request):
     q = (request.GET.get("q") or "").strip()
 
@@ -2163,7 +2163,7 @@ def saldos_pendientes(request):
         "q": q
     })
 
-@role_required("ADMIN", "SUPERVISOR", "CAJA")
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def caja_cerrar(request, fecha):
     fecha_dt = datetime.strptime(fecha, "%Y-%m-%d").date()
     caja = get_or_create_caja(fecha_dt)
