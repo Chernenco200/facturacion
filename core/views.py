@@ -307,10 +307,28 @@ import os, json
 from datetime import datetime
 import textwrap
 
-
+# Este es el que imprime el ticket
 def generar_ticket_pdf(request):
     buffer = BytesIO()
-    p = canvas.Canvas(buffer, pagesize=(90 * mm, 270 * mm))
+
+    # ========= AJUSTE REAL PARA TIQUETERA =========
+    WIDTH_MM = 80        # <-- prueba 80; si aún recorta, usa 78 o 76
+    HEIGHT_MM = 270
+    MARGIN_MM = 2
+
+    PAGE_W = WIDTH_MM * mm
+    PAGE_H = HEIGHT_MM * mm
+
+    LEFT_X   = MARGIN_MM * mm
+    RIGHT_X  = (WIDTH_MM - MARGIN_MM) * mm
+    CENTER_X = (WIDTH_MM / 2) * mm
+
+    # Columnas (ajústalas si quieres más espacio)
+    COL_QTY_X      = LEFT_X
+    COL_DESC_X     = (MARGIN_MM + 12) * mm
+    COL_SUBTOTAL_X = (WIDTH_MM - MARGIN_MM) * mm  # alineado a la derecha
+
+    p = canvas.Canvas(buffer, pagesize=(PAGE_W, PAGE_H))
 
     # Datos recibidos
     cliente = request.GET.get('cliente', 'Cliente no definido')
@@ -331,47 +349,50 @@ def generar_ticket_pdf(request):
     except Exception:
         detalles = []
 
-    # ====== Datos empresa ======
+    # Datos empresa
     RUC_EMPRESA = "RUC: 10429550101"
     DIR_EMPRESA = "Dirección: Jr. Camaná N° 560, Cercado de Lima"
     TELS_EMPRESA = "Cel: 952305913 / 914300701"
 
-    # Normalizar puntos_ic
     try:
         puntos_int = int(float(puntos_ic))
     except Exception:
         puntos_int = 0
 
-    # Helper wrap por caracteres (simple)
-    def wrap_text(text, max_chars=34):
+    def wrap_text(text, max_chars=32):
         return textwrap.wrap(str(text or ""), max_chars) or [""]
 
+    def hr(y_mm):
+        """Línea horizontal a lo ancho imprimible (mejor que '-----')."""
+        y = y_mm * mm
+        p.line(LEFT_X, y, RIGHT_X, y)
+
     total = 0.0
-    y = 257  # base (luego * mm)
+    y = 257  # en mm
 
     # ====== LOGO ======
     ruta_logo = finders.find("core/img/logo.png")
-    if os.path.exists(ruta_logo):
+    if ruta_logo and os.path.exists(ruta_logo):
         logo = ImageReader(ruta_logo)
-        ancho_logo = 90  # puntos
-        alto_logo = 35
-        x_centro = (90 * mm - ancho_logo) / 2
-        p.drawImage(logo, x_centro, y * mm, width=ancho_logo, height=alto_logo, preserveAspectRatio=True)
-        y -= 4
+        ancho_logo_pt = 90   # puntos
+        alto_logo_pt = 35
+        x_centro = (PAGE_W - ancho_logo_pt) / 2
+        p.drawImage(logo, x_centro, y * mm, width=ancho_logo_pt, height=alto_logo_pt, preserveAspectRatio=True, mask='auto')
+        y -= 6
     else:
         p.setFont("Helvetica-Bold", 11)
-        p.drawCentredString(45 * mm, y * mm, "OPTICA IC")
+        p.drawCentredString(CENTER_X, y * mm, "OPTICA IC")
         y -= 8
 
-    # ====== RUC / Dirección / Celulares (entre logo y recibo) ======
+    # ====== RUC / Dirección / Celulares ======
     p.setFont("Helvetica", 9.5)
-    p.drawCentredString(45 * mm, y * mm, RUC_EMPRESA); y -= 4
+    p.drawCentredString(CENTER_X, y * mm, RUC_EMPRESA); y -= 4
 
-    for ln in wrap_text(DIR_EMPRESA, 34):
-        p.drawCentredString(45 * mm, y * mm, ln); y -= 4
+    for ln in wrap_text(DIR_EMPRESA, 32):
+        p.drawCentredString(CENTER_X, y * mm, ln); y -= 4
 
-    for ln in wrap_text(TELS_EMPRESA, 34):
-        p.drawCentredString(45 * mm, y * mm, ln); y -= 10
+    for ln in wrap_text(TELS_EMPRESA, 32):
+        p.drawCentredString(CENTER_X, y * mm, ln); y -= 8
 
     # ====== Número de Ticket ======
     numero = request.GET.get('numero')
@@ -388,27 +409,27 @@ def generar_ticket_pdf(request):
         numero_formateado = "000001"
 
     p.setFont("Helvetica-Bold", 11)
-    p.drawCentredString(45 * mm, y * mm, f"Recibo N\u00B0 {numero_formateado}")
+    p.drawCentredString(CENTER_X, y * mm, f"Recibo N\u00B0 {numero_formateado}")
     y -= 8
 
     # ====== Datos del cliente ======
-    p.setFont("Helvetica", 10)
-    p.drawString(10 * mm, y * mm, f"Cliente: {cliente}"); y -= 5
-    p.drawString(10 * mm, y * mm, f"Teléfono: {telefono}"); y -= 5
-    p.drawString(10 * mm, y * mm, f"Vendedor: {vendedor}"); y -= 5
-    p.drawString(10 * mm, y * mm, f"Emisión: {fecha_sistema} {hora_sistema}"); y -= 5
-    p.drawString(10 * mm, y * mm, f"Entrega: {fecha_entrega} {hora_entrega}"); y -= 7
+    p.setFont("Helvetica", 9.5)
+    p.drawString(LEFT_X, y * mm, f"Cliente: {cliente}"); y -= 5
+    p.drawString(LEFT_X, y * mm, f"Teléfono: {telefono}"); y -= 5
+    p.drawString(LEFT_X, y * mm, f"Vendedor: {vendedor}"); y -= 5
+    p.drawString(LEFT_X, y * mm, f"Emisión: {fecha_sistema} {hora_sistema}"); y -= 5
+    p.drawString(LEFT_X, y * mm, f"Entrega: {fecha_entrega} {hora_entrega}"); y -= 6
 
-    # Línea divisoria
-    p.drawString(10 * mm, y * mm, "-" * 60); y -= 5
+    # Separador (línea)
+    hr(y); y -= 6
 
     # Encabezado productos
-    p.setFont("Helvetica-Bold", 10)
-    p.drawString(10 * mm, y * mm, "Cant.")
-    p.drawString(22 * mm, y * mm, "Producto")
-    p.drawRightString(80 * mm, y * mm, "Subtotal")
+    p.setFont("Helvetica-Bold", 9.5)
+    p.drawString(COL_QTY_X, y * mm, "Cant.")
+    p.drawString(COL_DESC_X, y * mm, "Producto")
+    p.drawRightString(COL_SUBTOTAL_X, y * mm, "Subtotal")
     y -= 5
-    p.setFont("Helvetica", 10)
+    p.setFont("Helvetica", 9.5)
 
     # Productos
     for item in detalles:
@@ -419,43 +440,44 @@ def generar_ticket_pdf(request):
         subtotal = precio  # tu lógica actual
         total += subtotal
 
-        lineas_desc = textwrap.wrap(descripcion, 26) or [""]
+        # Ojo: menos chars porque el ancho ahora es real de 80mm
+        lineas_desc = textwrap.wrap(descripcion, 24) or [""]
 
-        p.drawString(10 * mm, y * mm, cantidad)
-        p.drawRightString(80 * mm, y * mm, f"{subtotal:.2f}")
-        p.drawString(22 * mm, y * mm, lineas_desc[0])
+        p.drawString(COL_QTY_X, y * mm, cantidad)
+        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"{subtotal:.2f}")
+        p.drawString(COL_DESC_X, y * mm, lineas_desc[0])
         y -= 5
 
         for desc_line in lineas_desc[1:]:
-            p.drawString(22 * mm, y * mm, desc_line)
+            p.drawString(COL_DESC_X, y * mm, desc_line)
             y -= 5
 
         if y < 25:
             p.showPage()
-            y = 250
-            p.setFont("Helvetica", 10)
+            y = 257
+            p.setFont("Helvetica", 9.5)
 
     # Línea final + totales
-    p.drawString(10 * mm, y * mm, "-" * 60); y -= 6
+    hr(y); y -= 6
 
     p.setFont("Helvetica-Bold", 10)
-    p.drawRightString(80 * mm, y * mm, f"Total: S/ {total:.2f}"); y -= 5
-    p.drawRightString(80 * mm, y * mm, f"A cuenta: S/ {a_cuenta}"); y -= 5
-    p.drawRightString(80 * mm, y * mm, f"Saldo: S/ {saldo}"); y -= 10
+    p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Total: S/ {total:.2f}"); y -= 5
+    p.drawRightString(COL_SUBTOTAL_X, y * mm, f"A cuenta: S/ {a_cuenta}"); y -= 5
+    p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Saldo: S/ {saldo}"); y -= 8
 
-    # ====== Despedida + puntos (sin desborde: wrap por caracteres) ======
+    # Despedida + puntos
     p.setFont("Helvetica-Bold", 10)
-    p.drawCentredString(45 * mm, y * mm, "¡Gracias por su preferencia!")
+    p.drawCentredString(CENTER_X, y * mm, "¡Gracias por su preferencia!")
     y -= 6
 
     msg = f"Ud ha ganado {puntos_int} puntos IC que podrá canjear en su próxima compra"
-    p.setFont("Helvetica", 10)
-    for ln in wrap_text(msg, 36):
-        p.drawCentredString(45 * mm, y * mm, ln)
+    p.setFont("Helvetica", 9.5)
+    for ln in wrap_text(msg, 34):
+        p.drawCentredString(CENTER_X, y * mm, ln)
         y -= 5
 
     # ==========================
-    # === 2da hoja: OT + receta
+    # 2da hoja: OT + receta
     # ==========================
     receta_json = request.GET.get('receta')
     if receta_json:
@@ -472,20 +494,17 @@ def generar_ticket_pdf(request):
             "DIP_lejos_OD": G("DIP_lejos_OD"),
             "Add_lejos_OD": G("Add_lejos_OD"),
             "AV_lejos_OD":  G("AV_lejos_OD"),
-
             "esf_lejos_OI": G("esf_lejos_OI"),
             "cil_lejos_OI": G("cil_lejos_OI"),
             "eje_lejos_OI": G("eje_lejos_OI"),
             "DIP_lejos_OI": G("DIP_lejos_OI"),
             "Add_lejos_OI": G("Add_lejos_OI"),
             "AV_lejos_OI":  G("AV_lejos_OI"),
-
             "esf_cerca_OD": G("esf_cerca_OD"),
             "cil_cerca_OD": G("cil_cerca_OD"),
             "eje_cerca_OD": G("eje_cerca_OD"),
             "DIP_cerca_OD": G("DIP_cerca_OD"),
             "AV_cerca_OD":  G("AV_cerca_OD"),
-
             "esf_cerca_OI": G("esf_cerca_OI"),
             "cil_cerca_OI": G("cil_cerca_OI"),
             "eje_cerca_OI": G("eje_cerca_OI"),
@@ -501,8 +520,8 @@ def generar_ticket_pdf(request):
 
     dibujar_orden_trabajo(
         p,
-        ancho_mm=90,
-        alto_mm=270,
+        ancho_mm=WIDTH_MM,   # <--- importante: mismo ancho real
+        alto_mm=HEIGHT_MM,
         numero=numero_formateado,
         productos=nombres_productos,
         fecha_emision=fecha_sistema,
@@ -515,13 +534,11 @@ def generar_ticket_pdf(request):
         receta=receta_data,
     )
 
-    # ==========================
-    # === 3ra hoja: RECETA
-    # ==========================
+    # 3ra hoja: receta
     dibujar_receta(
         p,
-        ancho_mm=90,
-        alto_mm=270,
+        ancho_mm=WIDTH_MM,   # <--- importante
+        alto_mm=HEIGHT_MM,
         cliente=cliente,
         telefono=telefono,
         fecha_emision=fecha_sistema,
@@ -529,7 +546,6 @@ def generar_ticket_pdf(request):
         receta=receta_data
     )
 
-    # === Finalizar (UNA SOLA VEZ) ===
     p.save()
     pdf_value = buffer.getvalue()
     buffer.close()
@@ -537,9 +553,6 @@ def generar_ticket_pdf(request):
     response = HttpResponse(pdf_value, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="ticket.pdf"'
     return response
-
-
-
 
 
 # views.py (añadir al final o donde prefieras)
