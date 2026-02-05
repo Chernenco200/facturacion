@@ -314,7 +314,7 @@ def generar_ticket_pdf(request):
     # ========= AJUSTE REAL PARA TIQUETERA =========
     WIDTH_MM = 80        # <-- prueba 80; si aún recorta, usa 78 o 76
     HEIGHT_MM = 270
-    MARGIN_MM = 2
+    MARGIN_MM = 3
 
     PAGE_W = WIDTH_MM * mm
     PAGE_H = HEIGHT_MM * mm
