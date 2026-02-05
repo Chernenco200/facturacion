@@ -5,7 +5,7 @@ from .models import Cliente, MedidaVista, Venta, Producto, TipoLunas, Proveedor,
 class ProductoForm(forms.ModelForm):
     class Meta:
         model = Producto
-        fields = ['cod','descripcion', 'precio_venta', 'precio_compra', 'stock', 'tipo', 'talla', 'activo']
+        fields = ['cod','descripcion', 'precio_venta', 'precio_compra', 'stock', 'tipo', 'talla', 'activo', 'imagenF', 'imagenL', 'imagenD']
 
         widgets = {
             'cod': forms.TextInput(attrs={'id': 'id_cod'}),
