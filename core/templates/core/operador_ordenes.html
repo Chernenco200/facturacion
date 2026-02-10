@@ -5,7 +5,7 @@
 <style>
   /* ====== MOBILE CARDS (solo < md) ====== */
   @media (max-width: 767.98px) {
-    .ot-table thead { display: none; } /* ocultamos encabezado */
+    .ot-table thead { display: none; }
     .ot-table, .ot-table tbody, .ot-table tr, .ot-table td { display: block; width: 100%; }
 
     .ot-table tr {
@@ -20,47 +20,42 @@
       padding: .6rem .8rem;
     }
 
-    /* etiqueta + valor en cada "fila" */
-    .ot-table td[data-label] {
+    /* etiqueta + valor */
+    .ot-table td[data-label]{
       display: flex;
       gap: .75rem;
       justify-content: space-between;
       align-items: baseline;
     }
-    .ot-table td[data-label]::before {
+    .ot-table td[data-label]::before{
       content: attr(data-label);
       font-weight: 700;
       color: rgba(0,0,0,.65);
       flex: 0 0 auto;
     }
-    .ot-table td[data-label] > * {
-      text-align: right;
-    }
+    .ot-table td[data-label] > * { text-align: right; }
 
-    /* acciones: botones a 2 columnas en móvil */
-    .ot-actions {
+    /* acciones en grid 2 columnas */
+    .ot-actions{
       display: grid !important;
       grid-template-columns: 1fr 1fr;
       gap: .5rem;
     }
-    .ot-actions form button {
-      width: 100%;
-    }
+    .ot-actions button { width: 100%; }
 
-    /* SLA centrado sin "columna" */
-    .ot-sla {
-      justify-content: space-between;
-    }
+    /* buscador apilado */
+    .ot-search-actions { width: 100%; }
   }
 </style>
 
 <div class="container-fluid py-3">
+
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
     <h3 class="mb-0">Panel Operador - Órdenes</h3>
 
     <form method="get" class="d-flex flex-column flex-sm-row gap-2 w-100 w-md-auto" style="max-width: 520px;">
       <input type="text" name="q" class="form-control" placeholder="Buscar: N° ticket o cliente" value="{{ q }}">
-      <div class="d-flex gap-2">
+      <div class="d-flex gap-2 ot-search-actions">
         <button class="btn btn-outline-primary w-100" type="submit">Buscar</button>
         <a class="btn btn-outline-secondary w-100" href="{% url 'operador_ordenes' %}">Limpiar</a>
       </div>
@@ -117,7 +112,7 @@
             {% endif %}
           </td>
 
-          <td class="text-center fw-bold ot-sla" data-label="SLA">
+          <td class="text-center fw-bold" data-label="SLA">
             {% if mins == 0 %}
               <span>A tiempo ✅</span>
             {% else %}
@@ -128,39 +123,30 @@
           <td class="fw-bold" data-label="Estado">{{ ot.estado_publico }}</td>
 
           <td data-label="Acciones">
-            <div class="d-flex flex-wrap gap-2 ot-actions">
+            <!-- ✅ Un solo form: el botón envía name="estado" -->
+            <form method="post" action="{% url 'operador_cambiar_estado' ot.ticket.id %}">
+              {% csrf_token %}
 
-              <form method="post" action="{% url 'operador_cambiar_estado' ot.ticket.id %}">
-                {% csrf_token %}
-                <input type="hidden" name="estado" value="LAB_PEDIDO">
-                <button class="btn btn-sm btn-outline-dark">Lab pedido</button>
-              </form>
+              <div class="d-flex flex-wrap gap-2 ot-actions">
+                <button type="submit" class="btn btn-sm btn-outline-dark"
+                        name="estado" value="LAB_PEDIDO">Lab pedido</button>
 
-              <form method="post" action="{% url 'operador_cambiar_estado' ot.ticket.id %}">
-                {% csrf_token %}
-                <input type="hidden" name="estado" value="BISELADO">
-                <button class="btn btn-sm btn-outline-primary">Biselado</button>
-              </form>
+                <button type="submit" class="btn btn-sm btn-outline-primary"
+                        name="estado" value="BISELADO">Biselado</button>
 
-              <form method="post" action="{% url 'operador_cambiar_estado' ot.ticket.id %}">
-                {% csrf_token %}
-                <input type="hidden" name="estado" value="UV">
-                <button class="btn btn-sm btn-outline-warning">UV</button>
-              </form>
+                <button type="submit" class="btn btn-sm btn-outline-warning"
+                        name="estado" value="UV">UV</button>
 
-              <form method="post" action="{% url 'operador_cambiar_estado' ot.ticket.id %}">
-                {% csrf_token %}
-                <input type="hidden" name="estado" value="LISTO">
-                <button class="btn btn-sm btn-success">Listo</button>
-              </form>
+                <button type="submit" class="btn btn-sm btn-success"
+                        name="estado" value="LISTO">Listo</button>
 
-              <form method="post" action="{% url 'operador_cambiar_estado' ot.ticket.id %}">
-                {% csrf_token %}
-                <input type="hidden" name="estado" value="ENTREGADO">
-                <button class="btn btn-sm btn-danger">Entregado</button>
-              </form>
-
-            </div>
+                <button type="submit" class="btn btn-sm btn-danger"
+                        name="estado" value="ENTREGADO"
+                        onclick="return confirm('¿Confirmas marcar como ENTREGADO?');">
+                  Entregado
+                </button>
+              </div>
+            </form>
 
             <div class="mt-2 small text-muted">
               Últ. actualización: {{ ot.fecha_hora_ultima_actualizacion|date:"d/m H:i" }}
@@ -186,4 +172,5 @@
 
 </div>
 {% endblock %}
+
 
