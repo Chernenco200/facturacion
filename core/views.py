@@ -1,4 +1,6 @@
 from django.contrib.staticfiles import finders
+from django.urls import reverse
+
 
 from .models import OrdenTrabajo
 from .utils_pdf import render_to_pdf
@@ -201,17 +203,32 @@ def registrar_cliente(request):
             # 3. Crear nueva medida vinculada al cliente
             medida = medida_form.save(commit=False)
             medida.cliente = cliente
-            # Si luego agregas un campo fecha_registro en MedidaVista, aquí se llenaría automáticamente con auto_now_add
-            medida.fecha_registro = cliente.fecha_registro
-            medida.Optometra = cliente.Optometra
+
+            # OJO: si fecha_registro es auto_now_add en MedidaVista, NO la asignes.
+            # Solo deja esto si tu modelo MedidaVista tiene fecha_registro editable.
+            try:
+                medida.fecha_registro = cliente.fecha_registro
+            except Exception:
+                pass
+
+            # OJO: ajusta el nombre exacto del campo (Optometra vs optometra)
+            try:
+                medida.Optometra = cliente.Optometra
+            except Exception:
+                pass
 
             medida.save()
 
-            if cliente_id or (cliente and Cliente.objects.filter(DNI=dni).exists()):
+            if cliente_id or (dni and Cliente.objects.filter(DNI=dni).exists()):
                 messages.success(request, 'Medida registrada correctamente para el cliente.')
             else:
                 messages.success(request, 'Cliente y medida registrados correctamente.')
 
+            # ✅ SI PRESIONÓ "Guardar cliente y receta" -> abrir PDF receta
+            if "guardar_cliente_receta" in request.POST:
+                return redirect(reverse("receta_pdf", args=[medida.id]))
+
+            # Si no, tu flujo normal
             return redirect('lista_clientes')
     else:
         cliente_form = ClienteForm()
@@ -312,7 +329,7 @@ def generar_ticket_pdf(request):
     buffer = BytesIO()
 
     # ========= AJUSTE REAL PARA TIQUETERA =========
-    WIDTH_MM = 80        # <-- prueba 80; si aún recorta, usa 78 o 76
+    WIDTH_MM = 80
     HEIGHT_MM = 270
     MARGIN_MM = 3
 
@@ -323,10 +340,9 @@ def generar_ticket_pdf(request):
     RIGHT_X  = (WIDTH_MM - MARGIN_MM) * mm
     CENTER_X = (WIDTH_MM / 2) * mm
 
-    # Columnas (ajústalas si quieres más espacio)
     COL_QTY_X      = LEFT_X
     COL_DESC_X     = (MARGIN_MM + 12) * mm
-    COL_SUBTOTAL_X = (WIDTH_MM - MARGIN_MM) * mm  # alineado a la derecha
+    COL_SUBTOTAL_X = (WIDTH_MM - MARGIN_MM) * mm
 
     p = canvas.Canvas(buffer, pagesize=(PAGE_W, PAGE_H))
 
@@ -363,36 +379,8 @@ def generar_ticket_pdf(request):
         return textwrap.wrap(str(text or ""), max_chars) or [""]
 
     def hr(y_mm):
-        """Línea horizontal a lo ancho imprimible (mejor que '-----')."""
         y = y_mm * mm
         p.line(LEFT_X, y, RIGHT_X, y)
-
-    total = 0.0
-    y = 257  # en mm
-
-    # ====== LOGO ======
-    ruta_logo = finders.find("core/img/logo.png")
-    if ruta_logo and os.path.exists(ruta_logo):
-        logo = ImageReader(ruta_logo)
-        ancho_logo_pt = 90   # puntos
-        alto_logo_pt = 35
-        x_centro = (PAGE_W - ancho_logo_pt) / 2
-        p.drawImage(logo, x_centro, y * mm, width=ancho_logo_pt, height=alto_logo_pt, preserveAspectRatio=True, mask='auto')
-        y -= 6
-    else:
-        p.setFont("Helvetica-Bold", 11)
-        p.drawCentredString(CENTER_X, y * mm, "OPTICA IC")
-        y -= 8
-
-    # ====== RUC / Dirección / Celulares ======
-    p.setFont("Helvetica", 9.5)
-    p.drawCentredString(CENTER_X, y * mm, RUC_EMPRESA); y -= 4
-
-    for ln in wrap_text(DIR_EMPRESA, 32):
-        p.drawCentredString(CENTER_X, y * mm, ln); y -= 4
-
-    for ln in wrap_text(TELS_EMPRESA, 32):
-        p.drawCentredString(CENTER_X, y * mm, ln); y -= 8
 
     # ====== Número de Ticket ======
     numero = request.GET.get('numero')
@@ -408,77 +396,7 @@ def generar_ticket_pdf(request):
     except Exception:
         numero_formateado = "000001"
 
-    p.setFont("Helvetica-Bold", 11)
-    p.drawCentredString(CENTER_X, y * mm, f"Recibo N\u00B0 {numero_formateado}")
-    y -= 8
-
-    # ====== Datos del cliente ======
-    p.setFont("Helvetica", 9.5)
-    p.drawString(LEFT_X, y * mm, f"Cliente: {cliente}"); y -= 5
-    p.drawString(LEFT_X, y * mm, f"Teléfono: {telefono}"); y -= 5
-    p.drawString(LEFT_X, y * mm, f"Vendedor: {vendedor}"); y -= 5
-    p.drawString(LEFT_X, y * mm, f"Emisión: {fecha_sistema} {hora_sistema}"); y -= 5
-    p.drawString(LEFT_X, y * mm, f"Entrega: {fecha_entrega} {hora_entrega}"); y -= 6
-
-    # Separador (línea)
-    hr(y); y -= 6
-
-    # Encabezado productos
-    p.setFont("Helvetica-Bold", 9.5)
-    p.drawString(COL_QTY_X, y * mm, "Cant.")
-    p.drawString(COL_DESC_X, y * mm, "Producto")
-    p.drawRightString(COL_SUBTOTAL_X, y * mm, "Subtotal")
-    y -= 5
-    p.setFont("Helvetica", 9.5)
-
-    # Productos
-    for item in detalles:
-        cantidad = str(item.get("cantidad", "1"))
-        descripcion = item.get("descripcion", "")
-        precio = float(item.get("precio", 0) or 0)
-
-        subtotal = precio  # tu lógica actual
-        total += subtotal
-
-        # Ojo: menos chars porque el ancho ahora es real de 80mm
-        lineas_desc = textwrap.wrap(descripcion, 24) or [""]
-
-        p.drawString(COL_QTY_X, y * mm, cantidad)
-        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"{subtotal:.2f}")
-        p.drawString(COL_DESC_X, y * mm, lineas_desc[0])
-        y -= 5
-
-        for desc_line in lineas_desc[1:]:
-            p.drawString(COL_DESC_X, y * mm, desc_line)
-            y -= 5
-
-        if y < 25:
-            p.showPage()
-            y = 257
-            p.setFont("Helvetica", 9.5)
-
-    # Línea final + totales
-    hr(y); y -= 6
-
-    p.setFont("Helvetica-Bold", 10)
-    p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Total: S/ {total:.2f}"); y -= 5
-    p.drawRightString(COL_SUBTOTAL_X, y * mm, f"A cuenta: S/ {a_cuenta}"); y -= 5
-    p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Saldo: S/ {saldo}"); y -= 8
-
-    # Despedida + puntos
-    p.setFont("Helvetica-Bold", 10)
-    p.drawCentredString(CENTER_X, y * mm, "¡Gracias por su preferencia!")
-    y -= 6
-
-    msg = f"Ud ha ganado {puntos_int} puntos IC que podrá canjear en su próxima compra"
-    p.setFont("Helvetica", 9.5)
-    for ln in wrap_text(msg, 34):
-        p.drawCentredString(CENTER_X, y * mm, ln)
-        y -= 5
-
-    # ==========================
-    # 2da hoja: OT + receta
-    # ==========================
+    # ===== receta_data (lo mantengo igual como ya lo tienes) =====
     receta_json = request.GET.get('receta')
     if receta_json:
         try:
@@ -518,9 +436,127 @@ def generar_ticket_pdf(request):
         if desc:
             nombres_productos.append(desc)
 
+    # =========================================================
+    # ✅ FUNCIÓN QUE DIBUJA 1 RECIBO EN LA HOJA ACTUAL
+    # =========================================================
+    def dibujar_recibo(copia_n: int):
+        total = 0.0
+        y = 257  # en mm
+
+        # ====== LOGO ======
+        ruta_logo = finders.find("core/img/logo.png")
+        if ruta_logo and os.path.exists(ruta_logo):
+            logo = ImageReader(ruta_logo)
+            ancho_logo_pt = 90
+            alto_logo_pt = 35
+            x_centro_logo = (PAGE_W - ancho_logo_pt) / 2
+            p.drawImage(logo, x_centro_logo, y * mm, width=ancho_logo_pt, height=alto_logo_pt,
+                        preserveAspectRatio=True, mask='auto')
+            y -= 6
+        else:
+            p.setFont("Helvetica-Bold", 11)
+            p.drawCentredString(CENTER_X, y * mm, "OPTICA IC")
+            y -= 8
+
+        # ====== RUC / Dirección / Celulares ======
+        p.setFont("Helvetica", 9.5)
+        p.drawCentredString(CENTER_X, y * mm, RUC_EMPRESA); y -= 4
+        for ln in wrap_text(DIR_EMPRESA, 32):
+            p.drawCentredString(CENTER_X, y * mm, ln); y -= 4
+        for ln in wrap_text(TELS_EMPRESA, 32):
+            p.drawCentredString(CENTER_X, y * mm, ln); y -= 8
+
+        # ====== Número + COPIA ======
+        p.setFont("Helvetica-Bold", 11)
+        p.drawCentredString(CENTER_X, y * mm, f"Recibo N\u00B0 {numero_formateado}")
+        y -= 5
+        p.setFont("Helvetica-Bold", 9.5)
+        #p.drawCentredString(CENTER_X, y * mm, f"COPIA {copia_n}/3")
+        y -= 7
+
+        # ====== Datos del cliente ======
+        p.setFont("Helvetica", 9.5)
+        p.drawString(LEFT_X, y * mm, f"Cliente: {cliente}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Teléfono: {telefono}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Vendedor: {vendedor}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Emisión: {fecha_sistema} {hora_sistema}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Entrega: {fecha_entrega} {hora_entrega}"); y -= 6
+
+        hr(y); y -= 6
+
+        # Encabezado productos
+        p.setFont("Helvetica-Bold", 9.5)
+        p.drawString(COL_QTY_X, y * mm, "Cant.")
+        p.drawString(COL_DESC_X, y * mm, "Producto")
+        p.drawRightString(COL_SUBTOTAL_X, y * mm, "Subtotal")
+        y -= 5
+        p.setFont("Helvetica", 9.5)
+
+        # Productos
+        for item in detalles:
+            cantidad = str(item.get("cantidad", "1"))
+            descripcion = item.get("descripcion", "")
+            precio = float(item.get("precio", 0) or 0)
+
+            subtotal = precio
+            total += subtotal
+
+            lineas_desc = textwrap.wrap(descripcion, 24) or [""]
+
+            p.drawString(COL_QTY_X, y * mm, cantidad)
+            p.drawRightString(COL_SUBTOTAL_X, y * mm, f"{subtotal:.2f}")
+            p.drawString(COL_DESC_X, y * mm, lineas_desc[0])
+            y -= 5
+
+            for desc_line in lineas_desc[1:]:
+                p.drawString(COL_DESC_X, y * mm, desc_line)
+                y -= 5
+
+            # Si llega al final, mejor: cortar ahí (para tiquetera)
+            if y < 25:
+                hr(y); y -= 6
+                p.setFont("Helvetica-Oblique", 9)
+                #p.drawCentredString(CENTER_X, y * mm, "— Separa aquí —")
+                return  # termina este recibo aquí
+
+        # Totales
+        hr(y); y -= 6
+        p.setFont("Helvetica-Bold", 10)
+        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Total: S/ {total:.2f}"); y -= 5
+        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"A cuenta: S/ {a_cuenta}"); y -= 5
+        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Saldo: S/ {saldo}"); y -= 8
+
+        # Despedida + puntos
+        p.setFont("Helvetica-Bold", 10)
+        p.drawCentredString(CENTER_X, y * mm, "¡Gracias por su preferencia!")
+        y -= 6
+
+        msg = f"Ud ha ganado {puntos_int} puntos IC que podrá canjear en su próxima compra"
+        p.setFont("Helvetica", 9.5)
+        for ln in wrap_text(msg, 34):
+            p.drawCentredString(CENTER_X, y * mm, ln)
+            y -= 5
+
+        # Corte del recibo
+        y -= 2
+        hr(y); y -= 6
+        p.setFont("Helvetica-Oblique", 9)
+        #p.drawCentredString(CENTER_X, y * mm, "— Separa aquí —")
+
+    # =========================================================
+    # ✅ 1) IMPRIMIR RECIBO 3 VECES (3 hojas)
+    # =========================================================
+    for copia in (1, 2, 3):
+        dibujar_recibo(copia)
+        p.showPage()  # siguiente hoja (corte)
+
+    # =========================================================
+    # ✅ 2) IMPRIMIR OT 1 VEZ (1 hoja)
+    #    (OJO: tu OT ya NO debe hacer p.showPage() al inicio)
+    # =========================================================
     dibujar_orden_trabajo(
         p,
-        ancho_mm=WIDTH_MM,   # <--- importante: mismo ancho real
+        ancho_mm=WIDTH_MM,
         alto_mm=HEIGHT_MM,
         numero=numero_formateado,
         productos=nombres_productos,
@@ -533,18 +569,7 @@ def generar_ticket_pdf(request):
         vendedor=vendedor,
         receta=receta_data,
     )
-
-    # 3ra hoja: receta
-    dibujar_receta(
-        p,
-        ancho_mm=WIDTH_MM,   # <--- importante
-        alto_mm=HEIGHT_MM,
-        cliente=cliente,
-        telefono=telefono,
-        fecha_emision=fecha_sistema,
-        vendedor=vendedor,
-        receta=receta_data
-    )
+    p.showPage()
 
     p.save()
     pdf_value = buffer.getvalue()
@@ -553,6 +578,82 @@ def generar_ticket_pdf(request):
     response = HttpResponse(pdf_value, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="ticket.pdf"'
     return response
+
+
+from io import BytesIO
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from datetime import datetime
+
+from .models import MedidaVista  # ajusta si tu modelo se llama distinto
+
+def receta_pdf(request, medida_id):
+    medida = get_object_or_404(MedidaVista, id=medida_id)
+    cliente = medida.cliente  # ajusta si tu FK se llama diferente
+
+    buffer = BytesIO()
+
+    WIDTH_MM = 80
+    HEIGHT_MM = 270
+    PAGE_W = WIDTH_MM * mm
+    PAGE_H = HEIGHT_MM * mm
+
+    p = canvas.Canvas(buffer, pagesize=(PAGE_W, PAGE_H))
+
+    receta_data = {
+        "esf_lejos_OD": medida.esf_lejos_OD,
+        "cil_lejos_OD": medida.cil_lejos_OD,
+        "eje_lejos_OD": medida.eje_lejos_OD,
+        "DIP_lejos_OD": medida.DIP_lejos_OD,
+        "Add_lejos_OD": getattr(medida, "Add_lejos_OD", ""),
+        "AV_lejos_OD": getattr(medida, "AV_lejos_OD", ""),
+
+        "esf_lejos_OI": medida.esf_lejos_OI,
+        "cil_lejos_OI": medida.cil_lejos_OI,
+        "eje_lejos_OI": medida.eje_lejos_OI,
+        "DIP_lejos_OI": medida.DIP_lejos_OI,
+        "Add_lejos_OI": getattr(medida, "Add_lejos_OI", ""),
+        "AV_lejos_OI": getattr(medida, "AV_lejos_OI", ""),
+
+        "esf_cerca_OD": getattr(medida, "esf_cerca_OD", ""),
+        "cil_cerca_OD": getattr(medida, "cil_cerca_OD", ""),
+        "eje_cerca_OD": getattr(medida, "eje_cerca_OD", ""),
+        "DIP_cerca_OD": getattr(medida, "DIP_cerca_OD", ""),
+        "AV_cerca_OD": getattr(medida, "AV_cerca_OD", ""),
+
+        "esf_cerca_OI": getattr(medida, "esf_cerca_OI", ""),
+        "cil_cerca_OI": getattr(medida, "cil_cerca_OI", ""),
+        "eje_cerca_OI": getattr(medida, "eje_cerca_OI", ""),
+        "DIP_cerca_OI": getattr(medida, "DIP_cerca_OI", ""),
+        "AV_cerca_OI": getattr(medida, "AV_cerca_OI", ""),
+    }
+
+    # Datos básicos
+    fecha_emision = datetime.now().strftime("%d/%m/%Y")
+    vendedor = request.user.get_full_name() or request.user.username
+
+    # >>> REUSA tu helper tal cual lo tienes <<<
+    dibujar_receta(
+        p,
+        ancho_mm=WIDTH_MM,
+        alto_mm=HEIGHT_MM,
+        cliente=getattr(cliente, "nombre", str(cliente)),
+        telefono=getattr(cliente, "telefono", ""),
+        fecha_emision=fecha_emision,
+        vendedor=vendedor,
+        receta=receta_data,
+    )
+
+    p.save()
+    pdf_value = buffer.getvalue()
+    buffer.close()
+
+    response = HttpResponse(pdf_value, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="receta.pdf"'
+    return response
+
 
 
 # views.py (añadir al final o donde prefieras)
@@ -676,14 +777,14 @@ def guardar_ticket(request):
     return JsonResponse({"ok": True, "numero": numero})
 
 
-def dibujar_orden_trabajo(p, ancho_mm=90, alto_mm=270, *, numero=None, productos=None,
+def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos=None,
                           fecha_emision=None, hora_emision=None, fecha_entrega=None, hora_entrega=None, telefono=None, cliente=None, vendedor=None, receta=None):
     """
     Dibuja la 2da hoja (Orden de trabajo) en el canvas 'p'.
     Usa el mismo tamaño de página térmica (90mm x 270mm).
     """
     # Nueva página
-    p.showPage()
+    #p.showPage()
     if receta is None:
         receta = {}
 
@@ -746,7 +847,7 @@ def dibujar_orden_trabajo(p, ancho_mm=90, alto_mm=270, *, numero=None, productos
 
     # Cabeceras
     headers = ["", "Esf", "Cil", "Eje","DIP", "Add"]
-    col_x = [x_izq, x_izq+14, x_izq+27, x_izq+40, x_izq+53, x_izq+66, x_izq+78]  # mm aprox en rollo 80/90mm
+    col_x = [x_izq, x_izq+10, x_izq+20, x_izq+30, x_izq+40, x_izq+50, x_izq+60]  # mm aprox en rollo 80/90mm
     for i, h in enumerate(headers):
         p.drawString(col_x[i] * mm, y * mm, h)
     y -= 5
@@ -790,7 +891,7 @@ def dibujar_orden_trabajo(p, ancho_mm=90, alto_mm=270, *, numero=None, productos
         y -= 6
         p.setFont("Helvetica", 9)
         headers_c = ["", "Esf", "Cil", "Eje", "DIP"]
-        colc_x = [x_izq, x_izq+16, x_izq+30, x_izq+43, x_izq+56, x_izq+70]
+        colc_x = [x_izq, x_izq+10, x_izq+20, x_izq+30, x_izq+40, x_izq+50]
         for i, h in enumerate(headers_c):
             p.drawString(colc_x[i] * mm, y * mm, h)
         y -= 5
@@ -838,11 +939,11 @@ def dibujar_orden_trabajo(p, ancho_mm=90, alto_mm=270, *, numero=None, productos
     p.drawString(x_izq * mm, y * mm, "-" * 60)
     y -= 6
     p.setFont("Helvetica-Oblique", 9)
-    p.drawCentredString(x_centro, y * mm, "— Separa aquí —")
+    #p.drawCentredString(x_centro, y * mm, "— Separa aquí —")
 
 
 # --- 3ra hoja: RECETA ---
-def dibujar_receta(p, *, ancho_mm=90, alto_mm=270, cliente=None, telefono=None,
+def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
                    fecha_emision=None, vendedor=None, receta=None):
     """
     Dibuja la hoja de RECETA. 'receta' es un dict con campos:
@@ -852,7 +953,7 @@ def dibujar_receta(p, *, ancho_mm=90, alto_mm=270, cliente=None, telefono=None,
     - esf_cerca_OI, cil_cerca_OI, eje_cerca_OI, DIP_cerca_OI, AV_cerca_OI
     (puedes enviar solo “lejos” si no hay “cerca”)
     """
-    p.showPage()  # nueva página
+#    p.showPage()  # nueva página
     if receta is None:
         receta = {}
 
@@ -891,7 +992,7 @@ def dibujar_receta(p, *, ancho_mm=90, alto_mm=270, cliente=None, telefono=None,
 
     # Cabeceras
     headers = ["", "Esf", "Cil", "Eje", "DIP", "Add", "AV"]
-    col_x = [x_izq, x_izq+10, x_izq+23, x_izq+36, x_izq+49, x_izq+60, x_izq+70]  # mm aprox en rollo 80/90mm
+    col_x = [x_izq, x_izq+10, x_izq+20, x_izq+30, x_izq+40, x_izq+50, x_izq+60]  # mm aprox en rollo 80/90mm
     for i, h in enumerate(headers):
         p.drawString(col_x[i] * mm, y * mm, h)
     y -= 5
@@ -930,12 +1031,12 @@ def dibujar_receta(p, *, ancho_mm=90, alto_mm=270, cliente=None, telefono=None,
         "esf_cerca_OI","cil_cerca_OI","eje_cerca_OI","DIP_cerca_OI","AV_cerca_OI",
     ])
     if tiene_cerca:
-        p.setFont("Helvetica-Bold", 10)
+        p.setFont("Helvetica-Bold", 9)
         p.drawString(x_izq * mm, y * mm, "Visión de Cerca")
         y -= 6
         p.setFont("Helvetica", 9)
         headers_c = ["","Esf", "Cil", "Eje", "DIP", "AV"]
-        colc_x = [x_izq, x_izq+10, x_izq+23, x_izq+36, x_izq+49, x_izq+70]
+        colc_x = [x_izq, x_izq+10, x_izq+20, x_izq+30, x_izq+40, x_izq+50]
         for i, h in enumerate(headers_c):
             p.drawString(colc_x[i] * mm, y * mm, h)
         y -= 5
@@ -975,7 +1076,7 @@ def dibujar_receta(p, *, ancho_mm=90, alto_mm=270, cliente=None, telefono=None,
     # Línea de corte al final de la hoja RECETA
     p.drawString(x_izq * mm, y * mm, "-" * 60); y -= 6
     p.setFont("Helvetica-Oblique", 9)
-    p.drawCentredString(x_centro, y * mm, "— Separa aquí —")
+    #p.drawCentredString(x_centro, y * mm, "— Separa aquí —")
     p.showPage()  # corta justo aquí
 
 

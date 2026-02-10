@@ -4,12 +4,14 @@
 {% block title %}Registro de Cliente{% endblock %}
 
 {% block content %}
+
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
 <!-- jQuery UI (JS + CSS) -->
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.3/themes/base/jquery-ui.css">
 <script src="https://code.jquery.com/ui/1.13.3/jquery-ui.min.js"></script>
+
 
 
 
@@ -20,9 +22,13 @@
         <h1 class="h4 mb-0">Registro de cliente y receta</h1>
     </div>
 
-    <form method="post" novalidate>
+    <form method="post" novalidate target="_blank">
         {% csrf_token %}
         <input type="hidden" id="cliente_id" name="cliente_id">
+
+        <input type="hidden" id="vendedor_pdf" value="{{ request.user.get_full_name|default:request.user.username }}">
+        <input type="hidden" id="fecha_emision_pdf" value="{% now 'd/m/Y' %}">
+
 
         <div class="row g-4">
 
@@ -40,6 +46,7 @@
                                     class="btn btn-outline-info btn-sm"
                                     id="btn-buscar-dni">
                                 Buscar por DNI
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -161,8 +168,10 @@
 
         <!-- Botón guardar -->
         <div class="text-end mt-4">
-            <button type="submit" name="guardar_cliente" class="btn btn-success">
-                Guardar cliente y receta
+
+
+            <button type="submit" name="guardar_cliente_receta" class="btn btn-primary">
+            Guardar cliente y receta
             </button>
         </div>
     </form>

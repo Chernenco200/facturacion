@@ -102,6 +102,13 @@ urlpatterns = [
 
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
 
+    path("receta/<int:medida_id>/pdf/", views.receta_pdf, name="receta_pdf"),
+    
+
+    
+
+
+
 
 
 ]
