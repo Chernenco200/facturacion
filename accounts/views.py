@@ -18,12 +18,12 @@ def logout_view(request):
     logout(request)
     return redirect("accounts:login")
 
-@role_required("ADMIN")
+@role_required("ADMIN", "SUPERVISOR")
 def usuarios_list(request):
     users = User.objects.select_related("profile").order_by("username")
     return render(request, "accounts/usuarios_list.html", {"users": users})
 
-@role_required("ADMIN")
+@role_required("ADMIN", "SUPERVISOR")
 def usuarios_create(request):
     if request.method == "POST":
         form = UserCreateForm(request.POST)
@@ -35,7 +35,7 @@ def usuarios_create(request):
         form = UserCreateForm(initial={"is_active": True})
     return render(request, "accounts/usuarios_form.html", {"form": form, "title": "Crear usuario"})
 
-@role_required("ADMIN")
+@role_required("ADMIN", "SUPERVISOR")
 def usuarios_update(request, user_id):
     u = get_object_or_404(User.objects.select_related("profile"), pk=user_id)
     if request.method == "POST":
@@ -50,7 +50,7 @@ def usuarios_update(request, user_id):
         form = UserUpdateForm(instance=u, initial={"rol": u.profile.rol})
     return render(request, "accounts/usuarios_form.html", {"form": form, "title": f"Editar: {u.username}"})
 
-@role_required("ADMIN")
+@role_required("ADMIN", "SUPERVISOR")
 def usuarios_toggle_active(request, user_id):
     u = get_object_or_404(User, pk=user_id)
     if u.pk == request.user.pk:
@@ -61,7 +61,7 @@ def usuarios_toggle_active(request, user_id):
     messages.success(request, f"Estado actualizado: {u.username} -> {'ACTIVO' if u.is_active else 'INACTIVO'}")
     return redirect("accounts:usuarios_list")
 
-@role_required("ADMIN")
+@role_required("ADMIN", "SUPERVISOR")
 def usuarios_reset_password(request, user_id):
     u = get_object_or_404(User, pk=user_id)
     if request.method == "POST":
