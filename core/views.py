@@ -820,7 +820,7 @@ def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos
     p.setFont("Helvetica-Bold", 11)
     p.drawString(x_izq * mm, y * mm, "Productos / Trabajo:")
     y -= 6
-    p.setFont("Helvetica", 10)
+    p.setFont("Helvetica", 9)
 
     if not productos:
         productos = []
