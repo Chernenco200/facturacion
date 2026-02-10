@@ -2,19 +2,73 @@
 {% block title %}Panel Operador{% endblock %}
 
 {% block content %}
+<style>
+  /* ====== MOBILE CARDS (solo < md) ====== */
+  @media (max-width: 767.98px) {
+    .ot-table thead { display: none; } /* ocultamos encabezado */
+    .ot-table, .ot-table tbody, .ot-table tr, .ot-table td { display: block; width: 100%; }
+
+    .ot-table tr {
+      border: 1px solid rgba(0,0,0,.15);
+      border-radius: .75rem;
+      margin-bottom: .75rem;
+      overflow: hidden;
+    }
+
+    .ot-table td {
+      border: 0 !important;
+      padding: .6rem .8rem;
+    }
+
+    /* etiqueta + valor en cada "fila" */
+    .ot-table td[data-label] {
+      display: flex;
+      gap: .75rem;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .ot-table td[data-label]::before {
+      content: attr(data-label);
+      font-weight: 700;
+      color: rgba(0,0,0,.65);
+      flex: 0 0 auto;
+    }
+    .ot-table td[data-label] > * {
+      text-align: right;
+    }
+
+    /* acciones: botones a 2 columnas en móvil */
+    .ot-actions {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr;
+      gap: .5rem;
+    }
+    .ot-actions form button {
+      width: 100%;
+    }
+
+    /* SLA centrado sin "columna" */
+    .ot-sla {
+      justify-content: space-between;
+    }
+  }
+</style>
+
 <div class="container-fluid py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
     <h3 class="mb-0">Panel Operador - Órdenes</h3>
 
-    <form method="get" class="d-flex gap-2" style="max-width: 420px;">
+    <form method="get" class="d-flex flex-column flex-sm-row gap-2 w-100 w-md-auto" style="max-width: 520px;">
       <input type="text" name="q" class="form-control" placeholder="Buscar: N° ticket o cliente" value="{{ q }}">
-      <button class="btn btn-outline-primary" type="submit">Buscar</button>
-      <a class="btn btn-outline-secondary" href="{% url 'operador_ordenes' %}">Limpiar</a>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary w-100" type="submit">Buscar</button>
+        <a class="btn btn-outline-secondary w-100" href="{% url 'operador_ordenes' %}">Limpiar</a>
+      </div>
     </form>
   </div>
 
   <div class="table-responsive">
-    <table class="table table-bordered table-hover align-middle">
+    <table class="table table-bordered table-hover align-middle ot-table">
       <thead class="table-dark">
         <tr>
           <th style="width:90px;">Ticket</th>
@@ -38,10 +92,9 @@
             class="table-danger"
           {% endif %}
         >
-          <td class="fw-bold">#{{ ot.ticket.numero }}</td>
+          <td class="fw-bold" data-label="Ticket">#{{ ot.ticket.numero }}</td>
 
-          <td>
-            {# Cliente público: inicial + apellido #}
+          <td data-label="Cliente">
             {% if ot.ticket.cliente and ot.ticket.cliente.nombre %}
               {% with parts=ot.ticket.cliente.nombre.split %}
                 <span class="fw-bold">
@@ -56,7 +109,7 @@
             {% endif %}
           </td>
 
-          <td>
+          <td data-label="Entrega">
             {% if ot.due_datetime %}
               {{ ot.due_datetime|date:"d/m/Y H:i" }}
             {% else %}
@@ -64,20 +117,19 @@
             {% endif %}
           </td>
 
-          <td class="text-center fw-bold">
+          <td class="text-center fw-bold ot-sla" data-label="SLA">
             {% if mins == 0 %}
-              A tiempo ✅
+              <span>A tiempo ✅</span>
             {% else %}
-              +{{ mins }} min ⏱
+              <span>+{{ mins }} min ⏱</span>
             {% endif %}
           </td>
 
-          <td class="fw-bold">{{ ot.estado_publico }}</td>
+          <td class="fw-bold" data-label="Estado">{{ ot.estado_publico }}</td>
 
-          <td>
-            <div class="d-flex flex-wrap gap-2">
+          <td data-label="Acciones">
+            <div class="d-flex flex-wrap gap-2 ot-actions">
 
-              <!-- Botones de flujo (grandes) -->
               <form method="post" action="{% url 'operador_cambiar_estado' ot.ticket.id %}">
                 {% csrf_token %}
                 <input type="hidden" name="estado" value="LAB_PEDIDO">
@@ -134,3 +186,4 @@
 
 </div>
 {% endblock %}
+
