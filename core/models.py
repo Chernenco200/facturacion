@@ -96,7 +96,7 @@ class Producto(models.Model):
     ancho = models.CharField(max_length=5)
     altura = models.CharField(max_length=5)    
     descripcion = models.CharField(max_length=200)              # ej. LUNA BLANCA 1.56
-    precio_compra = models.DecimalField(max_digits=10, decimal_places=2)
+    precio_compra = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     precio_venta = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.IntegerField(default=0)                 # stock actual
     talla = models.CharField(max_length=50, blank=True, null=True)       # si aplica

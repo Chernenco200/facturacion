@@ -1744,245 +1744,386 @@ def _wrap_text(pdf, text, max_width_pt, font_name="Helvetica", font_size=10):
 
     return fixed or [""]
 
+from io import BytesIO
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
+from django.contrib.staticfiles import finders
+import os, json, textwrap
+
+# from core.models import TicketVenta  # <-- ajusta import
+# Si tienes un modelo detalle:
+# from core.models import TicketVentaDetalle
+
+from io import BytesIO
+import os, json, textwrap
+from datetime import datetime, date
+
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.contrib.staticfiles import finders
+
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
+
+from core.models import TicketVenta  # <-- ajusta si tu app/modelo cambia
+
 
 def imprimir_ticket_pdf(request):
-    numero = request.GET.get("numero")
-    if not numero:
-        return HttpResponse("Falta ?numero=", status=400)
-
-    ticket = get_object_or_404(TicketVenta, numero=numero)
-    detalles = DetalleTicketVenta.objects.filter(ticket_numero=ticket)
-
-    # ====== Datos (ajusta nombres si tu modelo difiere) ======
-    cliente_nombre = ""
-    cliente_telefono = ""
-    if ticket.cliente:
-        cliente_nombre = getattr(ticket.cliente, "nombre", str(ticket.cliente))
-        cliente_telefono = getattr(ticket.cliente, "telefono", "")
-
-    vendedor = getattr(ticket, "vendedor", "")
-
-    fecha_emision = getattr(ticket, "fecha_emision", None)
-    hora_emision = getattr(ticket, "hora_emision", None)
-
-    # ✅ Combina fecha + hora para que no salga 00:00
-    emision_dt = None
-    if fecha_emision and hora_emision:
-        emision_dt = datetime.combine(fecha_emision, hora_emision)
-    else:
-        emision_dt = fecha_emision or getattr(ticket, "fecha_registro", None)
-
-    fecha_entrega = getattr(ticket, "fecha_entrega", None)
-    hora_entrega = getattr(ticket, "hora_entrega", None)
-
-    total = getattr(ticket, "total", 0) or 0
-    a_cuenta = getattr(ticket, "a_cuenta", 0) or 0
-    saldo = getattr(ticket, "saldo", 0) or 0
-    puntos_ic = getattr(ticket, "puntos_ic", 0) or 0
-
-    # ====== Crear PDF ======
     buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=(90 * mm, 270 * mm))
 
-    W = 90 * mm
-    left = 7 * mm
-    right = W - 6 * mm
-    y = 265 * mm
+    # ========= AJUSTE REAL PARA TIQUETERA =========
+    WIDTH_MM = 80
+    HEIGHT_MM = 270
+    MARGIN_MM = 3
+
+    PAGE_W = WIDTH_MM * mm
+    PAGE_H = HEIGHT_MM * mm
+
+    LEFT_X   = MARGIN_MM * mm
+    RIGHT_X  = (WIDTH_MM - MARGIN_MM) * mm
+    CENTER_X = (WIDTH_MM / 2) * mm
+
+    COL_QTY_X      = LEFT_X
+    COL_DESC_X     = (MARGIN_MM + 12) * mm
+    COL_SUBTOTAL_X = (WIDTH_MM - MARGIN_MM) * mm
+
+    p = canvas.Canvas(buffer, pagesize=(PAGE_W, PAGE_H))
 
     # =========================
-    # Líneas punteadas: ahora dibujadas como línea real hasta el final del subtotal
+    # DATOS EMPRESA
     # =========================
-    def hr():
-        nonlocal y
-        pdf.setLineWidth(0.6)  # un poco más gruesa
-        pdf.setDash(2, 2)      # punteado
-        pdf.line(left, y, right, y)  # hasta el final del subtotal (right)
-        pdf.setDash()          # quitar dash para lo demás
-        y -= 5 * mm
+    RUC_EMPRESA = "RUC: 10429550101"
+    DIR_EMPRESA = "Dirección: Jr. Camaná N° 560, Cercado de Lima"
+    TELS_EMPRESA = "Cel: 952305913 / 914300701"
 
-    # ====== LOGO ======
-    ruta_logo = finders.find("core/img/logo.png")
-    if os.path.exists(ruta_logo):
-        logo = ImageReader(ruta_logo)
-        ancho_logo = 45 * mm
-        alto_logo = 16 * mm
-        x_centro = (W - ancho_logo) / 2
-        pdf.drawImage(
-            logo,
-            x_centro,
-            y - alto_logo,
-            width=ancho_logo,
-            height=alto_logo,
-            preserveAspectRatio=True,
-            mask="auto",
+    def wrap_text(text, max_chars=32):
+        return textwrap.wrap(str(text or ""), max_chars) or [""]
+
+    def hr(y_mm):
+        y = y_mm * mm
+        p.line(LEFT_X, y, RIGHT_X, y)
+
+    # =========================
+    # 1) TRAER TICKET DESDE BD
+    # =========================
+    ticket_id = request.GET.get("ticket_id")
+    numero = request.GET.get("numero")  # en tu URL: ?numero=5 (parece ser ID)
+
+    ticket = None
+    if ticket_id:
+        ticket = get_object_or_404(TicketVenta, pk=ticket_id)
+    elif numero:
+        try:
+            ticket = get_object_or_404(TicketVenta, pk=int(numero))
+        except Exception:
+            ticket = None
+
+    # =========================
+    # 2) ARMAR VARIABLES (BD primero; GET fallback)
+    # =========================
+    detalles = []
+    receta_data = {}
+    nombres_productos = []
+
+    if ticket:
+        # ---- Cliente ----
+        cli = getattr(ticket, "cliente", None)
+        cliente_nombre = (
+            getattr(cli, "nombre", None)
+            or getattr(cli, "nombres", None)
+            or getattr(cli, "razon_social", None)
+            or (str(cli) if cli else "")
         )
-        y -= alto_logo + 4 * mm
+        cliente_telefono = getattr(cli, "telefono", "") if cli else ""
+
+        # ---- Vendedor ----
+        vend_obj = getattr(ticket, "vendedor", None) or getattr(ticket, "usuario", None)
+        if vend_obj:
+            vendedor = (
+                getattr(vend_obj, "get_full_name", lambda: "")()  # si es User
+                or getattr(vend_obj, "username", "")
+                or str(vend_obj)
+            )
+        else:
+            vendedor = ""
+
+        # ---- Fecha de emisión ----
+        fecha_dt = (
+            getattr(ticket, "fecha_emision", None)
+            or getattr(ticket, "fecha_registro", None)
+            or getattr(ticket, "created_at", None)
+        )
+        if isinstance(fecha_dt, datetime):
+            fecha_sistema = fecha_dt.strftime("%d/%m/%Y")
+        elif isinstance(fecha_dt, date):
+            fecha_sistema = fecha_dt.strftime("%d/%m/%Y")
+        else:
+            fecha_sistema = timezone.now().strftime("%d/%m/%Y")
+
+        # ✅ Hora de emisión (TimeField auto_now_add)
+        he = getattr(ticket, "hora_emision", None)
+        if he:
+            hora_sistema = he.strftime("%H:%M")
+        else:
+            hora_sistema = timezone.now().strftime("%H:%M")
+
+        # ---- Fecha de entrega ----
+        fe = getattr(ticket, "fecha_entrega", None)
+        if isinstance(fe, datetime):
+            fecha_entrega = fe.strftime("%d/%m/%Y")
+        elif isinstance(fe, date):
+            fecha_entrega = fe.strftime("%d/%m/%Y")
+        elif isinstance(fe, str) and fe.strip():
+            fecha_entrega = fe.strip()
+        else:
+            fecha_entrega = timezone.now().strftime("%d/%m/%Y")
+
+        # ✅ Hora de entrega (CharField)
+        hora_entrega = (getattr(ticket, "hora_entrega", "") or "").strip()
+        if not hora_entrega:
+            hora_entrega = "--:--"
+
+        # ---- Totales/pagos (ajusta si tus campos se llaman distinto) ----
+        a_cuenta = f"{float(getattr(ticket, 'a_cuenta', 0) or 0):.2f}"
+        saldo    = f"{float(getattr(ticket, 'saldo', 0) or 0):.2f}"
+        puntos_ic_val = getattr(ticket, "puntos_ic", None)
+
+        # ---- Número ticket ----
+        numero_formateado = f"{ticket.id:06d}"
+
+        # ---- Detalles (RELACIÓN) ----
+        rel = getattr(ticket, "detalles", None) or getattr(ticket, "items", None)
+        if rel is not None and hasattr(rel, "all"):
+            for d in rel.all():
+                # ajusta nombres según tu detalle real
+                desc = (
+                    getattr(d, "descripcion", None)
+                    or getattr(getattr(d, "producto", None), "descripcion", "")
+                    or str(getattr(d, "producto", "") or "")
+                )
+                qty = getattr(d, "cantidad", 1) or 1
+                pu  = getattr(d, "precio", None) or getattr(d, "precio_unitario", None) or 0
+                detalles.append({"descripcion": desc, "cantidad": qty, "precio": float(pu or 0)})
+
+        # ---- Detalles (JSON fallback) ----
+        if not detalles:
+            dj = getattr(ticket, "detalles_json", None) or getattr(ticket, "detalles", None)
+            if isinstance(dj, str) and dj.strip():
+                try:
+                    detalles = json.loads(dj)
+                except Exception:
+                    detalles = []
+
+        # ---- Receta (JSON si existe) ----
+        rj = getattr(ticket, "receta_json", None) or getattr(ticket, "receta", None)
+        if isinstance(rj, str) and rj.strip():
+            try:
+                receta_data = json.loads(rj)
+            except Exception:
+                receta_data = {}
+        else:
+            receta_data = {}
+
+        # ---- Puntos ----
+        try:
+            puntos_int = int(float(puntos_ic_val)) if puntos_ic_val is not None else 0
+        except Exception:
+            puntos_int = 0
+
     else:
-        pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawCentredString(W / 2, y, "Óptica IC")
-        y -= 10 * mm
+        # ===== FALLBACK GET (por si llamas sin BD) =====
+        cliente_nombre = request.GET.get("cliente", "Cliente no definido")
+        cliente_telefono = request.GET.get("telefono", "")
+        vendedor = request.GET.get("vendedor", "")
 
-    # ====== Recibo ======
-    pdf.setFont("Helvetica-Bold", 12)
-    try:
-        nro = int(ticket.numero)
-        pdf.drawCentredString(W / 2, y, f"Recibo N° {nro:06d}")
-    except Exception:
-        pdf.drawCentredString(W / 2, y, f"Recibo N° {ticket.numero}")
-    y -= 9 * mm
+        fecha_sistema = request.GET.get("fecha_sistema", timezone.now().strftime("%d/%m/%Y"))
+        hora_sistema  = request.GET.get("hora_sistema", timezone.now().strftime("%H:%M"))
 
-    # ====== Datos ======
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(left, y, f"Cliente:  {cliente_nombre}")
-    y -= 6 * mm
-    pdf.drawString(left, y, f"Teléfono:  {cliente_telefono}")
-    y -= 6 * mm
-    pdf.drawString(left, y, f"Vendedor:  {vendedor}")
-    y -= 6 * mm
+        fecha_entrega = request.GET.get("fecha_entrega", timezone.now().strftime("%d/%m/%Y"))
+        hora_entrega  = request.GET.get("hora_entrega", "--:--")
 
-    if emision_dt:
+        a_cuenta = request.GET.get("a_cuenta", "0.00")
+        saldo    = request.GET.get("saldo", "0.00")
+
+        puntos_ic = request.GET.get("puntos_ic", "0.00")
         try:
-            emision_str = emision_dt.strftime("%d/%m/%Y %H:%M")
+            puntos_int = int(float(puntos_ic))
         except Exception:
-            emision_str = str(emision_dt)
-        pdf.drawString(left, y, f"Emisión:  {emision_str}")
-        y -= 6 * mm
+            puntos_int = 0
 
-    # ✅ ENTREGA (viene de DB; en tu modelo es CharField, pero igual lo formateamos seguro)
-    fe = fecha_entrega
-    he = hora_entrega
-
-    # Si por alguna razón llegaran como datetime/date/time, los convertimos a string amigable
-    try:
-        if hasattr(fe, "strftime"):
-            fe = fe.strftime("%d/%m/%Y")
-    except Exception:
-        pass
-
-    try:
-        if hasattr(he, "strftime"):
-            he = he.strftime("%H:%M")
-    except Exception:
-        pass
-
-    fe = (str(fe).strip() if fe is not None else "")
-    he = (str(he).strip() if he is not None else "")
-
-    if fe or he:
-        pdf.drawString(left, y, f"Entrega:  {fe or '--/--/----'} {he or '--:--'}")
-        y -= 6 * mm
-
-    hr()
-
-
-    # ====== Tabla (Cant | Producto | Subtotal) ======
-    col_cant_x = left
-    col_prod_x = left + 14 * mm
-
-    # ✅ Hacemos el subtotal un poquito más compacto para dar más ancho al producto
-    subtotal_col_width = 18 * mm
-    col_subt_right = right
-    col_subt_left = right - subtotal_col_width
-
-    gap = 1.5 * mm
-    max_prod_width = col_subt_left - col_prod_x - gap  # ✅ producto más ancho
-
-    pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawString(col_cant_x, y, "Cant.")
-    pdf.drawString(col_prod_x, y, "Producto")
-    pdf.drawRightString(col_subt_right, y, "Subtotal")
-    y -= 7 * mm
-
-    pdf.setFont("Helvetica", 10)
-
-    for d in detalles:
-        cantidad = getattr(d, "cantidad", 0) or 0
-        descripcion = getattr(d, "descripcion", "") or ""
-        precio = getattr(d, "precio", 0) or 0
-
+        detalles_json = request.GET.get("detalles", "[]")
         try:
-            subtotal = float(precio)
+            detalles = json.loads(detalles_json)
         except Exception:
-            subtotal = 0.0
+            detalles = []
 
-        lines = _wrap_text(pdf, descripcion, max_prod_width, font_name="Helvetica", font_size=10)
-
+        numero = request.GET.get("numero")
+        if not numero:
+            ultimo_id = TicketVenta.objects.order_by("-id").values_list("id", flat=True).first()
+            numero = ultimo_id or 1
         try:
-            cant_str = f"{float(cantidad):g}"
+            numero_formateado = f"{int(numero):06d}"
         except Exception:
-            cant_str = str(cantidad)
+            numero_formateado = "000001"
 
-        pdf.drawString(col_cant_x, y, cant_str)
-        pdf.drawString(col_prod_x, y, lines[0])
-        pdf.drawRightString(col_subt_right, y, f"{subtotal:,.2f}")
-        y -= 6 * mm
+        receta_data = {}
+        rj = request.GET.get("receta")
+        if rj:
+            try:
+                receta_data = json.loads(rj)
+            except Exception:
+                receta_data = {}
 
-        for extra in lines[1:]:
-            pdf.drawString(col_prod_x, y, extra)
-            y -= 6 * mm
+    # Nombres de productos para OT
+    nombres_productos = []
+    for item in detalles:
+        desc = str(item.get("descripcion", "")).strip()
+        if desc:
+            nombres_productos.append(desc)
 
-        if y < 30 * mm:
-            pdf.showPage()
-            W = 90 * mm
-            left = 6 * mm
-            right = W - 6 * mm
-            y = 265 * mm
+    # =========================================================
+    # ✅ DIBUJAR 1 RECIBO EN LA HOJA ACTUAL
+    # =========================================================
+    def dibujar_recibo(copia_n: int):
+        total = 0.0
+        y = 257  # mm
 
-            # Reimprimir encabezado de tabla si hay salto
-            pdf.setFont("Helvetica-Bold", 10)
-            pdf.drawString(col_cant_x, y, "Cant.")
-            pdf.drawString(col_prod_x, y, "Producto")
-            pdf.drawRightString(col_subt_right, y, "Subtotal")
-            y -= 7 * mm
-            pdf.setFont("Helvetica", 10)
+        # ====== LOGO ======
+        ruta_logo = finders.find("core/img/logo.png")
+        if ruta_logo and os.path.exists(ruta_logo):
+            logo = ImageReader(ruta_logo)
+            ancho_logo_pt = 90
+            alto_logo_pt = 35
+            x_centro_logo = (PAGE_W - ancho_logo_pt) / 2
+            p.drawImage(
+                logo, x_centro_logo, y * mm,
+                width=ancho_logo_pt, height=alto_logo_pt,
+                preserveAspectRatio=True, mask="auto"
+            )
+            y -= 6
+        else:
+            p.setFont("Helvetica-Bold", 11)
+            p.drawCentredString(CENTER_X, y * mm, "OPTICA IC")
+            y -= 8
 
-    hr()
+        # Empresa
+        p.setFont("Helvetica", 9.5)
+        p.drawCentredString(CENTER_X, y * mm, RUC_EMPRESA); y -= 4
+        for ln in wrap_text(DIR_EMPRESA, 32):
+            p.drawCentredString(CENTER_X, y * mm, ln); y -= 4
+        for ln in wrap_text(TELS_EMPRESA, 32):
+            p.drawCentredString(CENTER_X, y * mm, ln); y -= 8
 
-    # ====== Totales ======
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawRightString(right, y, f"Total:  S/ {float(total):,.2f}")
-    y -= 6 * mm
-    pdf.drawRightString(right, y, f"A cuenta:  S/ {float(a_cuenta):,.2f}")
-    y -= 6 * mm
-    pdf.drawRightString(right, y, f"Saldo:  S/ {float(saldo):,.2f}")
-    y -= 6 * mm
+        # Ticket
+        p.setFont("Helvetica-Bold", 11)
+        p.drawCentredString(CENTER_X, y * mm, f"Recibo N\u00B0 {numero_formateado}")
+        y -= 12
 
-    hr()
+        # Datos cliente
+        p.setFont("Helvetica", 9.5)
+        p.drawString(LEFT_X, y * mm, f"Cliente: {cliente_nombre}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Teléfono: {cliente_telefono}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Vendedor: {vendedor}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Emisión: {fecha_sistema} {hora_sistema}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Entrega: {fecha_entrega} {hora_entrega}"); y -= 6
 
-    # ====== Mensaje final ======
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawCentredString(W / 2, y, "¡GRACIAS POR SU PREFERENCIA!")
-    y -= 7 * mm
+        hr(y); y -= 6
 
-    # --- Puntos IC acumulados (sumatoria por cliente) ---
-    puntos_acumulados = int(puntos_ic or 0)
-    if ticket.cliente_id:
-        puntos_acumulados = int(
-            TicketVenta.objects.filter(cliente_id=ticket.cliente_id)
-            .aggregate(s=Sum("puntos_ic"))["s"] or 0
-        )
+        # Encabezado productos
+        p.setFont("Helvetica-Bold", 9.5)
+        p.drawString(COL_QTY_X, y * mm, "Cant.")
+        p.drawString(COL_DESC_X, y * mm, "Producto")
+        p.drawRightString(COL_SUBTOTAL_X, y * mm, "Subtotal")
+        y -= 5
+        p.setFont("Helvetica", 9.5)
 
-    mensaje = (
-        f"Felicitaciones!!!, Ud. ganó {int(puntos_ic)} Puntos IC que podrá canjear en su próxima compra"
-        
+        # Productos
+        for item in detalles:
+            qty = float(item.get("cantidad", 1) or 1)
+            descripcion = str(item.get("descripcion", "") or "")
+            precio_unit = float(item.get("precio", 0) or 0)
+
+            subtotal = qty * precio_unit
+            total += subtotal
+
+            lineas_desc = textwrap.wrap(descripcion, 24) or [""]
+
+            p.drawString(COL_QTY_X, y * mm, str(int(qty)) if qty.is_integer() else str(qty))
+            p.drawRightString(COL_SUBTOTAL_X, y * mm, f"{subtotal:.2f}")
+            p.drawString(COL_DESC_X, y * mm, lineas_desc[0])
+            y -= 5
+
+            for desc_line in lineas_desc[1:]:
+                p.drawString(COL_DESC_X, y * mm, desc_line)
+                y -= 5
+
+            if y < 25:
+                hr(y); y -= 6
+                return
+
+        # Totales
+        hr(y); y -= 6
+        p.setFont("Helvetica-Bold", 10)
+        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Total: S/ {total:.2f}"); y -= 5
+        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"A cuenta: S/ {a_cuenta}"); y -= 5
+        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Saldo: S/ {saldo}"); y -= 8
+
+        # Despedida
+        p.setFont("Helvetica-Bold", 10)
+        p.drawCentredString(CENTER_X, y * mm, "¡Gracias por su preferencia!")
+        y -= 6
+
+        msg = f"Ud ha ganado {puntos_int} puntos IC que podrá canjear en su próxima compra"
+        p.setFont("Helvetica", 9.5)
+        for ln in wrap_text(msg, 34):
+            p.drawCentredString(CENTER_X, y * mm, ln)
+            y -= 5
+
+        y -= 2
+        hr(y); y -= 6
+
+    # =========================================================
+    # ✅ 1) IMPRIMIR RECIBO 3 VECES (3 hojas)
+    # =========================================================
+    for copia in (1, 2, 3):
+        dibujar_recibo(copia)
+        p.showPage()
+
+    # =========================================================
+    # ✅ 2) IMPRIMIR OT 1 VEZ
+    #    (tu función debe existir y NO hacer showPage() al inicio)
+    # =========================================================
+    dibujar_orden_trabajo(
+        p,
+        ancho_mm=WIDTH_MM,
+        alto_mm=HEIGHT_MM,
+        numero=numero_formateado,
+        productos=nombres_productos,
+        fecha_emision=fecha_sistema,
+        hora_emision=hora_sistema,
+        fecha_entrega=fecha_entrega,
+        hora_entrega=hora_entrega,
+        telefono=cliente_telefono,
+        cliente=cliente_nombre,
+        vendedor=vendedor,
+        receta=receta_data,
     )
+    p.showPage()
 
-    # ✅ Wrap real al ancho útil del ticket (para que NO se desborde)
-    pdf.setFont("Helvetica", 10)
-    max_msg_width = (right - left)  # ancho útil
+    p.save()
+    pdf_value = buffer.getvalue()
+    buffer.close()
 
-    lineas = _wrap_text(pdf, mensaje, max_msg_width, font_name="Helvetica", font_size=10)
+    response = HttpResponse(pdf_value, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="ticket.pdf"'
+    return response
 
-    for ln in lineas:
-        pdf.drawCentredString(W / 2, y, ln)
-        y -= 6 * mm
-
-
-    pdf.showPage()
-    pdf.save()
-
-    buffer.seek(0)
-    return HttpResponse(buffer, content_type="application/pdf")
 
 @role_required("ADMIN", "SUPERVISOR")
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR")
