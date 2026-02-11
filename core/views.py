@@ -1758,22 +1758,6 @@ import os, json, textwrap
 # Si tienes un modelo detalle:
 # from core.models import TicketVentaDetalle
 
-from io import BytesIO
-import os, json, textwrap
-from datetime import datetime, date
-
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
-from django.contrib.staticfiles import finders
-
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm
-from reportlab.lib.utils import ImageReader
-
-from core.models import TicketVenta  # <-- ajusta si tu app/modelo cambia
-
-
 def imprimir_ticket_pdf(request):
     buffer = BytesIO()
 
@@ -2123,7 +2107,6 @@ def imprimir_ticket_pdf(request):
     response = HttpResponse(pdf_value, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="ticket.pdf"'
     return response
-
 
 @role_required("ADMIN", "SUPERVISOR")
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR")
