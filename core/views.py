@@ -37,7 +37,7 @@ from django.utils import timezone
 
 
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import mm
+#from reportlab.lib.pagesizes import mm
 from io import BytesIO
 
 import os
@@ -776,6 +776,10 @@ def guardar_ticket(request):
 
     return JsonResponse({"ok": True, "numero": numero})
 
+import re
+import textwrap
+from reportlab.lib.units import mm
+
 
 def dibujar_orden_trabajo(
     p,
@@ -791,8 +795,179 @@ def dibujar_orden_trabajo(
     telefono=None,
     cliente=None,
     vendedor=None,
-    receta=None
+    receta=None,
 ):
+    """
+    Dibuja la Orden de Trabajo (OT) en una hoja térmica.
+    - Usa 'receta' dict con keys EXACTAS como en tu view (receta_data).
+    - Si 'receta' llega vacío, intenta inferir RX desde el texto de productos: "(OD: Esf -0.25 Cil -0.75 ...)".
+    """
+
+    # -------------------------
+    # Helpers
+    # -------------------------
+    def _s(v):
+        return "" if v is None else str(v)
+
+    def _clean(v):
+        v = _s(v).strip()
+        return "" if v in ("None", "nan", "NaN") else v
+
+    def _get(key, default=""):
+        if not receta:
+            return default
+        return _clean(receta.get(key, default))
+
+    # Normalizar entradas
+    if receta is None:
+        receta = {}
+    if not productos:
+        productos = []
+
+    # -------------------------
+    # Fallback (opcional): si receta viene vacía, intentar leer de texto de productos
+    # -------------------------
+    keys_lejos = [
+        "esf_lejos_OD","cil_lejos_OD","eje_lejos_OD","DIP_lejos_OD","Add_lejos_OD",
+        "esf_lejos_OI","cil_lejos_OI","eje_lejos_OI","DIP_lejos_OI","Add_lejos_OI",
+    ]
+    receta_tiene_algo = any(_clean(receta.get(k, "")) for k in keys_lejos)
+
+    if not receta_tiene_algo:
+        ojo_pat = re.compile(r"\((OD|OI)\s*:\s*([^)]+)\)", re.IGNORECASE)
+
+        def pick(label, s):
+            m = re.search(rf"{label}\s*([+-]?\d+(?:\.\d+)?)", s, re.IGNORECASE)
+            return m.group(1) if m else ""
+
+        for prod in productos:
+            for ojo, body in ojo_pat.findall(_s(prod)):
+                ojo = ojo.upper()
+                body = body.strip()
+
+                esf = pick("Esf", body)
+                cil = pick("Cil", body)
+                eje = pick("Eje", body)
+                dip = pick("DIP", body)
+                add = pick("Add", body)
+
+                if esf or cil or eje or dip or add:
+                    receta[f"esf_lejos_{ojo}"] = esf
+                    receta[f"cil_lejos_{ojo}"] = cil
+                    receta[f"eje_lejos_{ojo}"] = eje
+                    receta[f"DIP_lejos_{ojo}"] = dip
+                    receta[f"Add_lejos_{ojo}"] = add
+
+    # -------------------------
+    # Layout base (80mm)
+    # -------------------------
+    y = 260
+    x_izq = 8
+    x_centro = (ancho_mm / 2) * mm
+
+    # Encabezado
+    p.setFont("Helvetica-Bold", 12)
+    p.drawCentredString(x_centro, y * mm, f"OT #{_s(numero)}")
+    y -= 10
+
+    p.setFont("Helvetica", 10)
+    p.drawString(x_izq * mm, y * mm, f"Emisión: {(_s(fecha_emision)+' '+_s(hora_emision)).strip()}"); y -= 7
+    p.drawString(x_izq * mm, y * mm, f"Entrega: {(_s(fecha_entrega)+' '+_s(hora_entrega)).strip()}"); y -= 7
+
+    if vendedor:
+        p.drawString(x_izq * mm, y * mm, f"Vendedor: {vendedor}"); y -= 7
+
+    # Línea
+    p.drawString(x_izq * mm, y * mm, "-" * 60); y -= 6
+
+    # Productos / Trabajo
+    p.setFont("Helvetica-Bold", 11)
+    p.drawString(x_izq * mm, y * mm, "Productos / Trabajo:"); y -= 6
+
+    p.setFont("Helvetica", 9)
+    max_chars = 40
+    idx = 1
+    for prod in productos:
+        if not prod:
+            continue
+        for i, linea in enumerate(textwrap.wrap(_s(prod), max_chars) or [""]):
+            bullet = f"{idx}. " if i == 0 else "    "
+            p.drawString(x_izq * mm, y * mm, bullet + linea)
+            y -= 5
+        idx += 1
+
+    # Línea
+    p.drawString(x_izq * mm, y * mm, "-" * 60); y -= 6
+
+    # -------------------------
+    # TABLA LEJOS (keys exactas)
+    # -------------------------
+    p.setFont("Helvetica-Bold", 10)
+    p.drawString(x_izq * mm, y * mm, "Visión de Lejos"); y -= 6
+    p.setFont("Helvetica", 9)
+
+    headers = ["", "Esf", "Cil", "Eje", "DIP", "Add"]
+    col_x = [x_izq, x_izq+10, x_izq+22, x_izq+34, x_izq+46, x_izq+58]
+
+    for i, h in enumerate(headers):
+        p.drawString(col_x[i] * mm, y * mm, h)
+    y -= 5
+
+    fila_OD = ["OD", _get("esf_lejos_OD"), _get("cil_lejos_OD"), _get("eje_lejos_OD"), _get("DIP_lejos_OD"), _get("Add_lejos_OD")]
+    for i, v in enumerate(fila_OD):
+        p.drawString(col_x[i] * mm, y * mm, _s(v))
+    y -= 5
+
+    fila_OI = ["OI", _get("esf_lejos_OI"), _get("cil_lejos_OI"), _get("eje_lejos_OI"), _get("DIP_lejos_OI"), _get("Add_lejos_OI")]
+    for i, v in enumerate(fila_OI):
+        p.drawString(col_x[i] * mm, y * mm, _s(v))
+    y -= 6
+
+    # -------------------------
+    # TABLA CERCA (si hay datos)
+    # -------------------------
+    tiene_cerca = any(_clean(receta.get(k, "")) for k in [
+        "esf_cerca_OD","cil_cerca_OD","eje_cerca_OD","DIP_cerca_OD",
+        "esf_cerca_OI","cil_cerca_OI","eje_cerca_OI","DIP_cerca_OI",
+    ])
+
+    if tiene_cerca:
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(x_izq * mm, y * mm, "Visión de Cerca"); y -= 6
+        p.setFont("Helvetica", 9)
+
+        headers_c = ["", "Esf", "Cil", "Eje", "DIP"]
+        colc_x = [x_izq, x_izq+10, x_izq+22, x_izq+34, x_izq+46]
+
+        for i, h in enumerate(headers_c):
+            p.drawString(colc_x[i] * mm, y * mm, h)
+        y -= 5
+
+        fila_ODc = ["OD", _get("esf_cerca_OD"), _get("cil_cerca_OD"), _get("eje_cerca_OD"), _get("DIP_cerca_OD")]
+        for i, v in enumerate(fila_ODc):
+            p.drawString(colc_x[i] * mm, y * mm, _s(v))
+        y -= 5
+
+        fila_OIc = ["OI", _get("esf_cerca_OI"), _get("cil_cerca_OI"), _get("eje_cerca_OI"), _get("DIP_cerca_OI")]
+        for i, v in enumerate(fila_OIc):
+            p.drawString(colc_x[i] * mm, y * mm, _s(v))
+        y -= 6
+
+    # Línea
+    p.drawString(x_izq * mm, y * mm, "-" * 60); y -= 6
+
+    # Observaciones
+    p.setFont("Helvetica-Bold", 10)
+    p.drawString(x_izq * mm, y * mm, "Observaciones:"); y -= 8
+    p.setFont("Helvetica", 10)
+    p.drawString(x_izq * mm, y * mm, "____________________________"); y -= 8
+    p.drawString(x_izq * mm, y * mm, "____________________________"); y -= 8
+    p.drawString(x_izq * mm, y * mm, "____________________________"); y -= 10
+
+    # Línea final / corte
+    p.drawString(x_izq * mm, y * mm, "-" * 60); y -= 6
+    p.setFont("Helvetica-Oblique", 9)
+
     """
     Orden de trabajo (OT) en papel térmico.
     - Imprime medidas desde 'receta' (dict) si existen.
@@ -1033,7 +1208,7 @@ def dibujar_orden_trabajo(
     y -= 6
     p.setFont("Helvetica-Oblique", 9)
 
-    
+
 # --- 3ra hoja: RECETA ---
 def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
                    fecha_emision=None, vendedor=None, receta=None):
