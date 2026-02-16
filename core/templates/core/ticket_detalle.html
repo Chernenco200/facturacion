@@ -59,7 +59,7 @@
       <a href="javascript:history.back()" class="btn btn-secondary">
         Volver
       </a>
-      <a href="{% url 'imprimir_ticket_pdf' %}?numero={{ ticket.numero }}"
+      <a href="{% url 'imprimir_ticket_pdf' %}?numero={{ ticket.numero }}&medida_id={{ medida.id }}"
         target="_blank"
         class="btn btn-primary">
         Imprimir Ticket
