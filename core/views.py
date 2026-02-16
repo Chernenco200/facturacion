@@ -2083,21 +2083,188 @@ def imprimir_ticket_pdf(request):
     # ✅ 2) IMPRIMIR OT 1 VEZ
     #    (tu función debe existir y NO hacer showPage() al inicio)
     # =========================================================
-    dibujar_orden_trabajo(
-        p,
-        ancho_mm=WIDTH_MM,
-        alto_mm=HEIGHT_MM,
-        numero=numero_formateado,
-        productos=nombres_productos,
-        fecha_emision=fecha_sistema,
-        hora_emision=hora_sistema,
-        fecha_entrega=fecha_entrega,
-        hora_entrega=hora_entrega,
-        telefono=cliente_telefono,
-        cliente=cliente_nombre,
-        vendedor=vendedor,
-        receta=receta_data,
-    )
+
+import textwrap
+from reportlab.lib.units import mm
+
+def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos=None,
+                          fecha_emision=None, hora_emision=None, fecha_entrega=None, hora_entrega=None,
+                          telefono=None, cliente=None, vendedor=None, receta=None):
+    """
+    Dibuja la hoja OT. Si el contenido se pasa, crea nueva página y continúa.
+    """
+    if receta is None:
+        receta = {}
+    if not productos:
+        productos = []
+
+    # --- helpers ---
+    def encabezado_ot(y):
+        x_izq = 10
+        x_centro = (ancho_mm / 2) * mm
+
+        p.setFont("Helvetica-Bold", 12)
+        p.drawCentredString(x_centro, y * mm, f"OT #000{numero}")
+        y -= 10
+
+        p.setFont("Helvetica", 10)
+        p.drawString(x_izq * mm, y * mm, f"Emisión: {fecha_emision} {hora_emision}")
+        y -= 7
+        p.drawString(x_izq * mm, y * mm, f"Entrega: {fecha_entrega} {hora_entrega}")
+        y -= 7
+
+        if vendedor:
+            p.drawString(x_izq * mm, y * mm, f"Vendedor: {vendedor}")
+            y -= 7
+
+        p.drawString(x_izq * mm, y * mm, "-" * 60)
+        y -= 6
+        return y
+
+    def asegurar_espacio(y, necesita_mm, titulo_cont="OT (Continuación)"):
+        # Si no hay espacio, salto de página y re-encabezado.
+        if y - necesita_mm < 12:  # margen inferior real (mm)
+            p.showPage()
+            y = 260
+            # Encabezado corto de continuación
+            x_centro = (ancho_mm / 2) * mm
+            p.setFont("Helvetica-Bold", 12)
+            p.drawCentredString(x_centro, y * mm, titulo_cont)
+            y -= 10
+            # Repite datos clave
+            p.setFont("Helvetica", 10)
+            p.drawString(10 * mm, y * mm, f"OT #000{numero}  |  Entrega: {fecha_entrega} {hora_entrega}")
+            y -= 8
+            p.drawString(10 * mm, y * mm, "-" * 60)
+            y -= 6
+        return y
+
+    # --- NUEVA PÁGINA: OT ---
+    p.showPage()
+
+    y = 260
+    x_izq = 10
+
+    # Encabezado OT completo
+    y = encabezado_ot(y)
+
+    # Productos
+    y = asegurar_espacio(y, 12)
+    p.setFont("Helvetica-Bold", 11)
+    p.drawString(x_izq * mm, y * mm, "Productos / Trabajo:")
+    y -= 6
+
+    p.setFont("Helvetica", 9)
+    max_chars = 40
+    idx = 1
+    for prod in productos:
+        lineas = textwrap.wrap(str(prod), max_chars) or [""]
+        # calcula alto aproximado del item (5mm por línea + 1mm)
+        y = asegurar_espacio(y, (len(lineas) * 5) + 2)
+
+        for i, linea in enumerate(lineas):
+            bullet = f"{idx}. " if i == 0 else "    "
+            p.drawString(x_izq * mm, y * mm, bullet + linea)
+            y -= 5
+        idx += 1
+
+    y = asegurar_espacio(y, 10)
+    p.drawString(x_izq * mm, y * mm, "-" * 60)
+    y -= 6
+
+    # Tabla LEJOS
+    y = asegurar_espacio(y, 28)
+    p.setFont("Helvetica-Bold", 10)
+    p.drawString(x_izq * mm, y * mm, "Visión de Lejos")
+    y -= 6
+
+    p.setFont("Helvetica", 9)
+    headers = ["", "Esf", "Cil", "Eje", "DIP", "Add"]
+    col_x = [x_izq, x_izq+12, x_izq+24, x_izq+36, x_izq+48, x_izq+60]  # 6 columnas
+
+    for i, h in enumerate(headers):
+        p.drawString(col_x[i] * mm, y * mm, h)
+    y -= 5
+
+    fila_OD = ["OD",
+               receta.get("esf_lejos_OD", ""),
+               receta.get("cil_lejos_OD", ""),
+               receta.get("eje_lejos_OD", ""),
+               receta.get("DIP_lejos_OD", ""),
+               receta.get("Add_lejos_OD", "")]
+    for i, val in enumerate(fila_OD):
+        p.drawString(col_x[i] * mm, y * mm, "" if val is None else str(val))
+    y -= 5
+
+    fila_OI = ["OI",
+               receta.get("esf_lejos_OI", ""),
+               receta.get("cil_lejos_OI", ""),
+               receta.get("eje_lejos_OI", ""),
+               receta.get("DIP_lejos_OI", ""),
+               receta.get("Add_lejos_OI", "")]
+    for i, val in enumerate(fila_OI):
+        p.drawString(col_x[i] * mm, y * mm, "" if val is None else str(val))
+    y -= 6
+
+    # Tabla CERCA (si existe)
+    tiene_cerca = any(receta.get(k) not in (None, "", 0) for k in [
+        "esf_cerca_OD","cil_cerca_OD","eje_cerca_OD","DIP_cerca_OD",
+        "esf_cerca_OI","cil_cerca_OI","eje_cerca_OI","DIP_cerca_OI",
+    ])
+
+    if tiene_cerca:
+        y = asegurar_espacio(y, 28)
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(x_izq * mm, y * mm, "Visión de Cerca")
+        y -= 6
+
+        p.setFont("Helvetica", 9)
+        headers_c = ["", "Esf", "Cil", "Eje", "DIP"]
+        colc_x = [x_izq, x_izq+12, x_izq+24, x_izq+36, x_izq+48]  # 5 columnas
+
+        for i, h in enumerate(headers_c):
+            p.drawString(colc_x[i] * mm, y * mm, h)
+        y -= 5
+
+        fila_ODc = ["OD",
+                    receta.get("esf_cerca_OD", ""),
+                    receta.get("cil_cerca_OD", ""),
+                    receta.get("eje_cerca_OD", ""),
+                    receta.get("DIP_cerca_OD", "")]
+        for i, val in enumerate(fila_ODc):
+            p.drawString(colc_x[i] * mm, y * mm, "" if val is None else str(val))
+        y -= 5
+
+        fila_OIc = ["OI",
+                    receta.get("esf_cerca_OI", ""),
+                    receta.get("cil_cerca_OI", ""),
+                    receta.get("eje_cerca_OI", ""),
+                    receta.get("DIP_cerca_OI", "")]
+        for i, val in enumerate(fila_OIc):
+            p.drawString(colc_x[i] * mm, y * mm, "" if val is None else str(val))
+        y -= 6
+
+    y = asegurar_espacio(y, 18)
+    p.drawString(x_izq * mm, y * mm, "-" * 60)
+    y -= 6
+
+    # Observaciones
+    y = asegurar_espacio(y, 40)
+    p.setFont("Helvetica-Bold", 10)
+    p.drawString(x_izq * mm, y * mm, "Observaciones:")
+    y -= 10
+
+    p.setFont("Helvetica", 10)
+    # líneas más largas para 80mm
+    p.drawString(x_izq * mm, y * mm, "_" * 42); y -= 8
+    p.drawString(x_izq * mm, y * mm, "_" * 42); y -= 8
+    p.drawString(x_izq * mm, y * mm, "_" * 42); y -= 8
+
+    # Línea de corte
+    y = asegurar_espacio(y, 10)
+    p.drawString(x_izq * mm, y * mm, "-" * 60)
+
+
     p.showPage()
 
     p.save()
