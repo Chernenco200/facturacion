@@ -777,20 +777,49 @@ def guardar_ticket(request):
     return JsonResponse({"ok": True, "numero": numero})
 
 
-def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos=None,
-                          fecha_emision=None, hora_emision=None, fecha_entrega=None, hora_entrega=None, telefono=None, cliente=None, vendedor=None, receta=None):
+def dibujar_orden_trabajo(
+    p,
+    ancho_mm=80,
+    alto_mm=270,
+    *,
+    numero=None,
+    productos=None,
+    fecha_emision=None,
+    hora_emision=None,
+    fecha_entrega=None,
+    hora_entrega=None,
+    telefono=None,
+    cliente=None,
+    vendedor=None,
+    receta=None
+):
     """
     Dibuja la 2da hoja (Orden de trabajo) en el canvas 'p'.
-    Usa el mismo tamaño de página térmica (90mm x 270mm).
+    Tamaño recomendado para térmica: 80mm x 270mm (o el que uses).
     """
-    # Nueva página
-    #p.showPage()
+
+    # ========= Helper robusto: acepta variantes de keys =========
+    def _val(d: dict, *keys, default=""):
+        """Devuelve el primer valor no vacío encontrado en d para las keys dadas."""
+        if not d:
+            return default
+        for k in keys:
+            v = d.get(k, None)
+            if v is not None and str(v).strip() != "":
+                return str(v)
+        return default
+
+    # Receta (dict)
     if receta is None:
         receta = {}
 
-    # Medidas bases
-    y = 260    # “línea base” en mm desde arriba
-    x_izq = 10 # margen izquierdo
+    # Seguridad productos
+    if not productos:
+        productos = []
+
+    # Medidas base
+    y = 260          # mm desde arriba (tu referencia)
+    x_izq = 10       # margen izquierdo en mm
     x_centro = (ancho_mm / 2) * mm
 
     # Encabezado
@@ -798,16 +827,21 @@ def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos
     p.drawCentredString(x_centro, y * mm, f"OT #{numero}")
     y -= 10
 
-    # 👇 Cambiar a normal antes de imprimir fechas
+    # Datos generales
     p.setFont("Helvetica", 10)
-    
-    # Fechas
-    p.drawString(10 * mm, y * mm, f"Emisión: {fecha_emision} {hora_emision}")
+    p.drawString(x_izq * mm, y * mm, f"Emisión: {fecha_emision or ''} {hora_emision or ''}".strip())
     y -= 7
-    p.drawString(10 * mm, y * mm, f"Entrega: {fecha_entrega} {hora_entrega}")
+    p.drawString(x_izq * mm, y * mm, f"Entrega: {fecha_entrega or ''} {hora_entrega or ''}".strip())
     y -= 7
 
-    # Vendedor (útil para taller)
+    if cliente:
+        p.drawString(x_izq * mm, y * mm, f"Cliente: {cliente}")
+        y -= 7
+
+    if telefono:
+        p.drawString(x_izq * mm, y * mm, f"Teléfono: {telefono}")
+        y -= 7
+
     if vendedor:
         p.drawString(x_izq * mm, y * mm, f"Vendedor: {vendedor}")
         y -= 7
@@ -816,132 +850,145 @@ def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos
     p.drawString(x_izq * mm, y * mm, "-" * 60)
     y -= 6
 
-    # Productos
+    # Productos / trabajo
     p.setFont("Helvetica-Bold", 11)
     p.drawString(x_izq * mm, y * mm, "Productos / Trabajo:")
     y -= 6
     p.setFont("Helvetica", 9)
 
-    if not productos:
-        productos = []
-
-    max_chars = 40  # ancho de línea aprox. para el rollo térmico
+    max_chars = 40
     idx = 1
     for prod in productos:
-        for i, linea in enumerate(textwrap.wrap(prod, max_chars)):
+        if not prod:
+            continue
+        for i, linea in enumerate(textwrap.wrap(str(prod), max_chars)):
             bullet = f"{idx}. " if i == 0 else "    "
             p.drawString(x_izq * mm, y * mm, bullet + linea)
             y -= 5
         idx += 1
 
-   # Línea
+    # Línea
     p.drawString(x_izq * mm, y * mm, "-" * 60)
     y -= 6
 
-
-    # Tabla (LEJOS)
+    # ========= TABLA LEJOS =========
     p.setFont("Helvetica-Bold", 10)
     p.drawString(x_izq * mm, y * mm, "Visión de Lejos")
     y -= 6
     p.setFont("Helvetica", 9)
 
-    # Cabeceras
-    headers = ["", "Esf", "Cil", "Eje","DIP", "Add"]
-    col_x = [x_izq, x_izq+10, x_izq+20, x_izq+30, x_izq+40, x_izq+50, x_izq+60]  # mm aprox en rollo 80/90mm
+    headers = ["", "Esf", "Cil", "Eje", "DIP", "Add"]
+
+    # OJO: tu lista col_x tenía 7 posiciones; aquí la dejamos consistente con headers (6)
+    col_x = [
+        x_izq,        # etiqueta OD/OI
+        x_izq + 10,   # Esf
+        x_izq + 22,   # Cil
+        x_izq + 34,   # Eje
+        x_izq + 46,   # DIP
+        x_izq + 58,   # Add
+    ]
+
+    # Cabecera
     for i, h in enumerate(headers):
         p.drawString(col_x[i] * mm, y * mm, h)
     y -= 5
 
-    # Fila OD lejos
+    # Fila OD Lejos (acepta variantes de keys)
     fila_OD = [
         "OD",
-        receta.get("esf_lejos_OD", ""),
-        receta.get("cil_lejos_OD", ""),
-        receta.get("eje_lejos_OD", ""),
-        receta.get("DIP_lejos_OD", ""),
-        receta.get("Add_lejos_OD", ""),
-        #receta.get("AV_lejos_OD", ""),
+        _val(receta, "esf_lejos_OD", "ESF_lejos_OD", "esf_lejos_od"),
+        _val(receta, "cil_lejos_OD", "CIL_lejos_OD", "cil_lejos_od"),
+        _val(receta, "eje_lejos_OD", "EJE_lejos_OD", "eje_lejos_od"),
+        _val(receta, "DIP_lejos_OD", "dip_lejos_OD", "dip_lejos_od", "DIPLejosOD"),
+        _val(receta, "Add_lejos_OD", "add_lejos_OD", "add_lejos_od", "ADD_lejos_OD", "AddLejosOD"),
     ]
     for i, val in enumerate(fila_OD):
-        p.drawString(col_x[i] * mm, y * mm, str(val))
+        p.drawString(col_x[i] * mm, y * mm, val)
     y -= 5
 
-    # Fila OI lejos
+    # Fila OI Lejos
     fila_OI = [
         "OI",
-        receta.get("esf_lejos_OI", ""),
-        receta.get("cil_lejos_OI", ""),
-        receta.get("eje_lejos_OI", ""),
-        receta.get("DIP_lejos_OI", ""),
-        receta.get("Add_lejos_OI", ""),
-        #receta.get("AV_lejos_OI", ""),
+        _val(receta, "esf_lejos_OI", "ESF_lejos_OI", "esf_lejos_oi"),
+        _val(receta, "cil_lejos_OI", "CIL_lejos_OI", "cil_lejos_oi"),
+        _val(receta, "eje_lejos_OI", "EJE_lejos_OI", "eje_lejos_oi"),
+        _val(receta, "DIP_lejos_OI", "dip_lejos_OI", "dip_lejos_oi", "DIPLejosOI"),
+        _val(receta, "Add_lejos_OI", "add_lejos_OI", "add_lejos_oi", "ADD_lejos_OI", "AddLejosOI"),
     ]
     for i, val in enumerate(fila_OI):
-        p.drawString(col_x[i] * mm, y * mm, str(val))
+        p.drawString(col_x[i] * mm, y * mm, val)
     y -= 6
 
-    # Si hay CERCA, dibuja tabla de cerca
-    tiene_cerca = any(receta.get(k) for k in [
-        "esf_cerca_OD","cil_cerca_OD","eje_cerca_OD","DIP_cerca_OD","AV_cerca_OD",
-        "esf_cerca_OI","cil_cerca_OI","eje_cerca_OI","DIP_cerca_OI","AV_cerca_OI",
+    # ========= TABLA CERCA (si hay datos) =========
+    tiene_cerca = any(str(_val(receta, k, default="")).strip() for k in [
+        "esf_cerca_OD","cil_cerca_OD","eje_cerca_OD","DIP_cerca_OD",
+        "esf_cerca_OI","cil_cerca_OI","eje_cerca_OI","DIP_cerca_OI",
     ])
+
     if tiene_cerca:
         p.setFont("Helvetica-Bold", 10)
         p.drawString(x_izq * mm, y * mm, "Visión de Cerca")
         y -= 6
         p.setFont("Helvetica", 9)
+
         headers_c = ["", "Esf", "Cil", "Eje", "DIP"]
-        colc_x = [x_izq, x_izq+10, x_izq+20, x_izq+30, x_izq+40, x_izq+50]
+        colc_x = [
+            x_izq,
+            x_izq + 10,
+            x_izq + 22,
+            x_izq + 34,
+            x_izq + 46,
+        ]
+
         for i, h in enumerate(headers_c):
             p.drawString(colc_x[i] * mm, y * mm, h)
         y -= 5
 
         fila_ODc = [
             "OD",
-            receta.get("esf_cerca_OD", ""),
-            receta.get("cil_cerca_OD", ""),
-            receta.get("eje_cerca_OD", ""),
-            receta.get("DIP_cerca_OD", ""),
-            #receta.get("AV_cerca_OD", ""),
+            _val(receta, "esf_cerca_OD", "ESF_cerca_OD", "esf_cerca_od"),
+            _val(receta, "cil_cerca_OD", "CIL_cerca_OD", "cil_cerca_od"),
+            _val(receta, "eje_cerca_OD", "EJE_cerca_OD", "eje_cerca_od"),
+            _val(receta, "DIP_cerca_OD", "dip_cerca_OD", "dip_cerca_od", "DIPCercaOD"),
         ]
         for i, val in enumerate(fila_ODc):
-            p.drawString(colc_x[i] * mm, y * mm, str(val))
+            p.drawString(colc_x[i] * mm, y * mm, val)
         y -= 5
 
         fila_OIc = [
             "OI",
-            receta.get("esf_cerca_OI", ""),
-            receta.get("cil_cerca_OI", ""),
-            receta.get("eje_cerca_OI", ""),
-            receta.get("DIP_cerca_OI", ""),
-            #receta.get("AV_cerca_OI", ""),
+            _val(receta, "esf_cerca_OI", "ESF_cerca_OI", "esf_cerca_oi"),
+            _val(receta, "cil_cerca_OI", "CIL_cerca_OI", "cil_cerca_oi"),
+            _val(receta, "eje_cerca_OI", "EJE_cerca_OI", "eje_cerca_oi"),
+            _val(receta, "DIP_cerca_OI", "dip_cerca_OI", "dip_cerca_oi", "DIPCercaOI"),
         ]
         for i, val in enumerate(fila_OIc):
-            p.drawString(colc_x[i] * mm, y * mm, str(val))
+            p.drawString(colc_x[i] * mm, y * mm, val)
         y -= 6
 
-   # Línea
-    p.drawString(x_izq * mm, y * mm, "-" * 80)
-
-    # Espacio para observaciones/taller
+    # Línea
+    p.drawString(x_izq * mm, y * mm, "-" * 60)
     y -= 6
+
+    # Observaciones
     p.setFont("Helvetica-Bold", 10)
     p.drawString(x_izq * mm, y * mm, "Observaciones:")
-    y -= 30
-    p.setFont("Helvetica", 10)
-    p.drawString(x_izq * mm, (y+22) * mm, "____________________________")
-    p.drawString(x_izq * mm, (y+14) * mm, "____________________________")
-    p.drawString(x_izq * mm, (y+6)  * mm, "____________________________")
-    y -= 10
+    y -= 8
 
+    p.setFont("Helvetica", 10)
+    p.drawString(x_izq * mm, y * mm, "____________________________")
+    y -= 8
+    p.drawString(x_izq * mm, y * mm, "____________________________")
+    y -= 8
+    p.drawString(x_izq * mm, y * mm, "____________________________")
+    y -= 10
 
     # Línea de corte
     p.drawString(x_izq * mm, y * mm, "-" * 60)
     y -= 6
     p.setFont("Helvetica-Oblique", 9)
-    #p.drawCentredString(x_centro, y * mm, "— Separa aquí —")
-
-
+    
 # --- 3ra hoja: RECETA ---
 def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
                    fecha_emision=None, vendedor=None, receta=None):
