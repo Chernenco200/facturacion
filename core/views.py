@@ -2084,8 +2084,6 @@ def imprimir_ticket_pdf(request):
     #    (tu función debe existir y NO hacer showPage() al inicio)
     # =========================================================
 
-import textwrap
-from reportlab.lib.units import mm
 
 def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos=None,
                           fecha_emision=None, hora_emision=None, fecha_entrega=None, hora_entrega=None,
