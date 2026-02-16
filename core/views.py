@@ -794,53 +794,105 @@ def dibujar_orden_trabajo(
     receta=None
 ):
     """
-    Dibuja la 2da hoja (Orden de trabajo) en el canvas 'p'.
-    Tamaño recomendado para térmica: 80mm x 270mm (o el que uses).
+    Orden de trabajo (OT) en papel térmico.
+    - Imprime medidas desde 'receta' (dict) si existen.
+    - Si 'receta' está vacío, intenta inferir Esf/Cil/Eje/DIP/Add desde el texto de 'productos'
+      (por ejemplo: "(OD: Esf -0.25 Cil -0.75)").
     """
 
-    # ========= Helper robusto: acepta variantes de keys =========
-    def _val(d: dict, *keys, default=""):
-        """Devuelve el primer valor no vacío encontrado en d para las keys dadas."""
+    # -------------------------
+    # Helpers
+    # -------------------------
+    def _s(v):
+        return "" if v is None else str(v)
+
+    def _clean(v):
+        v = _s(v).strip()
+        return "" if v in ("None", "nan", "NaN") else v
+
+    def _val(d: dict, key: str, default=""):
         if not d:
             return default
-        for k in keys:
-            v = d.get(k, None)
-            if v is not None and str(v).strip() != "":
-                return str(v)
-        return default
+        return _clean(d.get(key, default))
 
-    # Receta (dict)
+    def _wrap_lines(text, max_chars):
+        return textwrap.wrap(_s(text), max_chars) or [""]
+
+    # -------------------------
+    # Normalizar entrada
+    # -------------------------
     if receta is None:
         receta = {}
-
-    # Seguridad productos
     if not productos:
         productos = []
 
-    # Medidas base
-    y = 260          # mm desde arriba (tu referencia)
-    x_izq = 10       # margen izquierdo en mm
+    # -------------------------
+    # Fallback: inferir receta desde texto de productos
+    # -------------------------
+    # Caso típico que muestras:
+    # "(OD: Esf -0.25 Cil -0.75)" o "(OI: Esf -0.25 Cil -0.75)"
+    # También soporta: Eje, DIP, Add si aparecen.
+    def _parse_rx_from_text(productos_list):
+        # Devuelve dict parcial con keys de tu receta_data
+        out = {}
+
+        # Patrón por ojo: (OD: ....) o (OI: ....)
+        ojo_pat = re.compile(r"\((OD|OI)\s*:\s*([^)]+)\)", re.IGNORECASE)
+
+        # Campos dentro: Esf, Cil, Eje, DIP, Add (acepta variantes)
+        # Captura números con signo y decimal.
+        def pick(label, s):
+            m = re.search(rf"{label}\s*([+-]?\d+(?:\.\d+)?)", s, re.IGNORECASE)
+            return m.group(1) if m else ""
+
+        for prod in productos_list:
+            for ojo, body in ojo_pat.findall(_s(prod)):
+                ojo = ojo.upper()
+                body = body.strip()
+
+                esf = pick("Esf", body)
+                cil = pick("Cil", body)
+                eje = pick("Eje", body)
+                dip = pick("DIP", body)
+                add = pick("Add", body)
+
+                # Solo setear si encontramos algo
+                if esf or cil or eje or dip or add:
+                    out[f"esf_lejos_{ojo}"] = esf
+                    out[f"cil_lejos_{ojo}"] = cil
+                    out[f"eje_lejos_{ojo}"] = eje
+                    out[f"DIP_lejos_{ojo}"] = dip
+                    out[f"Add_lejos_{ojo}"] = add
+
+        return out
+
+    # Detectar si receta "útil" viene vacía
+    keys_lejos = [
+        "esf_lejos_OD","cil_lejos_OD","eje_lejos_OD","DIP_lejos_OD","Add_lejos_OD",
+        "esf_lejos_OI","cil_lejos_OI","eje_lejos_OI","DIP_lejos_OI","Add_lejos_OI",
+    ]
+    receta_tiene_algo = any(_clean(receta.get(k, "")) for k in keys_lejos)
+
+    if not receta_tiene_algo:
+        receta.update(_parse_rx_from_text(productos))
+
+    # -------------------------
+    # Layout
+    # -------------------------
+    y = 260          # mm (cerca del borde superior)
+    x_izq = 8        # margen izquierdo más pequeño para 80mm
     x_centro = (ancho_mm / 2) * mm
 
     # Encabezado
     p.setFont("Helvetica-Bold", 12)
-    p.drawCentredString(x_centro, y * mm, f"OT #{numero}")
+    p.drawCentredString(x_centro, y * mm, f"OT #{_s(numero)}")
     y -= 10
 
-    # Datos generales
     p.setFont("Helvetica", 10)
-    p.drawString(x_izq * mm, y * mm, f"Emisión: {fecha_emision or ''} {hora_emision or ''}".strip())
+    p.drawString(x_izq * mm, y * mm, f"Emisión: {(_s(fecha_emision) + ' ' + _s(hora_emision)).strip()}")
     y -= 7
-    p.drawString(x_izq * mm, y * mm, f"Entrega: {fecha_entrega or ''} {hora_entrega or ''}".strip())
+    p.drawString(x_izq * mm, y * mm, f"Entrega: {(_s(fecha_entrega) + ' ' + _s(hora_entrega)).strip()}")
     y -= 7
-
-    if cliente:
-        p.drawString(x_izq * mm, y * mm, f"Cliente: {cliente}")
-        y -= 7
-
-    if telefono:
-        p.drawString(x_izq * mm, y * mm, f"Teléfono: {telefono}")
-        y -= 7
 
     if vendedor:
         p.drawString(x_izq * mm, y * mm, f"Vendedor: {vendedor}")
@@ -850,18 +902,18 @@ def dibujar_orden_trabajo(
     p.drawString(x_izq * mm, y * mm, "-" * 60)
     y -= 6
 
-    # Productos / trabajo
+    # Productos
     p.setFont("Helvetica-Bold", 11)
     p.drawString(x_izq * mm, y * mm, "Productos / Trabajo:")
     y -= 6
-    p.setFont("Helvetica", 9)
 
+    p.setFont("Helvetica", 9)
     max_chars = 40
     idx = 1
     for prod in productos:
         if not prod:
             continue
-        for i, linea in enumerate(textwrap.wrap(str(prod), max_chars)):
+        for i, linea in enumerate(_wrap_lines(prod, max_chars)):
             bullet = f"{idx}. " if i == 0 else "    "
             p.drawString(x_izq * mm, y * mm, bullet + linea)
             y -= 5
@@ -871,7 +923,9 @@ def dibujar_orden_trabajo(
     p.drawString(x_izq * mm, y * mm, "-" * 60)
     y -= 6
 
-    # ========= TABLA LEJOS =========
+    # -------------------------
+    # Tabla LEJOS
+    # -------------------------
     p.setFont("Helvetica-Bold", 10)
     p.drawString(x_izq * mm, y * mm, "Visión de Lejos")
     y -= 6
@@ -879,49 +933,48 @@ def dibujar_orden_trabajo(
 
     headers = ["", "Esf", "Cil", "Eje", "DIP", "Add"]
 
-    # OJO: tu lista col_x tenía 7 posiciones; aquí la dejamos consistente con headers (6)
+    # Columnas ajustadas a 80mm (con margen izquierdo 8mm)
     col_x = [
-        x_izq,        # etiqueta OD/OI
+        x_izq,        # OD/OI
         x_izq + 10,   # Esf
         x_izq + 22,   # Cil
         x_izq + 34,   # Eje
         x_izq + 46,   # DIP
-        x_izq + 58,   # Add
+        x_izq + 58,   # Add (al límite, pero entra en 80mm)
     ]
 
-    # Cabecera
     for i, h in enumerate(headers):
         p.drawString(col_x[i] * mm, y * mm, h)
     y -= 5
 
-    # Fila OD Lejos (acepta variantes de keys)
     fila_OD = [
         "OD",
-        _val(receta, "esf_lejos_OD", "ESF_lejos_OD", "esf_lejos_od"),
-        _val(receta, "cil_lejos_OD", "CIL_lejos_OD", "cil_lejos_od"),
-        _val(receta, "eje_lejos_OD", "EJE_lejos_OD", "eje_lejos_od"),
-        _val(receta, "DIP_lejos_OD", "dip_lejos_OD", "dip_lejos_od", "DIPLejosOD"),
-        _val(receta, "Add_lejos_OD", "add_lejos_OD", "add_lejos_od", "ADD_lejos_OD", "AddLejosOD"),
+        _val(receta, "esf_lejos_OD"),
+        _val(receta, "cil_lejos_OD"),
+        _val(receta, "eje_lejos_OD"),
+        _val(receta, "DIP_lejos_OD"),
+        _val(receta, "Add_lejos_OD"),
     ]
     for i, val in enumerate(fila_OD):
-        p.drawString(col_x[i] * mm, y * mm, val)
+        p.drawString(col_x[i] * mm, y * mm, _s(val))
     y -= 5
 
-    # Fila OI Lejos
     fila_OI = [
         "OI",
-        _val(receta, "esf_lejos_OI", "ESF_lejos_OI", "esf_lejos_oi"),
-        _val(receta, "cil_lejos_OI", "CIL_lejos_OI", "cil_lejos_oi"),
-        _val(receta, "eje_lejos_OI", "EJE_lejos_OI", "eje_lejos_oi"),
-        _val(receta, "DIP_lejos_OI", "dip_lejos_OI", "dip_lejos_oi", "DIPLejosOI"),
-        _val(receta, "Add_lejos_OI", "add_lejos_OI", "add_lejos_oi", "ADD_lejos_OI", "AddLejosOI"),
+        _val(receta, "esf_lejos_OI"),
+        _val(receta, "cil_lejos_OI"),
+        _val(receta, "eje_lejos_OI"),
+        _val(receta, "DIP_lejos_OI"),
+        _val(receta, "Add_lejos_OI"),
     ]
     for i, val in enumerate(fila_OI):
-        p.drawString(col_x[i] * mm, y * mm, val)
+        p.drawString(col_x[i] * mm, y * mm, _s(val))
     y -= 6
 
-    # ========= TABLA CERCA (si hay datos) =========
-    tiene_cerca = any(str(_val(receta, k, default="")).strip() for k in [
+    # -------------------------
+    # Tabla CERCA (si hay)
+    # -------------------------
+    tiene_cerca = any(_clean(receta.get(k, "")) for k in [
         "esf_cerca_OD","cil_cerca_OD","eje_cerca_OD","DIP_cerca_OD",
         "esf_cerca_OI","cil_cerca_OI","eje_cerca_OI","DIP_cerca_OI",
     ])
@@ -933,13 +986,7 @@ def dibujar_orden_trabajo(
         p.setFont("Helvetica", 9)
 
         headers_c = ["", "Esf", "Cil", "Eje", "DIP"]
-        colc_x = [
-            x_izq,
-            x_izq + 10,
-            x_izq + 22,
-            x_izq + 34,
-            x_izq + 46,
-        ]
+        colc_x = [x_izq, x_izq + 10, x_izq + 22, x_izq + 34, x_izq + 46]
 
         for i, h in enumerate(headers_c):
             p.drawString(colc_x[i] * mm, y * mm, h)
@@ -947,24 +994,24 @@ def dibujar_orden_trabajo(
 
         fila_ODc = [
             "OD",
-            _val(receta, "esf_cerca_OD", "ESF_cerca_OD", "esf_cerca_od"),
-            _val(receta, "cil_cerca_OD", "CIL_cerca_OD", "cil_cerca_od"),
-            _val(receta, "eje_cerca_OD", "EJE_cerca_OD", "eje_cerca_od"),
-            _val(receta, "DIP_cerca_OD", "dip_cerca_OD", "dip_cerca_od", "DIPCercaOD"),
+            _val(receta, "esf_cerca_OD"),
+            _val(receta, "cil_cerca_OD"),
+            _val(receta, "eje_cerca_OD"),
+            _val(receta, "DIP_cerca_OD"),
         ]
         for i, val in enumerate(fila_ODc):
-            p.drawString(colc_x[i] * mm, y * mm, val)
+            p.drawString(colc_x[i] * mm, y * mm, _s(val))
         y -= 5
 
         fila_OIc = [
             "OI",
-            _val(receta, "esf_cerca_OI", "ESF_cerca_OI", "esf_cerca_oi"),
-            _val(receta, "cil_cerca_OI", "CIL_cerca_OI", "cil_cerca_oi"),
-            _val(receta, "eje_cerca_OI", "EJE_cerca_OI", "eje_cerca_oi"),
-            _val(receta, "DIP_cerca_OI", "dip_cerca_OI", "dip_cerca_oi", "DIPCercaOI"),
+            _val(receta, "esf_cerca_OI"),
+            _val(receta, "cil_cerca_OI"),
+            _val(receta, "eje_cerca_OI"),
+            _val(receta, "DIP_cerca_OI"),
         ]
         for i, val in enumerate(fila_OIc):
-            p.drawString(colc_x[i] * mm, y * mm, val)
+            p.drawString(colc_x[i] * mm, y * mm, _s(val))
         y -= 6
 
     # Línea
@@ -977,17 +1024,15 @@ def dibujar_orden_trabajo(
     y -= 8
 
     p.setFont("Helvetica", 10)
-    p.drawString(x_izq * mm, y * mm, "____________________________")
-    y -= 8
-    p.drawString(x_izq * mm, y * mm, "____________________________")
-    y -= 8
-    p.drawString(x_izq * mm, y * mm, "____________________________")
-    y -= 10
+    p.drawString(x_izq * mm, y * mm, "____________________________"); y -= 8
+    p.drawString(x_izq * mm, y * mm, "____________________________"); y -= 8
+    p.drawString(x_izq * mm, y * mm, "____________________________"); y -= 10
 
-    # Línea de corte
+    # Línea final / corte
     p.drawString(x_izq * mm, y * mm, "-" * 60)
     y -= 6
     p.setFont("Helvetica-Oblique", 9)
+
     
 # --- 3ra hoja: RECETA ---
 def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
