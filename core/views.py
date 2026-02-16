@@ -795,7 +795,7 @@ def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos
 
     # Encabezado
     p.setFont("Helvetica-Bold", 12)
-    p.drawCentredString(x_centro, y * mm, f"OT #000{numero}")
+    p.drawCentredString(x_centro, y * mm, f"OT #{numero}")
     y -= 10
 
     # 👇 Cambiar a normal antes de imprimir fechas
