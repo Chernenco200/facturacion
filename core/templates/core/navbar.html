@@ -47,8 +47,14 @@
                 <li class="nav-item">
                    <a class="nav-link" href="{% url 'lista_clientes' %}">Lista de Clientes</a>
                 </li>
+                {% endif %}
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA" %}
+                <li class="nav-item">
+                   <a class="nav-link" href="{% url 'lista_ventas' %}">Lista de Ventas</a>
+                </li>
                 {% endif %}                
-                
+
                 {% if request.user|has_role:"ADMIN,SUPERVISOR, CAJA" %}
                 <li class="nav-item">
                     <a class="nav-link" href="{% url 'saldos_pendientes' %}">Saldos</a>

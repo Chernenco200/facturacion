@@ -104,11 +104,13 @@ urlpatterns = [
 
     path("receta/<int:medida_id>/pdf/", views.receta_pdf, name="receta_pdf"),
     
-
+    path("ventas/", views.lista_ventas, name="lista_ventas"),
+    path("ventas/<int:pk>/editar/", views.editar_venta, name="editar_venta"),
+    path("ventas/<int:pk>/eliminar/", views.eliminar_venta, name="eliminar_venta"),
+    path("ventas/recibo/<int:ticket_id>/eliminar/", views.eliminar_recibo, name="eliminar_recibo"),
     
-
-
-
+    
+    path("caja/movimiento/<int:id>/eliminar/", views.eliminar_movimiento, name="eliminar_movimiento"),
 
 
 ]

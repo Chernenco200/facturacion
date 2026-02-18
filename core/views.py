@@ -21,7 +21,7 @@ from .forms import ClienteForm, MedidaVistaForm, TipoLunasForm, ProductoForm, Co
 from django.shortcuts import get_object_or_404
 
 from django.http import JsonResponse
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q, Sum, DecimalField, ExpressionWrapper
 
 from django.views.decorators.csrf import csrf_exempt
 import json
@@ -1404,7 +1404,7 @@ def lista_clientes(request):
 
     dni = request.GET.get('dni')
     nombre = request.GET.get('nombre')
-    fecha = request.GET.get('fecha')   # fecha_registro
+    fecha = request.GET.get('fecha')  # YYYY-MM-DD
 
     # FILTRO POR DNI
     if dni:
@@ -1414,9 +1414,13 @@ def lista_clientes(request):
     if nombre:
         clientes = clientes.filter(nombre__icontains=nombre)
 
-    # FILTRO POR FECHA (formato YYYY-MM-DD)
+    # ✅ FILTRO POR FECHA (SIN __date)
     if fecha:
-        clientes = clientes.filter(fecha_registro__date=fecha)
+        try:
+            fecha_obj = datetime.strptime(fecha, "%Y-%m-%d").date()
+            clientes = clientes.filter(fecha_registro=fecha_obj)
+        except ValueError:
+            pass
 
     return render(request, 'core/lista_clientes.html', {
         'clientes': clientes
@@ -1905,14 +1909,65 @@ def imprimir_ticket_pdf(request):
                     detalles = []
 
         # ---- Receta (JSON si existe) ----
-        rj = getattr(ticket, "receta_json", None) or getattr(ticket, "receta", None)
-        if isinstance(rj, str) and rj.strip():
+        # =========================
+        # ✅ RECETA / MEDIDAS
+        # =========================
+        receta_data = {}
+
+        medida_id = request.GET.get("medida_id")
+
+        mv = None
+
+        # 1️⃣ Si viene medida_id en la URL → usar esa
+        if medida_id:
             try:
-                receta_data = json.loads(rj)
+                mv = MedidaVista.objects.get(pk=int(medida_id))
             except Exception:
-                receta_data = {}
-        else:
-            receta_data = {}
+                mv = None
+
+        # 2️⃣ Si no viene medida_id → buscar la última del cliente
+        if mv is None and cli is not None:
+            mv = (
+                MedidaVista.objects
+                .filter(cliente=cli)
+                .order_by("-fecha_registro", "-id")
+                .first()
+            )
+
+        # 3️⃣ Si encontramos medida → armar diccionario
+        if mv:
+            receta_data = {
+                # LEJOS OD
+                "esf_lejos_OD": str(mv.esf_lejos_OD or ""),
+                "cil_lejos_OD": str(mv.cil_lejos_OD or ""),
+                "eje_lejos_OD": str(mv.eje_lejos_OD or ""),
+                "DIP_lejos_OD": str(mv.DIP_lejos_OD or ""),
+                "Add_lejos_OD": str(mv.Add_lejos_OD or ""),
+                "AV_lejos_OD":  str(mv.AV_lejos_OD or ""),
+
+                # LEJOS OI
+                "esf_lejos_OI": str(mv.esf_lejos_OI or ""),
+                "cil_lejos_OI": str(mv.cil_lejos_OI or ""),
+                "eje_lejos_OI": str(mv.eje_lejos_OI or ""),
+                "DIP_lejos_OI": str(mv.DIP_lejos_OI or ""),
+                "Add_lejos_OI": str(mv.Add_lejos_OI or ""),
+                "AV_lejos_OI":  str(mv.AV_lejos_OI or ""),
+
+                # CERCA OD
+                "esf_cerca_OD": str(mv.esf_cerca_OD or ""),
+                "cil_cerca_OD": str(mv.cil_cerca_OD or ""),
+                "eje_cerca_OD": str(mv.eje_cerca_OD or ""),
+                "DIP_cerca_OD": str(mv.DIP_cerca_OD or ""),
+                "AV_cerca_OD":  str(mv.AV_cerca_OD or ""),
+
+                # CERCA OI
+                "esf_cerca_OI": str(mv.esf_cerca_OI or ""),
+                "cil_cerca_OI": str(mv.cil_cerca_OI or ""),
+                "eje_cerca_OI": str(mv.eje_cerca_OI or ""),
+                "DIP_cerca_OI": str(mv.DIP_cerca_OI or ""),
+                "AV_cerca_OI":  str(mv.AV_cerca_OI or ""),
+            }
+
 
         # ---- Puntos ----
         try:
@@ -2692,3 +2747,80 @@ def operador_cambiar_estado(request, ticket_id):
     ot.save()
     return redirect("operador_ordenes")
 
+
+def lista_ventas(request):
+
+    recibo = request.GET.get("recibo", "").strip()
+    nombre = request.GET.get("nombre", "").strip()
+    fecha = request.GET.get("fecha", "").strip()
+
+    ventas = (
+        DetalleTicketVenta.objects
+        .select_related("ticket_numero", "ticket_numero__cliente")
+        .annotate(
+            monto=ExpressionWrapper(
+                F("cantidad") * F("precio"),
+                output_field=DecimalField(max_digits=10, decimal_places=2)
+            )
+        )
+        .order_by("-ticket_numero__fecha_emision", "-id")
+    )
+
+    if recibo:
+        ventas = ventas.filter(ticket_numero__numero__icontains=recibo)
+
+    if nombre:
+        ventas = ventas.filter(
+            Q(ticket_numero__cliente__nombre__icontains=nombre) |
+            Q(descripcion__icontains=nombre)
+        )
+
+    if fecha:
+        ventas = ventas.filter(ticket_numero__fecha_emision=fecha)
+
+    return render(request, "core/lista_ventas.html", {
+        "ventas": ventas
+    })
+
+@require_http_methods(["GET", "POST"])
+def editar_venta(request, pk):
+    detalle = get_object_or_404(DetalleTicketVenta, pk=pk)
+
+    if request.method == "POST":
+        form = DetalleTicketVentaForm(request.POST, instance=detalle)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Producto vendido actualizado.")
+            return redirect("lista_ventas")
+    else:
+        form = DetalleTicketVentaForm(instance=detalle)
+
+    return render(request, "core/editar_venta.html", {
+        "form": form,
+        "detalle": detalle
+    })
+
+@require_http_methods(["POST"])
+def eliminar_venta(request, pk):
+    detalle = get_object_or_404(DetalleTicketVenta, pk=pk)
+    detalle.delete()
+    messages.success(request, "Producto eliminado.")
+    return redirect("lista_ventas")
+
+@require_http_methods(["POST"])
+def eliminar_recibo(request, ticket_id):
+    ticket = get_object_or_404(TicketVenta, pk=ticket_id)
+    ticket.delete()  # <-- BORRA EN CASCADA
+    messages.success(request, "Recibo eliminado junto con todos sus productos.")
+    return redirect("lista_ventas")
+
+
+def eliminar_movimiento(request, id):
+    movimiento = get_object_or_404(MovimientoCaja, id=id)
+
+    if request.method == "POST":
+        movimiento.delete()
+        messages.success(request, "Movimiento eliminado correctamente.")
+
+    # vuelve a donde estabas
+    return redirect("caja_hoy")

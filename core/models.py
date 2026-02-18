@@ -624,3 +624,37 @@ class OrdenTrabajo(models.Model):
         return m.get(self.estado, self.estado)
 
 
+
+from django.db.models import Sum, F, DecimalField, ExpressionWrapper
+from decimal import Decimal
+
+def recalcular_totales_ticket(ticket: "TicketVenta"):
+    if not ticket:
+        return
+
+    total = (
+        ticket.detalles.aggregate(
+            t=Sum(
+                ExpressionWrapper(
+                    F("cantidad") * F("precio"),
+                    output_field=DecimalField(max_digits=12, decimal_places=2),
+                )
+            )
+        )["t"]
+        or Decimal("0.00")
+    )
+
+    ticket.total = total
+
+    # saldo = total - a_cuenta
+    a_cuenta = ticket.a_cuenta or Decimal("0.00")
+    saldo = total - a_cuenta
+
+    # (opcional) evitar saldo negativo
+    if saldo < 0:
+        saldo = Decimal("0.00")
+
+    ticket.saldo = saldo
+
+    # guardamos SOLO esos campos para no tocar fecha/hora etc.
+    ticket.save(update_fields=["total", "saldo"])

@@ -8,3 +8,10 @@ class CoreConfig(AppConfig):
 def ready(self):
     import core.signals
     import core.pagos_signals
+
+class CoreConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "core"
+
+    def ready(self):
+        import core.signals  # noqa
