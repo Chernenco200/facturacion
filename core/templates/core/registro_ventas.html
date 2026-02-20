@@ -59,7 +59,7 @@
 
                         <!-- ================= DATOS DEL COMPRADOR ================= -->
                         <fieldset class="border p-3">
-                            <legend class="w-auto">Datos del comprador</legend>
+                            <legend class="w-auto">Datos del cliente</legend>
 
                         <!-- Buscador de comprador/receta -->
                         <div class="mb-3">
@@ -290,27 +290,7 @@
                                     </div>
                                 </fieldset>
 
-                                <fieldset class="border p-2">              
-                                            <div class="row mt-5">
-                                    <div class="col-4">
-                                        <div class="input-group">
-                                            <div class="input-group-append pr-1">
-                                                    <h7>Vendedor:</h7>
-                                                </div>
-                                                <select required name="vendedor" class="form-control border border-dark text-blue"
-                                                    id="id_vendedor">
-                                                    <option value="Hellen" selected>Hellen</option>
-                                                    <option value="Xiomara">Xiomara</option>
-                                                    <option value="Grecia">Grecia</option>
-                                                    <option value="Ana">Ana</option>
-                                                    <option value="Cindy">Cindy</option>
-                                                    <option value="Jose">Jose</option>
-                                                    <option value="Jerry">Jerry</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    </fieldset>
+
                                 </div>
                             </div>
                             </div>
@@ -403,6 +383,24 @@
                     <option value="TRANSFERENCIA">Transferencia</option>
                     </select>
                     </div>
+
+
+                                
+                                    <div class="col-md-3">
+                                        <label class="form-label">Medio de pago (A cuenta)</label>
+                                        <select required name="vendedor" class="form-control border border-dark text-blue"
+                                                    id="id_vendedor">
+                                                    <option value="Hellen" selected>Hellen</option>
+                                                    <option value="Xiomara">Xiomara</option>
+                                                    <option value="Grecia">Grecia</option>
+                                                    <option value="Ana">Ana</option>
+                                                    <option value="Cindy">Cindy</option>
+                                                    <option value="Jose">Jose</option>
+                                                    <option value="Jerry">Jerry</option>
+                                        </select>                                            
+                                    </div>
+                              
+
 
 
 
@@ -1369,36 +1367,58 @@ document.addEventListener("DOMContentLoaded", function () {
         };
         // ====== RECETA — FIN ======
 
-        // Preguntar si quieres fecha/hora de entrega
+// ====== FECHA DE EMISIÓN (por defecto HOY, editable) ======
+let fechaEmision = "";
+
+(() => {
+  // Fecha actual DD/MM/YYYY
+  const ahora = new Date();
+  const dd = String(ahora.getDate()).padStart(2, "0");
+  const mm = String(ahora.getMonth() + 1).padStart(2, "0");
+  const yyyy = ahora.getFullYear();
+  const fechaActual = `${dd}/${mm}/${yyyy}`;
+
+  // Preguntar fecha emisión (por defecto hoy)
+  fechaEmision = prompt(
+    "Fecha de emisión (puedes modificarla):",
+    fechaActual
+  ) || "";
+
+  // Si cancelan o dejan vacío, usa fechaActual
+  if (!fechaEmision.trim()) fechaEmision = fechaActual;
+})();
+
+
+        // ====== FECHA/HORA DE ENTREGA (como lo tenías) ======
         let fechaEntrega = "";
         let horaEntrega  = "";
 
         const pedirFechaHora = confirm("¿Quieres registrar fecha y hora de entrega sugeridas en el ticket?");
 
         if (pedirFechaHora) {
-            // Fecha actual DD/MM/YYYY
-            const ahora = new Date();
-            const dd = String(ahora.getDate()).padStart(2, "0");
-            const mm = String(ahora.getMonth() + 1).padStart(2, "0");
-            const yyyy = ahora.getFullYear();
-            const fechaActual = `${dd}/${mm}/${yyyy}`;
+        // Fecha actual DD/MM/YYYY
+        const ahora = new Date();
+        const dd = String(ahora.getDate()).padStart(2, "0");
+        const mm = String(ahora.getMonth() + 1).padStart(2, "0");
+        const yyyy = ahora.getFullYear();
+        const fechaActual = `${dd}/${mm}/${yyyy}`;
 
-            // Hora +1 (formato 12h con am/pm)
-            const horaMasUna = new Date();
-            horaMasUna.setHours(horaMasUna.getHours() + 1);
-            const horas = horaMasUna.getHours() % 12 || 12;
-            const minutos = String(horaMasUna.getMinutes()).padStart(2, "0");
-            const ampm = horaMasUna.getHours() >= 12 ? "p. m." : "a. m.";
-            const horaSugerida = `${horas}:${minutos} ${ampm}`;
+        // Hora +1 (formato 12h con am/pm)
+        const horaMasUna = new Date();
+        horaMasUna.setHours(horaMasUna.getHours() + 1);
+        const horas = horaMasUna.getHours() % 12 || 12;
+        const minutos = String(horaMasUna.getMinutes()).padStart(2, "0");
+        const ampm = horaMasUna.getHours() >= 12 ? "p. m." : "a. m.";
+        const horaSugerida = `${horas}:${minutos} ${ampm}`;
 
-            fechaEntrega = prompt(
-                "Fecha de entrega (Los laboratorios no atienden domingos ni feriados):",
-                fechaActual
-            ) || "";
-            horaEntrega = prompt(
-                "Hora de entrega (hh:mm am/pm):",
-                horaSugerida
-            ) || "";
+        fechaEntrega = prompt(
+            "Fecha de entrega (Los laboratorios no atienden domingos ni feriados):",
+            fechaActual
+        ) || "";
+        horaEntrega = prompt(
+            "Hora de entrega (hh:mm am/pm):",
+            horaSugerida
+        ) || "";
         }
 
         // A cuenta / saldo
@@ -1425,46 +1445,36 @@ document.addEventListener("DOMContentLoaded", function () {
                 cliente: nombre,
                 telefono: telefono,
                 vendedor: vendedor,
+
+                fecha_emision: fechaEmision,   // ✅ IMPORTANTE
+
                 total: totalGeneral.toFixed(2),
                 a_cuenta: aCuenta.toFixed(2),
-                //saldo: saldo.toFixed(2),
                 detalles: detalles,
                 pedirFechaHora: pedirFechaHora,
                 fecha_entrega: fechaEntrega,
                 hora_entrega: horaEntrega,
                 receta: receta,
-
                 puntos_ic: puntosIC,
                 medio_pago: medioPago,
             }),
         })
         .then(response => response.json())
         .then(data => {
-            // data.numero_ticket o similar (ajusta a tu vista guardar-ticket)
-            alert("Ticket guardado correctamente.");
+            if (data.ok) {
 
-            // Abrir PDF
-            const params = new URLSearchParams();
-            params.set("cliente_id", clienteId);
-            params.set("medida_id", medidaId);
-            params.set("cliente", nombre);
-            params.set("telefono", telefono);
-            params.set("vendedor", vendedor);
-            params.set("total", totalGeneral.toFixed(2));
-            params.set("a_cuenta", aCuenta.toFixed(2));
-            params.set("saldo", saldo.toFixed(2));
-            params.set("fecha_entrega", fechaEntrega);
-            params.set("hora_entrega", horaEntrega);
-            params.set("detalles", JSON.stringify(detalles));
-            params.set("receta", JSON.stringify(receta));
+                // ✅ ABRIR PDF LEYENDO DESDE BD POR NUMERO
+                window.open(`/ticket/imprimir/?numero=${data.numero}`, "_blank");
 
-            params.set("puntos_ic", puntosIC.toFixed(2));
-            window.open(`/ticket-pdf/?${params.toString()}`, "_blank");
+            } else {
+                alert("Error al guardar el ticket");
+            }
         })
-        .catch(err => {
-            console.error(err);
-            alert("Error al guardar el ticket.");
+        .catch(error => {
+            console.error("Error:", error);
+            alert("Error inesperado al guardar el ticket");
         });
+
     });
 });
 </script>

@@ -319,7 +319,7 @@ class TicketVenta(models.Model):
     numero = models.PositiveIntegerField()
     cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True)
     vendedor = models.CharField(max_length=100)
-    fecha_emision = models.DateField(auto_now_add=True)
+    fecha_emision = models.DateField(default=timezone.now)
     hora_emision = models.TimeField(auto_now_add=True)
     fecha_entrega = models.CharField(max_length=20, blank=True, null=True)
     hora_entrega = models.CharField(max_length=20, blank=True, null=True)

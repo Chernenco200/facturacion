@@ -346,7 +346,20 @@ def generar_ticket_pdf(request):
 
     p = canvas.Canvas(buffer, pagesize=(PAGE_W, PAGE_H))
 
-    # Datos recibidos
+    # =========================================================
+    # ✅ 0) SI VIENE numero: LEER TODO DESDE BD (RECOMENDADO)
+    # =========================================================
+    numero = request.GET.get('numero')
+    ticket = None
+
+    if numero:
+        try:
+            # tu numero en BD es entero (TicketVenta.numero)
+            ticket = TicketVenta.objects.select_related("cliente").filter(numero=int(numero)).first()
+        except Exception:
+            ticket = None
+
+    # ---------- Valores por defecto (modo antiguo por GET) ----------
     cliente = request.GET.get('cliente', 'Cliente no definido')
     telefono = request.GET.get('telefono', '')
     vendedor = request.GET.get('vendedor', '')
@@ -359,11 +372,108 @@ def generar_ticket_pdf(request):
     saldo = request.GET.get('saldo', '0.00')
     puntos_ic = request.GET.get('puntos_ic', '0.00')
 
-    detalles_json = request.GET.get('detalles', '[]')
-    try:
-        detalles = json.loads(detalles_json)
-    except Exception:
-        detalles = []
+    detalles = []
+    receta_data = {}
+    nombres_productos = []
+
+    # ---------- Si hay ticket: sobreescribir con datos reales ----------
+    if ticket:
+        # Cliente / teléfono
+        if ticket.cliente:
+            cliente = ticket.cliente.nombre
+            # si tu Cliente usa otro campo, ajusta aquí
+            telefono = getattr(ticket.cliente, "telefono", telefono) or telefono
+
+        vendedor = ticket.vendedor or vendedor
+
+        # Emisión real guardada
+        if getattr(ticket, "fecha_emision", None):
+            fecha_sistema = ticket.fecha_emision.strftime('%d/%m/%Y')
+        else:
+            fecha_sistema = datetime.now().strftime('%d/%m/%Y')
+
+        if getattr(ticket, "hora_emision", None):
+            hora_sistema = ticket.hora_emision.strftime('%H:%M')
+        else:
+            hora_sistema = datetime.now().strftime('%H:%M')
+
+        # Entrega real guardada (son CharField en tu modelo)
+        fecha_entrega = ticket.fecha_entrega or ""
+        hora_entrega = ticket.hora_entrega or ""
+
+        a_cuenta = f"{ticket.a_cuenta:.2f}"
+        saldo = f"{ticket.saldo:.2f}"
+        puntos_ic = str(ticket.puntos_ic or 0)
+
+        # Detalles desde BD
+        det_qs = DetalleTicketVenta.objects.select_related("producto").filter(ticket_numero=ticket).order_by("id")
+        for d in det_qs:
+            detalles.append({
+                "cantidad": d.cantidad,
+                "descripcion": d.descripcion or (d.producto.descripcion if d.producto else ""),
+                "precio": float(d.precio or 0),
+            })
+
+        nombres_productos = [str(x["descripcion"]).strip() for x in detalles if str(x.get("descripcion","")).strip()]
+
+        # Receta (si la envías por GET en el pdf, la respetamos; si no, queda vacía)
+        receta_json = request.GET.get('receta')
+        if receta_json:
+            try:
+                receta_data = json.loads(receta_json)
+            except Exception:
+                receta_data = {}
+        else:
+            receta_data = {}
+
+    else:
+        # =========================================================
+        # ✅ MODO ANTIGUO: LEER detalles + receta DESDE GET
+        # =========================================================
+        detalles_json = request.GET.get('detalles', '[]')
+        try:
+            detalles = json.loads(detalles_json)
+        except Exception:
+            detalles = []
+
+        receta_json = request.GET.get('receta')
+        if receta_json:
+            try:
+                receta_data = json.loads(receta_json)
+            except Exception:
+                receta_data = {}
+        else:
+            def G(key): return request.GET.get(key, "")
+            receta_data = {
+                "esf_lejos_OD": G("esf_lejos_OD"),
+                "cil_lejos_OD": G("cil_lejos_OD"),
+                "eje_lejos_OD": G("eje_lejos_OD"),
+                "DIP_lejos_OD": G("DIP_lejos_OD"),
+                "Add_lejos_OD": G("Add_lejos_OD"),
+                "AV_lejos_OD":  G("AV_lejos_OD"),
+                "esf_lejos_OI": G("esf_lejos_OI"),
+                "cil_lejos_OI": G("cil_lejos_OI"),
+                "eje_lejos_OI": G("eje_lejos_OI"),
+                "DIP_lejos_OI": G("DIP_lejos_OI"),
+                "Add_lejos_OI": G("Add_lejos_OI"),
+                "AV_lejos_OI":  G("AV_lejos_OI"),
+                "esf_cerca_OD": G("esf_cerca_OD"),
+                "cil_cerca_OD": G("cil_cerca_OD"),
+                "eje_cerca_OD": G("eje_cerca_OD"),
+                "DIP_cerca_OD": G("DIP_cerca_OD"),
+                "AV_cerca_OD":  G("AV_cerca_OD"),
+                "esf_cerca_OI": G("esf_cerca_OI"),
+                "cil_cerca_OI": G("cil_cerca_OI"),
+                "eje_cerca_OI": G("eje_cerca_OI"),
+                "DIP_cerca_OI": G("DIP_cerca_OI"),
+                "AV_cerca_OI":  G("AV_cerca_OI"),
+            }
+
+        nombres_productos = []
+        for item in detalles:
+            desc = str(item.get("descripcion", "")).strip()
+            if desc:
+                nombres_productos.append(desc)
 
     # Datos empresa
     RUC_EMPRESA = "RUC: 10429550101"
@@ -382,65 +492,27 @@ def generar_ticket_pdf(request):
         y = y_mm * mm
         p.line(LEFT_X, y, RIGHT_X, y)
 
-    # ====== Número de Ticket ======
-    numero = request.GET.get('numero')
-    if not numero:
-        try:
-            ultimo_id = TicketVenta.objects.order_by('-id').values_list('id', flat=True).first()
-            numero = ultimo_id or 1
-        except Exception:
-            numero = 1
-
-    try:
-        numero_formateado = f"{int(numero):06d}"
-    except Exception:
-        numero_formateado = "000001"
-
-    # ===== receta_data (lo mantengo igual como ya lo tienes) =====
-    receta_json = request.GET.get('receta')
-    if receta_json:
-        try:
-            receta_data = json.loads(receta_json)
-        except Exception:
-            receta_data = {}
+    # ====== Número de Ticket (formato) ======
+    if ticket:
+        numero_formateado = f"{ticket.numero:06d}"
     else:
-        def G(key): return request.GET.get(key, "")
-        receta_data = {
-            "esf_lejos_OD": G("esf_lejos_OD"),
-            "cil_lejos_OD": G("cil_lejos_OD"),
-            "eje_lejos_OD": G("eje_lejos_OD"),
-            "DIP_lejos_OD": G("DIP_lejos_OD"),
-            "Add_lejos_OD": G("Add_lejos_OD"),
-            "AV_lejos_OD":  G("AV_lejos_OD"),
-            "esf_lejos_OI": G("esf_lejos_OI"),
-            "cil_lejos_OI": G("cil_lejos_OI"),
-            "eje_lejos_OI": G("eje_lejos_OI"),
-            "DIP_lejos_OI": G("DIP_lejos_OI"),
-            "Add_lejos_OI": G("Add_lejos_OI"),
-            "AV_lejos_OI":  G("AV_lejos_OI"),
-            "esf_cerca_OD": G("esf_cerca_OD"),
-            "cil_cerca_OD": G("cil_cerca_OD"),
-            "eje_cerca_OD": G("eje_cerca_OD"),
-            "DIP_cerca_OD": G("DIP_cerca_OD"),
-            "AV_cerca_OD":  G("AV_cerca_OD"),
-            "esf_cerca_OI": G("esf_cerca_OI"),
-            "cil_cerca_OI": G("cil_cerca_OI"),
-            "eje_cerca_OI": G("eje_cerca_OI"),
-            "DIP_cerca_OI": G("DIP_cerca_OI"),
-            "AV_cerca_OI":  G("AV_cerca_OI"),
-        }
-
-    nombres_productos = []
-    for item in detalles:
-        desc = str(item.get("descripcion", "")).strip()
-        if desc:
-            nombres_productos.append(desc)
+        # fallback si no hay ticket
+        if not numero:
+            try:
+                ultimo_id = TicketVenta.objects.order_by('-id').values_list('id', flat=True).first()
+                numero = ultimo_id or 1
+            except Exception:
+                numero = 1
+        try:
+            numero_formateado = f"{int(numero):06d}"
+        except Exception:
+            numero_formateado = "000001"
 
     # =========================================================
     # ✅ FUNCIÓN QUE DIBUJA 1 RECIBO EN LA HOJA ACTUAL
     # =========================================================
     def dibujar_recibo(copia_n: int):
-        total = 0.0
+        total_calc = 0.0
         y = 257  # en mm
 
         # ====== LOGO ======
@@ -464,15 +536,13 @@ def generar_ticket_pdf(request):
         for ln in wrap_text(DIR_EMPRESA, 32):
             p.drawCentredString(CENTER_X, y * mm, ln); y -= 4
         for ln in wrap_text(TELS_EMPRESA, 32):
-            p.drawCentredString(CENTER_X, y * mm, ln); y -= 8
+            p.drawCentredString(CENTER_X, y * mm, ln); y -= 4
+        y -= 4
 
-        # ====== Número + COPIA ======
+        # ====== Número ======
         p.setFont("Helvetica-Bold", 11)
         p.drawCentredString(CENTER_X, y * mm, f"Recibo N\u00B0 {numero_formateado}")
-        y -= 5
-        p.setFont("Helvetica-Bold", 9.5)
-        #p.drawCentredString(CENTER_X, y * mm, f"COPIA {copia_n}/3")
-        y -= 7
+        y -= 12
 
         # ====== Datos del cliente ======
         p.setFont("Helvetica", 9.5)
@@ -499,7 +569,7 @@ def generar_ticket_pdf(request):
             precio = float(item.get("precio", 0) or 0)
 
             subtotal = precio
-            total += subtotal
+            total_calc += subtotal
 
             lineas_desc = textwrap.wrap(descripcion, 24) or [""]
 
@@ -512,19 +582,22 @@ def generar_ticket_pdf(request):
                 p.drawString(COL_DESC_X, y * mm, desc_line)
                 y -= 5
 
-            # Si llega al final, mejor: cortar ahí (para tiquetera)
             if y < 25:
                 hr(y); y -= 6
                 p.setFont("Helvetica-Oblique", 9)
-                #p.drawCentredString(CENTER_X, y * mm, "— Separa aquí —")
-                return  # termina este recibo aquí
+                return
 
-        # Totales
+        # Totales (si existe ticket, usa sus montos; si no, usa cálculo)
         hr(y); y -= 6
         p.setFont("Helvetica-Bold", 10)
-        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Total: S/ {total:.2f}"); y -= 5
-        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"A cuenta: S/ {a_cuenta}"); y -= 5
-        p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Saldo: S/ {saldo}"); y -= 8
+        if ticket:
+            p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Total: S/ {ticket.total:.2f}"); y -= 5
+            p.drawRightString(COL_SUBTOTAL_X, y * mm, f"A cuenta: S/ {ticket.a_cuenta:.2f}"); y -= 5
+            p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Saldo: S/ {ticket.saldo:.2f}"); y -= 8
+        else:
+            p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Total: S/ {total_calc:.2f}"); y -= 5
+            p.drawRightString(COL_SUBTOTAL_X, y * mm, f"A cuenta: S/ {a_cuenta}"); y -= 5
+            p.drawRightString(COL_SUBTOTAL_X, y * mm, f"Saldo: S/ {saldo}"); y -= 8
 
         # Despedida + puntos
         p.setFont("Helvetica-Bold", 10)
@@ -537,22 +610,19 @@ def generar_ticket_pdf(request):
             p.drawCentredString(CENTER_X, y * mm, ln)
             y -= 5
 
-        # Corte del recibo
         y -= 2
         hr(y); y -= 6
         p.setFont("Helvetica-Oblique", 9)
-        #p.drawCentredString(CENTER_X, y * mm, "— Separa aquí —")
 
     # =========================================================
     # ✅ 1) IMPRIMIR RECIBO 3 VECES (3 hojas)
     # =========================================================
     for copia in (1, 2, 3):
         dibujar_recibo(copia)
-        p.showPage()  # siguiente hoja (corte)
+        p.showPage()
 
     # =========================================================
     # ✅ 2) IMPRIMIR OT 1 VEZ (1 hoja)
-    #    (OJO: tu OT ya NO debe hacer p.showPage() al inicio)
     # =========================================================
     dibujar_orden_trabajo(
         p,
@@ -578,7 +648,6 @@ def generar_ticket_pdf(request):
     response = HttpResponse(pdf_value, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="ticket.pdf"'
     return response
-
 
 from io import BytesIO
 from django.http import HttpResponse
@@ -679,13 +748,20 @@ from .models import (
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 @require_POST
 def guardar_ticket(request):
-    if request.method != "POST":
-        return HttpResponseBadRequest("Método no permitido")
-
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
         return HttpResponseBadRequest("JSON inválido")
+
+    # ✅ 0) Leer y parsear fecha_emision (viene como "DD/MM/YYYY")
+    fecha_emision_str = (data.get("fecha_emision") or "").strip()
+    if fecha_emision_str:
+        try:
+            fecha_emision = datetime.strptime(fecha_emision_str, "%d/%m/%Y").date()
+        except ValueError:
+            fecha_emision = timezone.localdate()
+    else:
+        fecha_emision = timezone.localdate()
 
     with transaction.atomic():
         # 1) Obtener/actualizar correlativo
@@ -694,27 +770,28 @@ def guardar_ticket(request):
         numero = correlativo.numero_actual
         correlativo.save()
 
-        # 2) Buscar cliente por nombre (opcional; ajusta según tu lógica)
+        # 2) Buscar cliente por nombre (opcional)
         nombre_cliente = data.get("cliente") or ""
-        cliente = None
-        if nombre_cliente:
-            cliente = Cliente.objects.filter(nombre=nombre_cliente).first()
+        cliente = Cliente.objects.filter(nombre=nombre_cliente).first() if nombre_cliente else None
 
-        # ====== Montos y medio de pago (vienen del JSON) ======
+        # 3) Montos
         total = Decimal(str(data.get("total", "0") or "0"))
         a_cuenta = Decimal(str(data.get("a_cuenta", "0") or "0"))
-        medio_pago = (data.get("medio_pago") or "").strip().upper()  # EFECTIVO/YAPE/TARJETA/TRANSFERENCIA
+        medio_pago = (data.get("medio_pago") or "").strip().upper()
 
-        # saldo: mejor calcularlo aquí
         saldo = total - a_cuenta
         if saldo < 0:
             saldo = Decimal("0")
 
-        # 3) Crear TicketVenta
+        # ✅ 4) Crear TicketVenta GUARDANDO fecha_emision
         ticket = TicketVenta.objects.create(
             numero=numero,
             cliente=cliente,
             vendedor=data.get("vendedor", ""),
+
+            # ✅ ESTA ES LA CLAVE
+            fecha_emision=fecha_emision,
+
             fecha_entrega=data.get("fecha_entrega", ""),
             hora_entrega=data.get("hora_entrega", ""),
             total=total,
@@ -722,15 +799,14 @@ def guardar_ticket(request):
             saldo=saldo,
             puntos_ic=int(data.get("puntos_ic", 0) or 0),
         )
+
         OrdenTrabajo.objects.create(
             ticket=ticket,
             estado="LAB_PEDIDO",
             ts_lab_pedido=timezone.now()
         )
 
-
-        # 3.1) Registrar PagoTicket (abono)
-        # Validar medio_pago contra los choices (por si mandan algo raro)
+        # 5) Pago
         medios_validos = {"EFECTIVO", "YAPE", "TARJETA", "TRANSFERENCIA"}
         if a_cuenta > 0 and medio_pago in medios_validos:
             PagoTicket.objects.create(
@@ -738,8 +814,10 @@ def guardar_ticket(request):
                 medio_pago=medio_pago,
                 monto=a_cuenta
             )
+
+        # 6) Detalles + stock + kardex
         productos_afectados = set()
-        # 4) Crear detalles y DESCONTAR STOCK
+
         for det in data.get("detalles", []):
             descripcion = det.get("descripcion", "")
             cantidad = int(det.get("cantidad", 0) or 0)
@@ -761,21 +839,20 @@ def guardar_ticket(request):
             )
 
             if producto:
-                if producto.stock < cantidad:
+                if (producto.stock or 0) < cantidad:
                     raise ValueError(f"Stock insuficiente para {producto.descripcion}")
-                producto.stock -= cantidad
+                producto.stock = (producto.stock or 0) - cantidad
                 producto.save(update_fields=["stock"])
-
-                # ✅ AQUI: marca el producto para recalcular kardex al final
                 productos_afectados.add(producto.id)
 
-        # ✅ AQUI: después del for, recalcula el kardex de todos los productos vendidos
         for pid in productos_afectados:
             recalcular_kardex_producto(Producto.objects.get(id=pid))
 
-
-    return JsonResponse({"ok": True, "numero": numero})
-
+    return JsonResponse({
+        "ok": True,
+        "numero": numero,
+        "fecha_emision": fecha_emision.strftime("%Y-%m-%d"),
+    })
 
 def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos=None,
                           fecha_emision=None, hora_emision=None, fecha_entrega=None, hora_entrega=None, telefono=None, cliente=None, vendedor=None, receta=None):
