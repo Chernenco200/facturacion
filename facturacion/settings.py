@@ -65,7 +65,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "tu_proyecto.urls"  # <-- CAMBIA esto por tu proyecto
+ROOT_URLCONF = "facturacion.urls"  # <-- CAMBIA esto por tu proyecto
 
 TEMPLATES = [
     {
@@ -83,7 +83,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "tu_proyecto.wsgi.application"  # <-- CAMBIA esto por tu proyecto
+WSGI_APPLICATION = "facturacion.wsgi.application"  # <-- CAMBIA esto por tu proyecto
 
 # ========= DATABASE (Heroku Postgres) =========
 DATABASES = {
