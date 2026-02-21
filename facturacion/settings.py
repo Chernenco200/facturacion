@@ -21,6 +21,7 @@ DEBUG = os.environ.get("DEBUG", "0") == "1"
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
+    "ALLOWED_HOSTS"
 ]
 # Heroku host dinámico (recomendado)
 HEROKU_APP_NAME = os.environ.get("HEROKU_APP_NAME")  # ej: facturacion-d28198aaf688
