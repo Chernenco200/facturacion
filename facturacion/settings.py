@@ -46,6 +46,7 @@ INSTALLED_APPS = [
 
     # TUS APPS
     "core",
+    "accounts",
 
     # Cloudinary
     "cloudinary",
