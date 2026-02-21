@@ -152,26 +152,26 @@ class MedidaVista(models.Model):
     eje_lejos_OD = models.DecimalField(max_digits=6, decimal_places=0, default=0)
     DIP_lejos_OD = models.FloatField(max_length=6, default=0)
     Add_lejos_OD = models.DecimalField(max_digits=6, decimal_places=2 ,null=True, blank=True, default=0.00)
-    AV_lejos_OD = models.CharField(max_length=6, null=True, blank=True)
+    AV_lejos_OD = models.CharField(max_length=6, null=True, blank=True, default=0)
     
     esf_lejos_OI = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)    
     cil_lejos_OI = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     eje_lejos_OI = models.DecimalField(max_digits=6, decimal_places=0, default=0)
     DIP_lejos_OI = models.FloatField(max_length=6, default=0)
     Add_lejos_OI = models.DecimalField(max_digits=6,decimal_places=2, default=0.00)
-    AV_lejos_OI = models.CharField(max_length=6, null=True, blank=True)
+    AV_lejos_OI = models.CharField(max_length=6, null=True, blank=True, default=0)
 
     esf_cerca_OD = models.DecimalField(max_digits=6, decimal_places=2, default=0.00 )
     cil_cerca_OD = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     eje_cerca_OD = models.DecimalField(max_digits=6, decimal_places=0, default=0)
     DIP_cerca_OD = models.FloatField(max_length=6, default=0)
-    AV_cerca_OD = models.CharField(max_length=6, null=True, blank=True)
+    AV_cerca_OD = models.CharField(max_length=6, null=True, blank=True, default=0)
     
     esf_cerca_OI = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     cil_cerca_OI = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     eje_cerca_OI = models.DecimalField(max_digits=6, decimal_places=0, default=0)
     DIP_cerca_OI = models.FloatField(max_length=6, default=0)
-    AV_cerca_OI = models.CharField(max_length=6, null=True, blank=True)
+    AV_cerca_OI = models.CharField(max_length=6, null=True, blank=True, default=0)
 
     descripcion = models.CharField(max_length=255, null=True, blank=True)
 
