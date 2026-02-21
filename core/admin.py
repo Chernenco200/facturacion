@@ -18,38 +18,51 @@ class ProductoAdmin(admin.ModelAdmin):
         }),
     )
 
-    # miniaturas en listado
-    def thumb_f(self, obj):
-        return self._thumb(obj.imagenF)
+    def thumb_f(self, obj): return self._thumb(obj.imagenF)
     thumb_f.short_description = "Foto F"
 
-    def thumb_d(self, obj):
-        return self._thumb(obj.imagenD)
+    def thumb_d(self, obj): return self._thumb(obj.imagenD)
     thumb_d.short_description = "Foto D"
 
-    def thumb_l(self, obj):
-        return self._thumb(obj.imagenL)
+    def thumb_l(self, obj): return self._thumb(obj.imagenL)
     thumb_l.short_description = "Foto L"
 
-    def _thumb(self, img):
-        if img:
-            return format_html('<img src="{}" style="height:40px;border-radius:6px;" />', img.url)
-        return "—"
-
-    # previews grandes en el formulario
-    def preview_f(self, obj):
-        return self._preview(obj.imagenF)
+    def preview_f(self, obj): return self._preview(obj.imagenF)
     preview_f.short_description = "Vista previa F"
 
-    def preview_d(self, obj):
-        return self._preview(obj.imagenD)
+    def preview_d(self, obj): return self._preview(obj.imagenD)
     preview_d.short_description = "Vista previa D"
 
-    def preview_l(self, obj):
-        return self._preview(obj.imagenL)
+    def preview_l(self, obj): return self._preview(obj.imagenL)
     preview_l.short_description = "Vista previa L"
 
+    def _thumb(self, img):
+        url = self._safe_url(img)
+        if not url:
+            return "—"
+        return format_html('<img src="{}" style="height:40px;border-radius:6px;" />', url)
+
     def _preview(self, img):
-        if img:
-            return format_html('<img src="{}" style="max-height:220px;border-radius:10px;" />', img.url)
-        return "Sin imagen"
+        url = self._safe_url(img)
+        if not url:
+            return "Sin imagen"
+        return format_html('<img src="{}" style="max-height:220px;border-radius:10px;" />', url)
+
+    def _safe_url(self, img):
+        """
+        Devuelve URL solo si es válida.
+        En Heroku, cualquier /media/... va a romper, así que lo ocultamos
+        hasta que se re-suban a Cloudinary.
+        """
+        if not img:
+            return None
+        try:
+            url = img.url
+        except Exception:
+            return None
+
+        # Si quedó como media local, no lo muestres en prod
+        if url.startswith("/media/"):
+            return None
+
+        return url
