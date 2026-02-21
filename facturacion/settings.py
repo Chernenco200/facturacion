@@ -100,8 +100,9 @@ DATABASES = {
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# IMPORTANTE: en producción (Heroku) usa Whitenoise Manifest
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# MEDIA (Cloudinary)
+MEDIA_URL = "/media/"
+
 
 # ========= MEDIA (Cloudinary) =========
 CLOUDINARY_STORAGE = {
@@ -111,9 +112,14 @@ CLOUDINARY_STORAGE = {
     "FOLDER": "optica_ic",
 }
 
-DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
-
-MEDIA_URL = "/media/"  # (no se sirve desde Heroku; Cloudinary se encarga)
+STORAGES = {
+    "default": {
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # ========= Seguridad Heroku =========
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
