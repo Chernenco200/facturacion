@@ -31,7 +31,7 @@ if HEROKU_APP_NAME:
 # Si prefieres fijo, agrega tu dominio heroku directo:
 # ALLOWED_HOSTS.append("facturacion-d28198aaf688.herokuapp.com")
 
-CSRF_TRUSTED_ORIGINS = []
+CSRF_TRUSTED_ORIGINS = ["https://facturacion-d28198aaf688.herokuapp.com",]
 if HEROKU_APP_NAME:
     CSRF_TRUSTED_ORIGINS.append(f"https://{HEROKU_APP_NAME}.herokuapp.com")
 
