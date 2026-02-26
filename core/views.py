@@ -359,7 +359,7 @@ def generar_ticket_pdf(request):
             ticket = None
 
     if numero and not ticket:
-    return HttpResponseBadRequest("No se encontró el ticket en la BD para ese número.")
+        return HttpResponseBadRequest("No se encontró el ticket en la BD para ese número.")
 
     # ---------- Valores por defecto (modo antiguo por GET) ----------
     cliente = request.GET.get('cliente', 'Cliente no definido')
