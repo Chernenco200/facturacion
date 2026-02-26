@@ -654,7 +654,11 @@ def receta_pdf(request, medida_id):
     }
 
     # Datos básicos
-    fecha_emision = datetime.now().strftime("%d/%m/%Y")
+    fecha_emision = (
+    medida.fecha_registro.strftime("%d/%m/%Y")
+    if medida.fecha_registro
+    else ""
+)
     vendedor = request.user.get_full_name() or request.user.username
 
     # >>> REUSA tu helper tal cual lo tienes <<<
