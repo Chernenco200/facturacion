@@ -354,10 +354,12 @@ def generar_ticket_pdf(request):
 
     if numero:
         try:
-            # tu numero en BD es entero (TicketVenta.numero)
-            ticket = TicketVenta.objects.select_related("cliente").filter(numero=int(numero)).first()
-        except Exception:
+            ticket = TicketVenta.objects.select_related("cliente").get(numero=int(numero))
+        except TicketVenta.DoesNotExist:
             ticket = None
+
+    if numero and not ticket:
+    return HttpResponseBadRequest("No se encontró el ticket en la BD para ese número.")
 
     # ---------- Valores por defecto (modo antiguo por GET) ----------
     cliente = request.GET.get('cliente', 'Cliente no definido')
@@ -378,102 +380,54 @@ def generar_ticket_pdf(request):
 
     # ---------- Si hay ticket: sobreescribir con datos reales ----------
     if ticket:
-        # Cliente / teléfono
-        if ticket.cliente:
-            cliente = ticket.cliente.nombre
-            # si tu Cliente usa otro campo, ajusta aquí
-            telefono = getattr(ticket.cliente, "telefono", telefono) or telefono
+        # cliente / vendedor
+        cliente = ticket.cliente.nombre if ticket.cliente else "Sin cliente"
+        telefono = getattr(ticket.cliente, "telefono", "") if ticket.cliente else ""
+        vendedor = ticket.vendedor or ""
 
-        vendedor = ticket.vendedor or vendedor
-
-        # Emisión real guardada
-        if getattr(ticket, "fecha_emision", None):
-            fecha_sistema = ticket.fecha_emision.strftime('%d/%m/%Y')
-        else:
-            fecha_sistema = datetime.now().strftime('%d/%m/%Y')
-
-        if getattr(ticket, "hora_emision", None):
-            hora_sistema = ticket.hora_emision.strftime('%H:%M')
-        else:
-            hora_sistema = datetime.now().strftime('%H:%M')
-
-        # Entrega real guardada (son CharField en tu modelo)
+        # emisión / entrega
+        fecha_sistema = ticket.fecha_emision.strftime("%d/%m/%Y") if ticket.fecha_emision else datetime.now().strftime("%d/%m/%Y")
+        hora_sistema  = ticket.hora_emision.strftime("%H:%M") if getattr(ticket, "hora_emision", None) else datetime.now().strftime("%H:%M")
         fecha_entrega = ticket.fecha_entrega or ""
-        hora_entrega = ticket.hora_entrega or ""
+        hora_entrega  = ticket.hora_entrega or "--:--"
 
+        # montos/puntos
         a_cuenta = f"{ticket.a_cuenta:.2f}"
-        saldo = f"{ticket.saldo:.2f}"
+        saldo    = f"{ticket.saldo:.2f}"
         puntos_ic = str(ticket.puntos_ic or 0)
 
-        # Detalles desde BD
-        det_qs = DetalleTicketVenta.objects.select_related("producto").filter(ticket_numero=ticket).order_by("id")
+        # detalles desde BD (para que nunca dependas del GET)
+        detalles = []
+        det_qs = DetalleTicketVenta.objects.filter(ticket_numero=ticket).order_by("id")
         for d in det_qs:
             detalles.append({
                 "cantidad": d.cantidad,
-                "descripcion": d.descripcion or (d.producto.descripcion if d.producto else ""),
+                "descripcion": d.descripcion or "",
                 "precio": float(d.precio or 0),
             })
 
-        nombres_productos = [str(x["descripcion"]).strip() for x in detalles if str(x.get("descripcion","")).strip()]
-
-        # Receta (si la envías por GET en el pdf, la respetamos; si no, queda vacía)
-        receta_json = request.GET.get('receta')
-        if receta_json:
-            try:
-                receta_data = json.loads(receta_json)
-            except Exception:
-                receta_data = {}
-        else:
-            receta_data = {}
-
+        numero_formateado = f"{ticket.numero:06d}"
     else:
-        # =========================================================
-        # ✅ MODO ANTIGUO: LEER detalles + receta DESDE GET
-        # =========================================================
+        # si NO viene numero, recién usa el modo antiguo con GET (opcional)
+        cliente = request.GET.get('cliente', 'Cliente no definido')
+        telefono = request.GET.get('telefono', '')
+        vendedor = request.GET.get('vendedor', '')
+        fecha_sistema = request.GET.get('fecha_sistema', datetime.now().strftime('%d/%m/%Y'))
+        hora_sistema = request.GET.get('hora_sistema', datetime.now().strftime('%H:%M'))
+        fecha_entrega = request.GET.get('fecha_entrega', datetime.now().strftime('%d/%m/%Y'))
+        hora_entrega = request.GET.get('hora_entrega', '--:--')
+        a_cuenta = request.GET.get('a_cuenta', '0.00')
+        saldo = request.GET.get('saldo', '0.00')
+        puntos_ic = request.GET.get('puntos_ic', '0.00')
+
         detalles_json = request.GET.get('detalles', '[]')
         try:
             detalles = json.loads(detalles_json)
         except Exception:
             detalles = []
 
-        receta_json = request.GET.get('receta')
-        if receta_json:
-            try:
-                receta_data = json.loads(receta_json)
-            except Exception:
-                receta_data = {}
-        else:
-            def G(key): return request.GET.get(key, "")
-            receta_data = {
-                "esf_lejos_OD": G("esf_lejos_OD"),
-                "cil_lejos_OD": G("cil_lejos_OD"),
-                "eje_lejos_OD": G("eje_lejos_OD"),
-                "DIP_lejos_OD": G("DIP_lejos_OD"),
-                "Add_lejos_OD": G("Add_lejos_OD"),
-                "AV_lejos_OD":  G("AV_lejos_OD"),
-                "esf_lejos_OI": G("esf_lejos_OI"),
-                "cil_lejos_OI": G("cil_lejos_OI"),
-                "eje_lejos_OI": G("eje_lejos_OI"),
-                "DIP_lejos_OI": G("DIP_lejos_OI"),
-                "Add_lejos_OI": G("Add_lejos_OI"),
-                "AV_lejos_OI":  G("AV_lejos_OI"),
-                "esf_cerca_OD": G("esf_cerca_OD"),
-                "cil_cerca_OD": G("cil_cerca_OD"),
-                "eje_cerca_OD": G("eje_cerca_OD"),
-                "DIP_cerca_OD": G("DIP_cerca_OD"),
-                "AV_cerca_OD":  G("AV_cerca_OD"),
-                "esf_cerca_OI": G("esf_cerca_OI"),
-                "cil_cerca_OI": G("cil_cerca_OI"),
-                "eje_cerca_OI": G("eje_cerca_OI"),
-                "DIP_cerca_OI": G("DIP_cerca_OI"),
-                "AV_cerca_OI":  G("AV_cerca_OI"),
-            }
-
-        nombres_productos = []
-        for item in detalles:
-            desc = str(item.get("descripcion", "")).strip()
-            if desc:
-                nombres_productos.append(desc)
+        # si no mandan numero, no inventes ultimo_id: mejor un fijo
+        numero_formateado = "------"
 
     # Datos empresa
     RUC_EMPRESA = "RUC: 10429550101"
