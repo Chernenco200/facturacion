@@ -830,7 +830,7 @@ def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos
 
     # Encabezado
     p.setFont("Helvetica-Bold", 12)
-    p.drawCentredString(x_centro, y * mm, f"OT #000{numero}")
+    p.drawCentredString(x_centro, y * mm, f"OT #{numero}")
     y -= 10
 
     # 👇 Cambiar a normal antes de imprimir fechas
@@ -1838,14 +1838,14 @@ def imprimir_ticket_pdf(request):
     ticket_id = request.GET.get("ticket_id")
     numero = request.GET.get("numero")  # en tu URL: ?numero=5 (parece ser ID)
 
+    ticket_id = request.GET.get("ticket_id")
+    numero = request.GET.get("numero")  # ✅ este es el N° de recibo (campo TicketVenta.numero)
+
     ticket = None
     if ticket_id:
-        ticket = get_object_or_404(TicketVenta, pk=ticket_id)
+        ticket = get_object_or_404(TicketVenta, pk=int(ticket_id))  # opcional: dejarlo por si lo usas
     elif numero:
-        try:
-            ticket = get_object_or_404(TicketVenta, pk=int(numero))
-        except Exception:
-            ticket = None
+        ticket = get_object_or_404(TicketVenta, numero=int(numero))  # ✅ BUSCAR EN COLUMNA numero
 
     # =========================
     # 2) ARMAR VARIABLES (BD primero; GET fallback)
@@ -1918,7 +1918,7 @@ def imprimir_ticket_pdf(request):
         puntos_ic_val = getattr(ticket, "puntos_ic", None)
 
         # ---- Número ticket ----
-        numero_formateado = f"{ticket.id:06d}"
+        numero_formateado = f"{int(ticket.numero):06d}"  # ✅ mostrar el correlativo real
 
         # ---- Detalles (RELACIÓN) ----
         rel = getattr(ticket, "detalles", None) or getattr(ticket, "items", None)
@@ -2039,8 +2039,9 @@ def imprimir_ticket_pdf(request):
 
         numero = request.GET.get("numero")
         if not numero:
-            ultimo_id = TicketVenta.objects.order_by("-id").values_list("id", flat=True).first()
-            numero = ultimo_id or 1
+            ultimo_numero = TicketVenta.objects.order_by("-numero").values_list("numero", flat=True).first()
+            numero = ultimo_numero or 1
+
         try:
             numero_formateado = f"{int(numero):06d}"
         except Exception:
