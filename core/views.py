@@ -349,17 +349,15 @@ def generar_ticket_pdf(request):
     # =========================================================
     # ✅ 0) SI VIENE numero: LEER TODO DESDE BD (RECOMENDADO)
     # =========================================================
-    numero = request.GET.get('numero')
+    numero = request.GET.get("numero")
     ticket = None
 
     if numero:
         try:
-            ticket = TicketVenta.objects.select_related("cliente").get(numero=int(numero))
-        except TicketVenta.DoesNotExist:
-            ticket = None
-
-    if numero and not ticket:
-        return HttpResponseBadRequest("No se encontró el ticket en la BD para ese número.")
+            numero_int = int(numero)
+            ticket = TicketVenta.objects.select_related("cliente").get(numero=numero_int)  # ✅ columna numero
+        except (ValueError, TicketVenta.DoesNotExist):
+            return HttpResponseBadRequest("No se encontró el ticket en la BD para ese número.")
 
     # ---------- Valores por defecto (modo antiguo por GET) ----------
     cliente = request.GET.get('cliente', 'Cliente no definido')
@@ -447,24 +445,20 @@ def generar_ticket_pdf(request):
         p.line(LEFT_X, y, RIGHT_X, y)
 
     # ====== Número de Ticket (formato) ======
+    # ====== Número de Ticket (formato) ======
     if ticket:
-        numero_formateado = f"{ticket.numero:06d}"
+        numero_formateado = f"{int(ticket.numero):06d}"   # ✅ siempre el correlativo real
     else:
-        # fallback si no hay ticket
-        if not numero:
-            try:
-                ultimo_id = TicketVenta.objects.order_by('-id').values_list('id', flat=True).first()
-                numero = ultimo_id or 1
-            except Exception:
-                numero = 1
+        # modo antiguo (GET). No uses id.
         try:
-            numero_formateado = f"{int(numero):06d}"
+            numero_formateado = f"{int(numero):06d}" if numero else "------"
         except Exception:
-            numero_formateado = "000001"
+            numero_formateado = "------"
 
     # =========================================================
     # ✅ FUNCIÓN QUE DIBUJA 1 RECIBO EN LA HOJA ACTUAL
-    # =========================================================
+    # ==================================
+    =======================
     def dibujar_recibo(copia_n: int):
         total_calc = 0.0
         y = 257  # en mm
