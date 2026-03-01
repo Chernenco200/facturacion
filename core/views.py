@@ -445,7 +445,6 @@ def generar_ticket_pdf(request):
         p.line(LEFT_X, y, RIGHT_X, y)
 
     # ====== Número de Ticket (formato) ======
-    # ====== Número de Ticket (formato) ======
     if ticket:
         numero_formateado = f"{int(ticket.numero):06d}"   # ✅ siempre el correlativo real
     else:
@@ -457,8 +456,7 @@ def generar_ticket_pdf(request):
 
     # =========================================================
     # ✅ FUNCIÓN QUE DIBUJA 1 RECIBO EN LA HOJA ACTUAL
-    # ==================================
-    =======================
+    # =========================================================
     def dibujar_recibo(copia_n: int):
         total_calc = 0.0
         y = 257  # en mm
