@@ -2723,7 +2723,7 @@ def operador_ordenes(request):
     q = (request.GET.get("q") or "").strip()
 
     # Activas: todo menos ENTREGADO (o entregados de hoy si quieres verlos)
-    qs = OrdenTrabajo.objects.select_related("ticket", "ticket__cliente").order_by("fecha_hora_ultima_actualizacion")
+    qs = OrdenTrabajo.objects.select_related("ticket", "ticket__cliente").order_by("ticket")
 
     qs = qs.filter(estado__in=["LAB_PEDIDO","LAB_EN_PROCESO","BISELADO","UV","LISTO"])
 
