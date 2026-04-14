@@ -95,7 +95,7 @@
                 <span class="fw-bold">
                   {{ parts.0|slice:":1"|upper }}.
                   {% if parts|length > 1 %}
-                    {{ parts|last|upper }}
+                    {{ parts.1|upper }}
                   {% endif %}
                 </span>
               {% endwith %}
