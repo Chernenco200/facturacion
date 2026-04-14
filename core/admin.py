@@ -11,7 +11,7 @@ class ProductoAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Datos del producto", {
-            "fields": ("cod", "activo", "descripcion", "tipo", "precio_venta", "stock", "talla", "puente", "largo", "ancho", "altura")
+            "fields": ("cod", "activo", "marca", "descripcion", "tipo", "precio_venta", "stock", "talla", "puente", "largo", "ancho", "altura", "condicion", "uso" )
         }),
         ("Fotos", {
             "fields": ("imagenF", "preview_f", "imagenD", "preview_d", "imagenL", "preview_l")
