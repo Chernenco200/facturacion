@@ -128,7 +128,7 @@ class Producto(models.Model):
     material = models.CharField(max_length=20, choices=MATERIAL_CHOICES, null=True, blank=True)
     forma = models.CharField(max_length=20, choices=FORMA_CHOICES, null=True, blank=True)
     color = models.CharField(max_length=20, null=True, blank=True)   
-    talla = models.CharField(max_length=5, null=True, blank=True)    
+    talla_luna = models.CharField(max_length=5, null=True, blank=True)    
     puente = models.CharField(max_length=5, null=True, blank=True)
     largo = models.CharField(max_length=5, null=True, blank=True)
     ancho = models.CharField(max_length=5, null=True, blank=True)
