@@ -6,6 +6,8 @@ from django.utils import timezone
 # Create your models here.
 from django.db import models
 
+from django.utils.text import slugify
+
 class Proveedor(models.Model):
     ruc = models.CharField(max_length=11, unique=True)
     nombre = models.CharField(max_length=150)
