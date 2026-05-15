@@ -1038,9 +1038,22 @@ def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
     y -= 5
 
     # Fila OD lejos
+    def formato_signo(valor):
+        try:
+            num = float(valor)
+
+            if num > 0:
+                return f"+{num:.2f}"
+            elif num < 0:
+                return f"{num:.2f}"
+            else:
+                return "0.00"
+
+        except:
+            return str(valor)    
     fila_OD = [
         "OD",
-        receta.get("esf_lejos_OD", ""),
+        formato_signo(receta.get("esf_lejos_OD", "")),
         receta.get("cil_lejos_OD", ""),
         receta.get("eje_lejos_OD", ""),
         receta.get("DIP_lejos_OD", ""),
@@ -1054,7 +1067,7 @@ def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
     # Fila OI lejos
     fila_OI = [
         "OI",
-        receta.get("esf_lejos_OI", ""),
+        formato_signo(receta.get("esf_lejos_OI", "")),
         receta.get("cil_lejos_OI", ""),
         receta.get("eje_lejos_OI", ""),
         receta.get("DIP_lejos_OI", ""),
@@ -1083,7 +1096,7 @@ def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
 
         fila_ODc = [
             "OD",
-            receta.get("esf_cerca_OD", ""),
+            formato_signo(receta.get("esf_cerca_OD", "")),
             receta.get("cil_cerca_OD", ""),
             receta.get("eje_cerca_OD", ""),
             receta.get("DIP_cerca_OD", ""),
@@ -1095,7 +1108,7 @@ def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
 
         fila_OIc = [
             "OI",
-            receta.get("esf_cerca_OI", ""),
+            formato_signo(receta.get("esf_cerca_OI", "")),
             receta.get("cil_cerca_OI", ""),
             receta.get("eje_cerca_OI", ""),
             receta.get("DIP_cerca_OI", ""),

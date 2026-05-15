@@ -50,7 +50,7 @@ class DetalleCompra(models.Model):
 
 class Producto(models.Model):
     TIPO_CHOICES = [
-        ('Monturas oftálimcas', 'Monturas oftálimcas'),
+        ('Monturas oftálmicas', 'Monturas oftálmicas'),
         ('Monturas Solares', 'Monturas Solares'),
         ('Lentes de Contacto', 'Lentes de Contacto'),
         ('Monturas de Marca', 'Monturas de Marca'),
