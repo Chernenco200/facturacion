@@ -2878,3 +2878,156 @@ def eliminar_movimiento(request, id):
 
     # vuelve a donde estabas
     return redirect("caja_hoy")
+
+
+
+#--------------Conectar con WhatsApp---------
+
+
+def enviar_mensaje_whatsapp(numero_destino, mensaje):
+    token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+    phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
+
+    url = f"https://graph.facebook.com/v25.0/{phone_number_id}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero_destino,
+        "type": "text",
+        "text": {"body": mensaje},
+    }
+
+    return requests.post(url, headers=headers, json=payload)
+
+
+def menu_principal():
+    return """Bienvenido a Óptica IC 👓
+
+Responde con una opción:
+
+1️⃣ Consultar estado de pedido
+2️⃣ Horario de atención
+3️⃣ Promociones
+4️⃣ Hablar con un asesor"""
+
+
+def obtener_respuesta(mensaje_texto):
+    texto = mensaje_texto.strip().lower()
+
+    if texto in ["hola", "buenos dias", "buenos días", "buenas tardes", "buenas noches", "menu", "menú"]:
+        return menu_principal()
+
+    if texto == "1":
+        return """Para consultar el estado de tu pedido, envíanos tu número de ticket.
+
+Ejemplo:
+estado 123"""
+
+    if texto.startswith("estado"):
+        partes = texto.split()
+
+        if len(partes) < 2:
+            return "Por favor envíanos tu número de recibo. Ejemplo: estado 123"
+
+        numero_pedido = partes[1]
+
+        return f"""Estamos revisando el estado de tu pedido N° {numero_pedido} 👓
+
+En breve un asesor confirmará si ya está listo."""
+
+    if texto == "2":
+        return """Nuestro horario de atención es:
+
+Lunes a sábado:
+9:00 am. a 7:45 pm.
+
+Domingos y feriados:
+10:30 am.a 6:30 pm.
+
+    if texto == "3":
+        return """Promociones disponibles en Óptica IC 👓
+
+✅ Promo familiar (3X2 en monturas) 
+✅ Consulta por monturas, lunas y multifocales
+
+Escríbenos qué tipo de lentes necesitas."""
+
+    if texto == "4":
+        return """Un asesor de Óptica IC te atenderá en breve.
+
+También puedes escribir directamente tu consulta por aquí."""
+
+    return """No entendí tu mensaje.
+
+Responde con una opción del menú:
+
+1️⃣ Consultar estado de pedido
+2️⃣ Horario de atención
+3️⃣ Promociones
+4️⃣ Hablar con un asesor"""
+
+
+@csrf_exempt
+def whatsapp_webhook(request):
+    if request.method == "GET":
+        mode = request.GET.get("hub.mode", "")
+        token = request.GET.get("hub.verify_token", "")
+        challenge = request.GET.get("hub.challenge", "")
+
+        if not mode and not token and not challenge:
+            return HttpResponse("Webhook WhatsApp activo", status=200)
+
+        if mode == "subscribe" and token == VERIFY_TOKEN:
+            return HttpResponse(str(challenge), status=200)
+
+        return HttpResponse("Token inválido", status=403)
+
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body.decode("utf-8"))
+            value = data["entry"][0]["changes"][0]["value"]
+
+            if "messages" in value:
+                mensaje = value["messages"][0]
+                numero_cliente = mensaje.get("from")
+
+                if mensaje.get("type") == "text":
+                    texto_cliente = mensaje["text"]["body"]
+                    respuesta = obtener_respuesta(texto_cliente)
+                else:
+                    respuesta = "Por ahora solo puedo responder mensajes de texto. Escribe menú para ver las opciones."
+
+                enviar_mensaje_whatsapp(numero_cliente, respuesta)
+
+        except Exception as e:
+            print("ERROR PROCESANDO WHATSAPP:", e)
+
+        return JsonResponse({"status": "ok"})
+
+    return HttpResponse("Método no permitido", status=405)
+
+
+
+
+
+
+def suscribir_waba(request):
+    token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+    waba_id = "1315153820041937"
+
+    url = f"https://graph.facebook.com/v25.0/{waba_id}/subscribed_apps"
+
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    r = requests.post(url, headers=headers)
+
+    return HttpResponse(
+        f"Status: {r.status_code}<br><pre>{r.text}</pre>"
+    )

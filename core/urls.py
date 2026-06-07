@@ -113,4 +113,13 @@ urlpatterns = [
     path("caja/movimiento/<int:id>/eliminar/", views.eliminar_movimiento, name="eliminar_movimiento"),
 
 
+
+    path(
+        "webhook/whatsapp/",
+        views.whatsapp_webhook,
+        name="whatsapp_webhook"
+    ),
+
+    path("suscribir-waba/", views.suscribir_waba, name="suscribir_waba"),
+
 ]
