@@ -2943,11 +2943,11 @@ En breve un asesor confirmará si ya está listo."""
     if texto == "2":
         return """Nuestro horario de atención es:
 
-Lunes a sábado:
-9:00 am. a 7:45 pm.
+    Lunes a sábado:
+    9:00 am. a 7:45 pm.
 
-Domingos y feriados:
-10:30 am.a 6:30 pm.
+    Domingos y feriados:
+    10:30 am. a 6:30 pm."""
 
     if texto == "3":
         return """Promociones disponibles en Óptica IC 👓
