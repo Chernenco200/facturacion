@@ -2883,7 +2883,7 @@ def eliminar_movimiento(request, id):
 
 #--------------Conectar con WhatsApp---------
 
-
+VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN")
 def enviar_mensaje_whatsapp(numero_destino, mensaje):
     token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
