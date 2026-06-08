@@ -2900,17 +2900,39 @@ def whatsapp_webhook(request):
         return HttpResponse("Token incorrecto", status=403)
 
     if request.method == "POST":
-        print("===== WHATSAPP POST RECIBIDO =====")
+
+        print("===================================")
+        print("WHATSAPP RECIBIDO")
         print(request.body.decode("utf-8"))
+        print("===================================")
 
         try:
             data = json.loads(request.body)
-            print("JSON OK:", data)
+
+            entry = data.get("entry", [])
+
+            for e in entry:
+                for change in e.get("changes", []):
+
+                    value = change.get("value", {})
+
+                    if "messages" in value:
+
+                        mensaje = value["messages"][0]
+
+                        numero = mensaje.get("from")
+                        tipo = mensaje.get("type")
+
+                        print("NUMERO:", numero)
+                        print("TIPO:", tipo)
+
+                        if tipo == "text":
+                            texto = mensaje["text"]["body"]
+                            print("MENSAJE:", texto)
+
         except Exception as e:
-            print("ERROR LEYENDO JSON:", e)
+            print("ERROR:", str(e))
 
         return HttpResponse("EVENT_RECEIVED", status=200)
-
-    return HttpResponse("Método no permitido", status=405)
 
 
