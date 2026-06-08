@@ -2886,6 +2886,34 @@ def eliminar_movimiento(request, id):
 
 VERIFY_TOKEN = "mi_token_whatsapp_123"
 
+def enviar_whatsapp(numero, mensaje):
+    token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+    phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
+
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    data = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {
+            "body": mensaje
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+
+    print("RESPUESTA META STATUS:", response.status_code)
+    print("RESPUESTA META TEXTO:", response.text)
+
+    return response
+
+
 @csrf_exempt
 def whatsapp_webhook(request):
 
@@ -2900,7 +2928,6 @@ def whatsapp_webhook(request):
         return HttpResponse("Token incorrecto", status=403)
 
     if request.method == "POST":
-
         print("===================================")
         print("WHATSAPP RECIBIDO")
         print(request.body.decode("utf-8"))
@@ -2930,9 +2957,19 @@ def whatsapp_webhook(request):
                             texto = mensaje["text"]["body"]
                             print("MENSAJE:", texto)
 
+                            if texto.lower().strip() == "hola":
+                                enviar_whatsapp(
+                                    numero,
+                                    "Hola 👋 Bienvenido a Óptica IC.\n\n"
+                                    "Responde:\n"
+                                    "1️⃣ Estado de mi pedido\n"
+                                    "2️⃣ Horarios\n"
+                                    "3️⃣ Hablar con asesor"
+                                )
+
         except Exception as e:
             print("ERROR:", str(e))
 
         return HttpResponse("EVENT_RECEIVED", status=200)
 
-
+    return HttpResponse("Método no permitido", status=405)
