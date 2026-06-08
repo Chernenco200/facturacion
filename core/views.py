@@ -2888,21 +2888,29 @@ VERIFY_TOKEN = "mi_token_whatsapp_123"
 
 @csrf_exempt
 def whatsapp_webhook(request):
+
     if request.method == "GET":
         mode = request.GET.get("hub.mode")
         token = request.GET.get("hub.verify_token")
         challenge = request.GET.get("hub.challenge")
-
-        print("===== VERIFICACION META =====")
-        print("MODE:", mode)
-        print("TOKEN:", token)
-        print("CHALLENGE:", challenge)
 
         if mode == "subscribe" and token == VERIFY_TOKEN:
             return HttpResponse(challenge, status=200)
 
         return HttpResponse("Token incorrecto", status=403)
 
-    return HttpResponse("OK", status=200)
+    if request.method == "POST":
+        print("===== WHATSAPP POST RECIBIDO =====")
+        print(request.body.decode("utf-8"))
+
+        try:
+            data = json.loads(request.body)
+            print("JSON OK:", data)
+        except Exception as e:
+            print("ERROR LEYENDO JSON:", e)
+
+        return HttpResponse("EVENT_RECEIVED", status=200)
+
+    return HttpResponse("Método no permitido", status=405)
 
 
