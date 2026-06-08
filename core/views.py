@@ -62,6 +62,9 @@ from core.kardex import recalcular_kardex_producto
 
 from accounts.forms import LoginForm
 from django.contrib.auth import login
+
+
+
 def index(request):
     # Si ya inició sesión, manda al dashboard (o a donde quieras)
     if request.user.is_authenticated:
@@ -2883,7 +2886,12 @@ def eliminar_movimiento(request, id):
 
 #--------------Conectar con WhatsApp---------
 
-VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN")
+
+
+
+VERIFY_TOKEN = "opticaic_token_2026"
+
+
 def enviar_mensaje_whatsapp(numero_destino, mensaje):
     token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
@@ -2923,7 +2931,7 @@ def obtener_respuesta(mensaje_texto):
         return menu_principal()
 
     if texto == "1":
-        return """Para consultar el estado de tu pedido, envíanos tu número de ticket.
+        return """Para consultar el estado de tu pedido, envíanos el número de recibo.
 
 Ejemplo:
 estado 123"""
@@ -2943,16 +2951,17 @@ En breve un asesor confirmará si ya está listo."""
     if texto == "2":
         return """Nuestro horario de atención es:
 
-    Lunes a sábado:
-    9:00 am. a 7:45 pm.
+Lunes a sábado:
+9:00 a. m. a 8:00 p. m.
 
-    Domingos y feriados:
-    10:30 am. a 6:30 pm."""
+Domingos:
+Consultar disponibilidad."""
 
     if texto == "3":
         return """Promociones disponibles en Óptica IC 👓
 
-✅ Promo familiar (3X2 en monturas) 
+✅ Lentes completos desde precios especiales
+✅ Promo familiar
 ✅ Consulta por monturas, lunas y multifocales
 
 Escríbenos qué tipo de lentes necesitas."""
@@ -3016,18 +3025,18 @@ def whatsapp_webhook(request):
 
 
 
-def suscribir_waba(request):
-    token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
-    waba_id = "1315153820041937"
+#def suscribir_waba(request):
+#    token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+#    waba_id = "1315153820041937"
 
-    url = f"https://graph.facebook.com/v25.0/{waba_id}/subscribed_apps"
+#    url = f"https://graph.facebook.com/v25.0/{waba_id}/subscribed_apps"
 
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
+#    headers = {
+#        "Authorization": f"Bearer {token}"
+#    }
 
-    r = requests.post(url, headers=headers)
+#    r = requests.post(url, headers=headers)
 
-    return HttpResponse(
-        f"Status: {r.status_code}<br><pre>{r.text}</pre>"
-    )
+#    return HttpResponse(
+#        f"Status: {r.status_code}<br><pre>{r.text}</pre>"
+#    )
