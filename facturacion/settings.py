@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     # TUS APPS
     "core",
     "accounts",
+    "whatsapp",
 
     # Cloudinary
     "cloudinary",

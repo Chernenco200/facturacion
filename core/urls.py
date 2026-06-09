@@ -114,11 +114,7 @@ urlpatterns = [
 
 
 
-    path(
-        "webhook/whatsapp/",
-        views.whatsapp_webhook,
-        name="whatsapp_webhook"
-    ),
+
 
     #path("suscribir-waba/", views.suscribir_waba, name="suscribir_waba"),
 

@@ -24,6 +24,7 @@ urlpatterns = [
     path('', include('core.urls')),
 
     path("accounts/", include("accounts.urls")),
+    path("", include("whatsapp.urls")),
 ]
 
 # ✅ Agrega esta línea al final
