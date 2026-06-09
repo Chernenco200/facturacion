@@ -8,6 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from .utils import enviar_whatsapp_texto
+from .models import ConversacionWhatsApp, CitaWhatsApp
 
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
