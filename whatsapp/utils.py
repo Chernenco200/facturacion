@@ -46,3 +46,12 @@ def enviar_whatsapp_texto(numero, mensaje):
     print("WHATSAPP RESPUESTA:", response.text)
 
     return response.status_code in [200, 201]
+
+def avisar_asesor(mensaje):
+    numero_asesor = os.environ.get("NUMERO_ASESOR_WHATSAPP")
+
+    if not numero_asesor:
+        print("No existe NUMERO_ASESOR_WHATSAPP")
+        return False
+
+    return enviar_whatsapp_texto(numero_asesor, mensaje)
