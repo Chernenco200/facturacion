@@ -82,10 +82,15 @@ def responder_mensaje(numero, texto):
         return
 
     if conversacion.estado == "ESPERANDO_TICKET":
-        consultar_estado_ticket(numero, texto_original)
+        encontrado = consultar_estado_ticket(numero, texto_original)
 
-        conversacion.estado = "INICIO"
-        conversacion.save()
+        if encontrado:
+            conversacion.estado = "INICIO"
+            conversacion.save()
+        else:
+            conversacion.estado = "ESPERANDO_TICKET"
+            conversacion.save()
+
         return
 
 
@@ -243,9 +248,10 @@ def consultar_estado_ticket(numero, texto_ticket):
         enviar_whatsapp_texto(
             numero,
             "No encontramos ese número de ticket.\n\n"
-            "Verifica el número e intenta nuevamente."
+            "Verifica el número e intenta nuevamente.\n\n"
+            "Ejemplo: 000123"
         )
-        return
+        return False
 
     orden = OrdenTrabajo.objects.filter(ticket=ticket).last()
 
@@ -295,4 +301,6 @@ def consultar_estado_ticket(numero, texto_ticket):
     )
 
     enviar_whatsapp_texto(numero, mensaje)
+    
+    return True
     
