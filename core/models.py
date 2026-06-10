@@ -71,6 +71,7 @@ class Producto(models.Model):
         ('Cuadrado', 'Cuadrado'),
         ('Redondo', 'Redondo'),
         ('Exagonal', 'Exagonal'),
+        ('Curvo', 'Curvo'),
         ('Otros', 'Otros'),  
     ]
 
@@ -80,6 +81,7 @@ class Producto(models.Model):
         ('Carey', 'Carey'),
         ('TR90', 'TR90'),
         ('Aluminium', 'Aluminium'),
+        ('Metal', 'Metal'),
         ('Engomado', 'Engomado'),
         ('Otros', 'Otros'),  
     ]
@@ -91,6 +93,20 @@ class Producto(models.Model):
         ('Tommy-Hilfiger', 'Tommy-Hilfiger'),
         ('Arnette', 'Arnette'),
         ('Nano', 'Nano'),
+        ('AX', 'Armani Exchange'),
+        ('Emporio', 'Emporio Armani'),
+        ('Skechers', 'Skechers'),
+        ('Harley', 'Harley Davidson'),
+        ('Police', 'Police'),
+        ('Adidas', 'Adidas'),
+        ('Fila', 'Fila'),
+        ('Polo', 'Polo'),
+        ('Timberland', 'Timberland'),
+        ('Ralph', 'Ralph'),
+        ('Carolina', 'Carolina Herrera'),
+        ('Tous', 'Tous'),
+        ('Vogue', 'Vogue'),
+
         ('Otros', 'Otros'),
 
         ('Acuvue', 'Acuvue'),
@@ -595,10 +611,10 @@ class PagoTicket(models.Model):
 class OrdenTrabajo(models.Model):
     ESTADOS = (
         ("LAB_PEDIDO", "Pedido al Laboratorio"),
-        ("LAB_EN_PROCESO", "En Laboratorio"),
-        ("BISELADO", "En Biselado"),
-        ("UV", "Desinfección UV"),
-        ("LISTO", "Lentes Listos"),
+        ("LAB_EN_PROCESO", "Lunas en fabricación"),
+        ("BISELADO", "Lunas en Biselado"),
+        ("UV", "En control de calidad"),
+        ("LISTO", "Sus lentes ya están listos"),
         ("ENTREGADO", "Entregado"),
     )
 
