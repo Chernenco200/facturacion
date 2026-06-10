@@ -256,6 +256,76 @@ def consultar_estado_ticket(numero, texto_ticket):
         )
         return
 
+    estados = {
+        "LAB_PEDIDO": "🏭 Pedido enviado a laboratorio",
+        "LAB_EN_PROCESO": "🔬 En proceso de fabricación",
+        "BISELADO": "🔧 En taller de biselado",
+        "UV": "🔍 En control de calidad",
+        "LISTO": "✅ Listo para recoger",
+        "ENTREGADO": "📦 Entregado",
+    }
+
+    estado_codigo = orden.estado
+    estado_texto = estados.get(estado_codigo, f"📌 {orden.get_estado_display()}")
+
+    mensaje = (
+        f"Ticket N° {ticket.numero}\n\n"
+        f"Estado actual:\n"
+        f"{estado_texto}\n\n"
+    )
+
+    if estado_codigo == "LISTO":
+        mensaje += (
+            "Tus lentes ya están listos. Puedes acercarte a recogerlos 😊\n\n"
+        )
+
+    elif estado_codigo == "ENTREGADO":
+        mensaje += (
+            "Este pedido ya fue entregado. Gracias por confiar en Óptica IC 😊\n\n"
+        )
+
+    else:
+        mensaje += (
+            "Seguimos trabajando en tu pedido. Te avisaremos cuando esté listo.\n\n"
+        )
+
+    mensaje += (
+        "Óptica IC\n"
+        "Innovación y Calidad"
+    )
+
+    enviar_whatsapp_texto(numero, mensaje)
+    numero_ticket = texto_ticket.strip().upper()
+    numero_ticket = numero_ticket.replace("TICKET", "").strip()
+    numero_ticket = numero_ticket.lstrip("0")
+
+    if not numero_ticket:
+        enviar_whatsapp_texto(
+            numero,
+            "Por favor escribe el número de ticket.\n\n"
+            "Ejemplo: 000123"
+        )
+        return
+
+    try:
+        ticket = TicketVenta.objects.get(numero=numero_ticket)
+    except TicketVenta.DoesNotExist:
+        enviar_whatsapp_texto(
+            numero,
+            "No encontramos ese número de ticket.\n\n"
+            "Verifica el número e intenta nuevamente."
+        )
+        return
+
+    orden = OrdenTrabajo.objects.filter(ticket=ticket).last()
+
+    if not orden:
+        enviar_whatsapp_texto(
+            numero,
+            f"Encontramos tu ticket N° {ticket.numero}, pero aún no tiene orden de trabajo registrada."
+        )
+        return
+
     estado = orden.get_estado_display()
 
     mensaje = (
