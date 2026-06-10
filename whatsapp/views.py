@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import ConversacionWhatsApp, CitaWhatsApp
 from .utils import enviar_whatsapp_texto, avisar_asesor
 
+from core.models import TicketVenta, OrdenTrabajo
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
@@ -80,9 +81,18 @@ def responder_mensaje(numero, texto):
         )
         return
 
+    if conversacion.estado == "ESPERANDO_TICKET":
+        consultar_estado_ticket(numero, texto_original)
+
+        conversacion.estado = "INICIO"
+        conversacion.save()
+        return
+
+
     # Saludo / menú
     if texto in [
         "hola",
+        "Hi",
         "buenas",
         "buenos dias",
         "buenos días",
@@ -104,13 +114,19 @@ def responder_mensaje(numero, texto):
         )
         return
 
+    if texto.startswith("ticket"):
+        consultar_estado_ticket(numero, texto_original)
+        return
+
     # Estado de ticket
-    if texto in ["2", "2️⃣"] or "estado" in texto or "ticket" in texto:
+    if texto in ["2", "2️⃣"] or "estado" in texto or texto == "ticket":
+        conversacion.estado = "ESPERANDO_TICKET"
+        conversacion.save()
+
         enviar_whatsapp_texto(
             numero,
-            "Para consultar tu ticket escribe:\n\n"
-            "TICKET 000123\n\n"
-            "Ejemplo: TICKET 000045"
+            "Por favor escribe el número de tu ticket.\n\n"
+            "Ejemplo: 000123"
         )
         return
 
@@ -119,7 +135,7 @@ def responder_mensaje(numero, texto):
         enviar_whatsapp_texto(
             numero,
             "Estamos ubicados en: Jr Camaná 560 - Cercado de Lima.\n\n"
-            "https://www.google.com/search?q=opticas+en+centro+de+lima&sca_esv=0af47fe24a20a796&rlz=1C1GCEA_en&sxsrf=ANbL-n6UHrPkOCqkXS-qJHerJBXMnqBSKw:1781045234179&udm=1&lsack=8pcoaoLWCsGc1sQPs9K2sAM&sa=X&ved=2ahUKEwiCl4zEnvuUAxVBjpUCHTOpDTYQjGp6BAgdEAA&biw=1280&bih=585&dpr=1.5#sv=CAwS-AIKBmxjbF9wdhIbCgNwdnESFENnMHZaeTh4TVdJMmJYQjRhalo0Er4BCgNscWkStgFDaGx2Y0hScFkyRnpJR1Z1SUdObGJuUnlieUJrWlNCc2FXMWhTTnlCLWJxYXFvQ0FDRm9wRUFBWUFCZ0NHQVFpR1c5d2RHbGpZWE1nWlc0Z1kyVnVkSEp2SUdSbElHeHBiV0VxQkFnREVBQ1NBUWh2Y0hScFkybGhicG9CSTBOb1drUlRWV2hPVFVjNWJsTXdWa3BSTUVadVUxVk5lbUZ0VWpGVWJWb3pSVUZGLWdFRUNBQVFTQRJcCgN0YnMSVWxyZjohMm00ITFlMTUhNG0yITE1bTEhMXNoYXNfMXdoZWVsY2hhaXJfMWFjY2Vzc2libGVfMWVudHJhbmNlITJtMSExZTIhMm0xITFlMyEzc0lBRT0SHgoBcRIZb3B0aWNhcyBlbiBjZW50cm8gZGUgbGltYRoSbG9jYWwtcGxhY2Utdmlld2VyGAog29rHXA"
+            "Ref: Entre Av. Emancipación y Jr. Huancavelica"
         )
         return
 
@@ -206,3 +222,48 @@ def whatsapp_webhook(request):
         return JsonResponse({"status": "ok"})
 
     return HttpResponse("Método no permitido", status=405)
+
+
+def consultar_estado_ticket(numero, texto_ticket):
+    numero_ticket = texto_ticket.strip().upper()
+    numero_ticket = numero_ticket.replace("TICKET", "").strip()
+    numero_ticket = numero_ticket.lstrip("0")
+
+    if not numero_ticket:
+        enviar_whatsapp_texto(
+            numero,
+            "Por favor escribe el número de ticket.\n\n"
+            "Ejemplo: 000123"
+        )
+        return
+
+    try:
+        ticket = TicketVenta.objects.get(numero=numero_ticket)
+    except TicketVenta.DoesNotExist:
+        enviar_whatsapp_texto(
+            numero,
+            "No encontramos ese número de ticket.\n\n"
+            "Verifica el número e intenta nuevamente."
+        )
+        return
+
+    orden = OrdenTrabajo.objects.filter(ticket=ticket).last()
+
+    if not orden:
+        enviar_whatsapp_texto(
+            numero,
+            f"Encontramos tu ticket N° {ticket.numero}, pero aún no tiene orden de trabajo registrada."
+        )
+        return
+
+    estado = orden.get_estado_display()
+
+    mensaje = (
+        f"Ticket N° {ticket.numero}\n\n"
+        f"Estado actual:\n"
+        f"{estado}\n\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
+    )
+
+    enviar_whatsapp_texto(numero, mensaje)
