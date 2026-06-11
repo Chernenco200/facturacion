@@ -63,8 +63,6 @@ from core.kardex import recalcular_kardex_producto
 from accounts.forms import LoginForm
 from django.contrib.auth import login
 
-from whatsapp.utils import enviar_aviso_lentes_listos
-
 
 
 def index(request):
@@ -758,8 +756,6 @@ def guardar_ticket(request):
             estado="LAB_PEDIDO",
             ts_lab_pedido=timezone.now()
         )
-
-        enviar_agradecimiento_ticket(ticket) #Envia mensaje a wasap
 
         # 5) Pago
         medios_validos = {"EFECTIVO", "YAPE", "TARJETA", "TRANSFERENCIA"}
@@ -2724,15 +2720,12 @@ from django.contrib.auth.decorators import login_required
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR","TALLER")
-
 def actualizar_estado_orden(request, ticket_id):
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "POST requerido"}, status=400)
 
-    ot = OrdenTrabajo.objects.select_related("ticket", "ticket__cliente").get(ticket__id=ticket_id)
+    ot = OrdenTrabajo.objects.select_related("ticket").get(ticket__id=ticket_id)
     nuevo = (request.POST.get("estado") or "").strip()
-
-    estado_anterior = ot.estado
 
     validos = {k for k, _ in OrdenTrabajo.ESTADOS}
     if nuevo not in validos:
@@ -2741,25 +2734,15 @@ def actualizar_estado_orden(request, ticket_id):
     ot.estado = nuevo
 
     now = timezone.now()
-
-    if nuevo == "LAB_PEDIDO":
-        ot.ts_lab_pedido = ot.ts_lab_pedido or now
-    if nuevo == "BISELADO":
-        ot.ts_biselado = ot.ts_biselado or now
-    if nuevo == "UV":
-        ot.ts_uv = ot.ts_uv or now
-    if nuevo == "LISTO":
-        ot.ts_listo = ot.ts_listo or now
-    if nuevo == "ENTREGADO":
-        ot.ts_entregado = ot.ts_entregado or now
+    # setear timestamp del hito
+    if nuevo == "LAB_PEDIDO": ot.ts_lab_pedido = ot.ts_lab_pedido or now
+    if nuevo == "BISELADO": ot.ts_biselado = ot.ts_biselado or now
+    if nuevo == "UV": ot.ts_uv = ot.ts_uv or now
+    if nuevo == "LISTO": ot.ts_listo = ot.ts_listo or now
+    if nuevo == "ENTREGADO": ot.ts_entregado = ot.ts_entregado or now
 
     ot.save()
-
-    if estado_anterior != "LISTO" and ot.estado == "LISTO":
-        enviar_aviso_lentes_listos(ot)
-
     return JsonResponse({"ok": True})
-
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "TALLER", "CAJA","VENDEDOR")
@@ -2794,9 +2777,6 @@ def operador_cambiar_estado(request, ticket_id):
     ot = get_object_or_404(OrdenTrabajo, ticket__id=ticket_id)
     nuevo = (request.POST.get("estado") or "").strip()
 
-    # GUARDAR ESTADO ANTERIOR
-    estado_anterior = ot.estado
-
     validos = {k for k, _ in OrdenTrabajo.ESTADOS}
     if nuevo not in validos:
         return redirect("operador_ordenes")
@@ -2820,11 +2800,6 @@ def operador_cambiar_estado(request, ticket_id):
         ot.ts_entregado = ot.ts_entregado or now
 
     ot.save()
-
-    # ENVIAR WHATSAPP SOLO LA PRIMERA VEZ QUE PASE A LISTO
-    if estado_anterior != "LISTO" and ot.estado == "LISTO":
-        enviar_aviso_lentes_listos(ot)
-
     return redirect("operador_ordenes")
 
 
