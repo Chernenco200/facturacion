@@ -55,3 +55,49 @@ def avisar_asesor(mensaje):
         return False
 
     return enviar_whatsapp_texto(numero_asesor, mensaje)
+
+
+def enviar_agradecimiento_ticket(ticket):
+    cliente = ticket.cliente
+
+    if not cliente.telefono:
+        print("Cliente sin teléfono. No se envía WhatsApp.")
+        return False
+
+    mensaje = (
+        f"Hola {cliente.nombre} 😊\n\n"
+        f"Gracias por tu compra en Óptica IC.\n\n"
+        f"Tu ticket es: N° {ticket.numero}\n\n"
+        f"Tu pedido pasará por estas etapas:\n"
+        f"1️⃣ Pedido enviado a laboratorio\n"
+        f"2️⃣ En proceso de laboratorio\n"
+        f"3️⃣ Biselado\n"
+        f"4️⃣ Revisión final\n"
+        f"5️⃣ Listo para recoger ✅\n\n"
+        f"Puedes consultar el estado de tu ticket escribiendo:\n"
+        f"TICKET {str(ticket.numero).zfill(6)}\n\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
+    )
+
+    return enviar_whatsapp_texto(cliente.telefono, mensaje)
+
+
+def enviar_aviso_lentes_listos(orden):
+    ticket = orden.ticket
+    cliente = ticket.cliente
+
+    if not cliente.telefono:
+        print("Cliente sin teléfono. No se envía WhatsApp.")
+        return False
+
+    mensaje = (
+        f"Hola {cliente.nombre} 😊\n\n"
+        f"Tus lentes del ticket N° {ticket.numero} ya están listos ✅\n\n"
+        f"Puedes acercarte a recogerlos en nuestra tienda.\n\n"
+        f"Gracias por confiar en Óptica IC.\n\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
+    )
+
+    return enviar_whatsapp_texto(cliente.telefono, mensaje)
