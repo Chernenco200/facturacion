@@ -761,10 +761,10 @@ def guardar_ticket(request):
         )
 
         # ✅ Enviar WhatsApp de agradecimiento
-        try:
-            enviar_agradecimiento_ticket(ticket)
-        except Exception as e:
-            print("ERROR ENVIANDO AGRADECIMIENTO WHATSAPP:", e)
+        #try:
+        #    enviar_agradecimiento_ticket(ticket)
+        #except Exception as e:
+        #    print("ERROR ENVIANDO AGRADECIMIENTO WHATSAPP:", e)
 
 
         # 5) Pago
