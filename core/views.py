@@ -63,8 +63,8 @@ from core.kardex import recalcular_kardex_producto
 from accounts.forms import LoginForm
 from django.contrib.auth import login
 
-from whatsapp.utils import enviar_agradecimiento_ticket
-from whatsapp.utils import enviar_aviso_lentes_listos
+#from whatsapp.utils import enviar_agradecimiento_ticket
+#from whatsapp.utils import enviar_aviso_lentes_listos
 
 
 
@@ -2760,11 +2760,11 @@ def actualizar_estado_orden(request, ticket_id):
 
     ot.save()
 
-    if estado_anterior != "LISTO" and ot.estado == "LISTO":
-        try:
-            enviar_aviso_lentes_listos(ot)
-        except Exception as e:
-            print("ERROR ENVIANDO WHATSAPP LISTO:", e)
+    #if estado_anterior != "LISTO" and ot.estado == "LISTO":
+    #    try:
+    #        enviar_aviso_lentes_listos(ot)
+    #    except Exception as e:
+    #        print("ERROR ENVIANDO WHATSAPP LISTO:", e)
 
     return JsonResponse({"ok": True})
     
@@ -2825,11 +2825,11 @@ def operador_cambiar_estado(request, ticket_id):
 
     ot.save()
 
-    if estado_anterior != "LISTO" and ot.estado == "LISTO":
-        try:
-            enviar_aviso_lentes_listos(ot)
-        except Exception as e:
-            print("ERROR ENVIANDO WHATSAPP LISTO:", e)
+    #if estado_anterior != "LISTO" and ot.estado == "LISTO":
+    #    try:
+    #        enviar_aviso_lentes_listos(ot)
+    #    except Exception as e:
+    #        print("ERROR ENVIANDO WHATSAPP LISTO:", e)
 
     return redirect("operador_ordenes")
 
