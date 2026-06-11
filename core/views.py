@@ -63,6 +63,8 @@ from core.kardex import recalcular_kardex_producto
 from accounts.forms import LoginForm
 from django.contrib.auth import login
 
+from whatsapp.utils import enviar_agradecimiento_ticket
+
 
 
 def index(request):
@@ -756,6 +758,13 @@ def guardar_ticket(request):
             estado="LAB_PEDIDO",
             ts_lab_pedido=timezone.now()
         )
+
+        # ✅ Enviar WhatsApp de agradecimiento
+        try:
+            enviar_agradecimiento_ticket(ticket)
+        except Exception as e:
+            print("ERROR ENVIANDO AGRADECIMIENTO WHATSAPP:", e)
+
 
         # 5) Pago
         medios_validos = {"EFECTIVO", "YAPE", "TARJETA", "TRANSFERENCIA"}
