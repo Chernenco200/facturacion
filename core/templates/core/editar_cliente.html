@@ -11,22 +11,40 @@
 
     <form method="post">
         {% csrf_token %}
+
+        {{ form.errors }}
+
         <div class="row">
             <div class="col-md-3">
                 <label class="form-label">DNI</label>
                 {{ form.DNI }}
             </div>
+
             <div class="col-md-5">
                 <label class="form-label">Nombre</label>
                 {{ form.nombre }}
             </div>
+
             <div class="col-md-2">
                 <label class="form-label">Teléfono</label>
                 {{ form.telefono }}
             </div>
+
             <div class="col-md-2">
                 <label class="form-label">Edad</label>
                 {{ form.Edad }}
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-md-3">
+                <label class="form-label">Fecha registro</label>
+                {{ form.fecha_registro }}
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Optómetra</label>
+                {{ form.Optometra }}
             </div>
         </div>
 

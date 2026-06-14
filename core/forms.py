@@ -21,12 +21,18 @@ class ProductoForm(forms.ModelForm):
 class ClienteForm(forms.ModelForm):
     class Meta:
         model = Cliente
-        fields = ['DNI', 'nombre', 'telefono', 'Edad', 'fecha_registro','Optometra']
+        fields = ['DNI', 'nombre', 'telefono', 'Edad', 'fecha_registro', 'Optometra']
 
         widgets = {
+            "DNI": forms.TextInput(attrs={"class": "form-control"}),
+            "nombre": forms.TextInput(attrs={"class": "form-control"}),
+            "telefono": forms.TextInput(attrs={"class": "form-control"}),
+            "Edad": forms.NumberInput(attrs={"class": "form-control"}),
             "fecha_registro": forms.DateInput(
-                attrs={"type": "date", "class": "form-control form-control-sm"}
-            )
+                attrs={"type": "date", "class": "form-control"},
+                format="%Y-%m-%d"
+            ),
+            "Optometra": forms.TextInput(attrs={"class": "form-control"}),
         }
 
 
@@ -104,7 +110,7 @@ class ProveedorForm(forms.ModelForm):
 class CompraForm(forms.ModelForm):
     class Meta:
         model = Compra
-        fields = ['proveedor', 'fecha', 'tipo_comprobante', 'serie', 'numero', 'total']
+        fields = ['proveedor', 'fecha', 'tipo_comprobante', 'serie', 'numero']
         widgets = {
             'fecha': forms.DateInput(attrs={'type': 'date'})
         }

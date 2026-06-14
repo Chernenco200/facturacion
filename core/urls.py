@@ -111,8 +111,8 @@ urlpatterns = [
     
     
     path("caja/movimiento/<int:id>/eliminar/", views.eliminar_movimiento, name="eliminar_movimiento"),
-
-
+    
+    path("productos/buscar-codigo/", views.buscar_producto_codigo, name="buscar_producto_codigo"),
 
 
 

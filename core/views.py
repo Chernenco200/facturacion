@@ -779,6 +779,10 @@ def guardar_ticket(request):
         # 6) Detalles + stock + kardex
         productos_afectados = set()
 
+        print("===== DETALLES RECIBIDOS =====")
+        print(data.get("detalles", []))
+        print("TOTAL FILAS:", len(data.get("detalles", [])))
+        print("==============================")
         for det in data.get("detalles", []):
             descripcion = det.get("descripcion", "")
             cantidad = int(det.get("cantidad", 0) or 0)
@@ -800,14 +804,9 @@ def guardar_ticket(request):
             )
 
             if producto:
-                if (producto.stock or 0) < cantidad:
-                    raise ValueError(f"Stock insuficiente para {producto.descripcion}")
-                producto.stock = (producto.stock or 0) - cantidad
-                producto.save(update_fields=["stock"])
                 productos_afectados.add(producto.id)
 
-        for pid in productos_afectados:
-            recalcular_kardex_producto(Producto.objects.get(id=pid))
+
 
     return JsonResponse({
         "ok": True,
@@ -1191,7 +1190,7 @@ def registrar_compra(request):
         compra_form = CompraForm(request.POST)
         if compra_form.is_valid():
             compra = compra_form.save(commit=False)
-            compra.total = 0  # lo calculamos
+            compra.total = float(request.POST.get("total") or 0)
             compra.save()
 
             cods            = request.POST.getlist('cod[]')
@@ -1201,9 +1200,7 @@ def registrar_compra(request):
             precios_venta   = request.POST.getlist('precio_venta[]')
             cantidades      = request.POST.getlist('cantidad[]')
             subtotales      = request.POST.getlist('subtotal[]')
-
-            total_compra = 0
-
+            
             productos_afectados = set()
 
             for i in range(len(cods)):
@@ -1233,8 +1230,7 @@ def registrar_compra(request):
                     producto.descripcion = descripcion or producto.descripcion
                     producto.precio_compra = pc
                     producto.precio_venta = pv
-                    producto.stock = (producto.stock or 0) + cant
-                    producto.save()
+                    producto.save(update_fields=["descripcion", "precio_compra", "precio_venta"])
                 else:
                     # si es nuevo, ya se guardó con el stock inicial
                     producto.save()
@@ -1251,15 +1247,15 @@ def registrar_compra(request):
                     subtotal=sub
                 )
 
-                total_compra += sub
+#                total_compra += sub
 
-            # 🔹 4. Actualizar total de la compra
-            compra.total = total_compra
-            compra.save()
+#            # 🔹 4. Actualizar total de la compra
+#            compra.total = total_compra
+#            compra.save()
 
             for pid in productos_afectados:
                 producto = Producto.objects.get(id=pid)
-                recalcular_kardex_producto(producto)
+                #recalcular_kardex_producto(producto)
 
             return redirect('lista_compras')  # o donde quieras
 
@@ -1508,16 +1504,23 @@ def crear_cliente(request):
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR")
 def editar_cliente(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
+
     if request.method == 'POST':
         form = ClienteForm(request.POST, instance=cliente)
+
         if form.is_valid():
             form.save()
             messages.success(request, 'Cliente actualizado correctamente.')
             return redirect('lista_clientes')
+        else:
+            print(form.errors)
+
     else:
         form = ClienteForm(instance=cliente)
+
     return render(request, 'core/editar_cliente.html', {
         'form': form,
+        'cliente': cliente,
         'titulo': f'Editar Cliente: {cliente.nombre}',
     })
 
@@ -2280,71 +2283,6 @@ def kardex_detalle(request, producto_id):
         "movimientos": movimientos,
     })
 
-@transaction.atomic
-def recalcular_kardex_producto2(producto: Producto):
-    KardexMovimiento.objects.filter(producto=producto).delete()
-
-    stock = Decimal("0")
-    costo_prom = Decimal("0")
-
-    eventos = []
-
-    # ENTRADAS (compras)
-    for dc in DetalleCompra.objects.filter(producto=producto).select_related("compra"):
-        # Compra.fecha es DateField -> lo convertimos a datetime
-        fecha_dt = datetime.combine(dc.compra.fecha, time(0, 0))
-        eventos.append(("IN", fecha_dt, Decimal(dc.cantidad), Decimal(dc.precio_compra), dc.compra, None))
-
-    # SALIDAS (ventas)
-    for dv in DetalleTicketVenta.objects.filter(producto=producto).select_related("ticket_numero"):
-        t = dv.ticket_numero
-        fecha_dt = datetime.combine(t.fecha_emision, t.hora_emision)
-        eventos.append(("OUT", fecha_dt, Decimal(dv.cantidad), None, None, t))
-
-    eventos.sort(key=lambda x: x[1])
-
-    for tipo, fecha_dt, cantidad, costo_in, compra_ref, ticket_ref in eventos:
-        if tipo == "IN":
-            nuevo_stock = stock + cantidad
-            nuevo_costo_prom = ((stock * costo_prom) + (cantidad * costo_in)) / nuevo_stock if nuevo_stock > 0 else Decimal("0")
-
-            KardexMovimiento.objects.create(
-                producto=producto,
-                fecha=fecha_dt,
-                tipo="IN",
-                cantidad=cantidad,
-                costo_unitario=costo_in,
-                costo_total=cantidad * costo_in,
-                stock_anterior=stock,
-                stock_actual=nuevo_stock,
-                costo_promedio=nuevo_costo_prom,
-                compra=compra_ref
-            )
-
-            stock = nuevo_stock
-            costo_prom = nuevo_costo_prom
-
-        else:
-            nuevo_stock = stock - cantidad
-
-            KardexMovimiento.objects.create(
-                producto=producto,
-                fecha=fecha_dt,
-                tipo="OUT",
-                cantidad=cantidad,
-                costo_unitario=costo_prom,
-                costo_total=cantidad * costo_prom,
-                stock_anterior=stock,
-                stock_actual=nuevo_stock,
-                costo_promedio=costo_prom,
-                ticket=ticket_ref
-            )
-
-            stock = nuevo_stock
-
-    # opcional: sincronizar stock real al producto
-    producto.stock = int(stock)
-    producto.save()
 
 from .caja import get_or_create_caja
 
@@ -2909,6 +2847,24 @@ def eliminar_movimiento(request, id):
 
     # vuelve a donde estabas
     return redirect("caja_hoy")
+
+
+def buscar_producto_codigo(request):
+    q = request.GET.get("q", "").strip()
+
+    productos = Producto.objects.filter(cod__icontains=q)[:10]
+
+    data = [
+        {
+            "cod": p.cod,
+            "descripcion": p.descripcion,
+            "precio_compra": float(p.precio_compra or 0),
+            "precio_venta": float(p.precio_venta or 0),
+        }
+        for p in productos
+    ]
+
+    return JsonResponse(data, safe=False)
 
 
 
