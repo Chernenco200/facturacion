@@ -4,14 +4,14 @@ from .models import Producto
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ("cod", "descripcion", "tipo", "precio_venta", "stock", "activo", "thumb_f", "thumb_d", "thumb_l")
+    list_display = ("cod", "descripcion", "tipo", "precio_venta", "activo", "thumb_f", "thumb_d", "thumb_l")
     search_fields = ("cod", "descripcion")
     list_filter = ("tipo", "activo")
     readonly_fields = ("preview_f", "preview_d", "preview_l")
 
     fieldsets = (
         ("Datos del producto", {
-            "fields": ("cod", "categoria", "forma", "material", "color", "activo", "marca", "descripcion", "tipo", "precio_venta", "stock", "talla_luna", "puente", "largo", "ancho", "altura", "talla", "condicion", "uso" )
+            "fields": ("cod", "categoria", "forma", "material", "color", "activo", "marca", "descripcion", "tipo", "precio_venta", "talla_luna", "puente", "largo", "ancho", "altura", "talla", "condicion", "uso" )
         }),
         ("Fotos", {
             "fields": ("imagenF", "preview_f", "imagenD", "preview_d", "imagenL", "preview_l")
