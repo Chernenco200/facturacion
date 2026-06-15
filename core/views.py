@@ -67,6 +67,13 @@ from whatsapp.utils import enviar_agradecimiento_ticket
 from whatsapp.utils import enviar_aviso_lentes_listos
 
 
+from datetime import timedelta
+
+from whatsapp.utils import (
+    enviar_encuesta_7_dias,
+    enviar_control_menor_6_meses,
+    enviar_renovacion_anual,
+)
 
 def index(request):
     # Si ya inició sesión, manda al dashboard (o a donde quieras)
@@ -2870,4 +2877,96 @@ def buscar_producto_codigo(request):
     return JsonResponse(data, safe=False)
 
 
+@login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+def seguimiento_whatsapp(request):
+    hoy = timezone.localdate()
 
+    encuesta_desde = hoy - timedelta(days=7)
+    control_desde = hoy - timedelta(days=180)
+    renovacion_desde = hoy - timedelta(days=365)
+
+    encuestas = OrdenTrabajo.objects.select_related(
+        "ticket", "ticket__cliente"
+    ).filter(
+        estado="ENTREGADO",
+        ts_entregado__date__lte=encuesta_desde,
+        encuesta_enviada=False,
+        ticket__cliente__telefono__isnull=False,
+    ).order_by("-ts_entregado")
+
+    controles_menores = OrdenTrabajo.objects.select_related(
+        "ticket", "ticket__cliente"
+    ).filter(
+        estado="ENTREGADO",
+        ts_entregado__date__lte=control_desde,
+        control_menor_enviado=False,
+        ticket__cliente__Edad__lt=18,
+        ticket__cliente__telefono__isnull=False,
+    ).order_by("-ts_entregado")
+
+    renovaciones = OrdenTrabajo.objects.select_related(
+        "ticket", "ticket__cliente"
+    ).filter(
+        estado="ENTREGADO",
+        ts_entregado__date__lte=renovacion_desde,
+        renovacion_enviada=False,
+        ticket__cliente__telefono__isnull=False,
+    ).order_by("-ts_entregado")
+
+    return render(request, "core/seguimiento_whatsapp.html", {
+        "encuestas": encuestas,
+        "controles_menores": controles_menores,
+        "renovaciones": renovaciones,
+    })
+
+
+@login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+def enviar_encuesta_manual(request, orden_id):
+    orden = get_object_or_404(OrdenTrabajo, id=orden_id)
+
+    if request.method == "POST":
+        try:
+            enviar_encuesta_7_dias(orden)
+            orden.encuesta_enviada = True
+            orden.save(update_fields=["encuesta_enviada"])
+            messages.success(request, "Encuesta enviada correctamente.")
+        except Exception as e:
+            messages.error(request, f"Error enviando encuesta: {e}")
+
+    return redirect("seguimiento_whatsapp")
+
+
+@login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+def enviar_control_menor_manual(request, orden_id):
+    orden = get_object_or_404(OrdenTrabajo, id=orden_id)
+
+    if request.method == "POST":
+        try:
+            enviar_control_menor_6_meses(orden)
+            orden.control_menor_enviado = True
+            orden.save(update_fields=["control_menor_enviado"])
+            messages.success(request, "Control de menor enviado correctamente.")
+        except Exception as e:
+            messages.error(request, f"Error enviando control: {e}")
+
+    return redirect("seguimiento_whatsapp")
+
+
+@login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+def enviar_renovacion_manual(request, orden_id):
+    orden = get_object_or_404(OrdenTrabajo, id=orden_id)
+
+    if request.method == "POST":
+        try:
+            enviar_renovacion_anual(orden)
+            orden.renovacion_enviada = True
+            orden.save(update_fields=["renovacion_enviada"])
+            messages.success(request, "Recordatorio de renovación enviado correctamente.")
+        except Exception as e:
+            messages.error(request, f"Error enviando renovación: {e}")
+
+    return redirect("seguimiento_whatsapp")

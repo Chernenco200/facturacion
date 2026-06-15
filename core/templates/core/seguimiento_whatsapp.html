@@ -1,0 +1,125 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h3>Seguimiento WhatsApp</h3>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-info">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <hr>
+
+    <h4>Encuestas 7 días</h4>
+
+    <table class="table table-sm table-bordered">
+        <thead>
+            <tr>
+                <th>Ticket</th>
+                <th>Cliente</th>
+                <th>Teléfono</th>
+                <th>Entregado</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for orden in encuestas %}
+            <tr>
+                <td>{{ orden.ticket.numero|stringformat:"06d" }}</td>
+                <td>{{ orden.ticket.cliente.nombre }}</td>
+                <td>{{ orden.ticket.cliente.telefono }}</td>
+                <td>{{ orden.ts_entregado|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <form method="post" action="{% url 'enviar_encuesta_manual' orden.id %}">
+                        {% csrf_token %}
+                        <button class="btn btn-primary btn-sm">Enviar encuesta</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">No hay encuestas pendientes.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <hr>
+
+    <h4>Control menores 6 meses</h4>
+
+    <table class="table table-sm table-bordered">
+        <thead>
+            <tr>
+                <th>Ticket</th>
+                <th>Cliente</th>
+                <th>Edad</th>
+                <th>Teléfono</th>
+                <th>Entregado</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for orden in controles_menores %}
+            <tr>
+                <td>{{ orden.ticket.numero|stringformat:"06d" }}</td>
+                <td>{{ orden.ticket.cliente.nombre }}</td>
+                <td>{{ orden.ticket.cliente.Edad }}</td>
+                <td>{{ orden.ticket.cliente.telefono }}</td>
+                <td>{{ orden.ts_entregado|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <form method="post" action="{% url 'enviar_control_menor_manual' orden.id %}">
+                        {% csrf_token %}
+                        <button class="btn btn-warning btn-sm">Enviar control</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6">No hay controles pendientes.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <hr>
+
+    <h4>Renovación anual</h4>
+
+    <table class="table table-sm table-bordered">
+        <thead>
+            <tr>
+                <th>Ticket</th>
+                <th>Cliente</th>
+                <th>Teléfono</th>
+                <th>Entregado</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for orden in renovaciones %}
+            <tr>
+                <td>{{ orden.ticket.numero|stringformat:"06d" }}</td>
+                <td>{{ orden.ticket.cliente.nombre }}</td>
+                <td>{{ orden.ticket.cliente.telefono }}</td>
+                <td>{{ orden.ts_entregado|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <form method="post" action="{% url 'enviar_renovacion_manual' orden.id %}">
+                        {% csrf_token %}
+                        <button class="btn btn-success btn-sm">Enviar renovación</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">No hay renovaciones pendientes.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+{% endblock %}

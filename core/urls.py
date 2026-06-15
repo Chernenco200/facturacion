@@ -114,8 +114,16 @@ urlpatterns = [
     
     path("productos/buscar-codigo/", views.buscar_producto_codigo, name="buscar_producto_codigo"),
 
+    #path("suscribir-waba/", views.suscribir_waba, name="suscribir_waba"),
+
+    path("seguimiento-whatsapp/", views.seguimiento_whatsapp, name="seguimiento_whatsapp"),
+
+    path("seguimiento-whatsapp/encuesta/<int:orden_id>/", views.enviar_encuesta_manual, name="enviar_encuesta_manual"),
+
+    path("seguimiento-whatsapp/control-menor/<int:orden_id>/", views.enviar_control_menor_manual, name="enviar_control_menor_manual"),
+
+    path("seguimiento-whatsapp/renovacion/<int:orden_id>/", views.enviar_renovacion_manual, name="enviar_renovacion_manual"),
 
 
-    path("suscribir-waba/", views.suscribir_waba, name="suscribir_waba"),
 
 ]

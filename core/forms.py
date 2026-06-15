@@ -32,7 +32,7 @@ class ClienteForm(forms.ModelForm):
                 attrs={"type": "date", "class": "form-control"},
                 format="%Y-%m-%d"
             ),
-            "Optometra": forms.TextInput(attrs={"class": "form-control"}),
+            "Optometra": forms.Select(attrs={"class": "form-control"}),
         }
 
 

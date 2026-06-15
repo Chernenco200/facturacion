@@ -100,3 +100,63 @@ def enviar_aviso_lentes_listos(orden):
     )
 
     return enviar_whatsapp_texto(cliente.telefono, mensaje)
+
+
+def enviar_encuesta_7_dias(orden):
+    ticket = orden.ticket
+    cliente = ticket.cliente
+
+    if not cliente or not cliente.telefono:
+        print("Cliente sin teléfono")
+        return False
+
+    mensaje = (
+        f"Hola {cliente.nombre} 😊\n\n"
+        f"Queremos saber cómo fue tu experiencia en Óptica IC.\n\n"
+        f"Del 1 al 5, ¿cómo calificarías nuestra atención?\n\n"
+        f"Ticket N° {str(ticket.numero).zfill(6)}\n\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
+    )
+
+    return enviar_whatsapp_texto(cliente.telefono, mensaje)
+
+
+def enviar_control_menor_6_meses(orden):
+    ticket = orden.ticket
+    cliente = ticket.cliente
+
+    if not cliente or not cliente.telefono:
+        print("Cliente sin teléfono")
+        return False
+
+    mensaje = (
+        f"Hola {cliente.nombre} 😊\n\n"
+        f"Te recordamos que hoy se cumplen 6 meses desde que adquiriste tus lentes.\n\n"
+        f"Los menores deben realizar controles visuales periódicos según lo que indican los médicos.\n\n"
+        f"Puedes escribirnos para separar una cita de control.\n\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
+    )
+
+    return enviar_whatsapp_texto(cliente.telefono, mensaje)
+
+
+def enviar_renovacion_anual(orden):
+    ticket = orden.ticket
+    cliente = ticket.cliente
+
+    if not cliente or not cliente.telefono:
+        print("Cliente sin teléfono")
+        return False
+
+    mensaje = (
+        f"Hola {cliente.nombre} 😊\n\n"
+        f"Ha pasado un año desde tu compra en Óptica IC.\n\n"
+        f"Te recomendamos revisar tu medida y evaluar la renovación de tus lentes.\n\n"
+        f"Puedes escribirnos para separar una cita.\n\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
+    )
+
+    return enviar_whatsapp_texto(cliente.telefono, mensaje)
