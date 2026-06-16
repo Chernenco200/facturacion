@@ -157,6 +157,7 @@ class Producto(models.Model):
     descripcion = models.CharField(max_length=200, null=True, blank=True)              # ej. LUNA BLANCA 1.56
     precio_compra = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     precio_venta = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    precio_promo = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     stock = models.IntegerField(default=0, blank=True, null=True)                 # stock actual
     talla = models.CharField(max_length=50, choices=TALLA_CHOICES, null=True, blank=True)       # si aplica
     activo = models.BooleanField(default=True, blank=True, null=True)             # por si luego das de baja productos   
