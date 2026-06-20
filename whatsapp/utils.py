@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import ConversacionWhatsApp
 
+from django.conf import settings
 
 def normalizar_numero(numero):
     if not numero:
@@ -50,6 +51,47 @@ def enviar_whatsapp_texto(numero, mensaje):
     print("WHATSAPP RESPUESTA:", response.text)
 
     return response.status_code in [200, 201]
+
+def enviar_whatsapp_template(numero, template_name, parametros):
+    url = f"https://graph.facebook.com/v23.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    data = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {
+                "code": "es_PE"
+            },
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": str(p)
+                        }
+                        for p in parametros
+                    ]
+                }
+            ]
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+
+    print("STATUS TEMPLATE:", response.status_code)
+    print("RESPUESTA TEMPLATE:", response.text)
+
+    return response.status_code == 200
+
+
 
 def avisar_asesor(mensaje):
     numero_asesor = os.environ.get("NUMERO_ASESOR_WHATSAPP")
@@ -262,4 +304,13 @@ def enviar_aviso_lentes_listos(orden):
         f"Innovación y Calidad"
     )
 
-    return enviar_whatsapp_texto(cliente.telefono, mensaje)
+    if cliente_esta_en_ventana_servicio(cliente.telefono):
+        return enviar_whatsapp_texto(cliente.telefono, mensaje)
+
+    return enviar_whatsapp_template(
+        numero=cliente.telefono,
+        template_name="lentes_listos",
+        parametros=[
+            cliente.nombre,
+        ],
+    )
