@@ -149,7 +149,7 @@ def enviar_agradecimiento_ticket(ticket):
 #    return enviar_whatsapp_texto(cliente.telefono, mensaje)
 
 
-
+5
 
 
 def cliente_esta_en_ventana_servicio(telefono):
@@ -250,26 +250,16 @@ def enviar_aviso_lentes_listos(orden):
     cliente = ticket.cliente
 
     if not cliente.telefono:
+        print("Cliente sin teléfono. No se envía WhatsApp.")
         return False
 
-    # Si el cliente escribió en las últimas 24 h
-    if cliente_esta_en_ventana_servicio(cliente.telefono):
-        mensaje = (
-            f"Hola {cliente.nombre} 😊\n\n"
-            f"Tus lentes del ticket N° {ticket.numero} ya están listos ✅\n\n"
-            f"Puedes acercarte a recogerlos en nuestra tienda.\n\n"
-            f"Gracias por confiar en Óptica IC.\n\n"
-            f"Óptica IC\n"
-            f"Innovación y Calidad"
-        )
-
-        return enviar_whatsapp_texto(cliente.telefono, mensaje)
-
-    # Fuera de las 24 h → plantilla
-    return enviar_whatsapp_template(
-        numero=cliente.telefono,
-        template_name="lentes_listos",
-        parametros=[
-            cliente.nombre,
-        ]
+    mensaje = (
+        f"Hola {cliente.nombre} 😊\n\n"
+        f"Tus lentes del ticket N° {ticket.numero} ya están listos ✅\n\n"
+        f"Puedes acercarte a recogerlos en nuestra tienda.\n\n"
+        f"Gracias por confiar en Óptica IC.\n\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
     )
+
+    return enviar_whatsapp_texto(cliente.telefono, mensaje)
