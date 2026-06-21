@@ -210,7 +210,7 @@ def enviar_agradecimiento_ticket(ticket):
 
     return enviar_whatsapp_template(
         numero=cliente.telefono,
-        template_name="encuesta_7_dias",
+        template_name="agradecimiento",
         parametros=[
             cliente.nombre,
             str(ticket.numero).zfill(6),
@@ -222,6 +222,7 @@ def enviar_encuesta_7_dias(orden):
     cliente = ticket.cliente
 
     if not cliente or not cliente.telefono:
+        print("Cliente sin teléfono. No se envía WhatsApp.")
         return False
 
     mensaje = (
