@@ -53,10 +53,19 @@ def enviar_whatsapp_texto(numero, mensaje):
     return response.status_code in [200, 201]
 
 def enviar_whatsapp_template(numero, template_name, parametros):
-    url = f"https://graph.facebook.com/v23.0/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+    phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
+
+    numero = normalizar_numero(numero)
+
+    if not numero:
+        print("ERROR: número vacío")
+        return False
+
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
 
     headers = {
-        "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
 
@@ -73,10 +82,7 @@ def enviar_whatsapp_template(numero, template_name, parametros):
                 {
                     "type": "body",
                     "parameters": [
-                        {
-                            "type": "text",
-                            "text": str(p)
-                        }
+                        {"type": "text", "text": str(p)}
                         for p in parametros
                     ]
                 }
@@ -89,9 +95,7 @@ def enviar_whatsapp_template(numero, template_name, parametros):
     print("STATUS TEMPLATE:", response.status_code)
     print("RESPUESTA TEMPLATE:", response.text)
 
-    return response.status_code == 200
-
-
+    return response.status_code in [200, 201]
 
 def avisar_asesor(mensaje):
     numero_asesor = os.environ.get("NUMERO_ASESOR_WHATSAPP")
@@ -191,19 +195,15 @@ def enviar_agradecimiento_ticket(ticket):
 #    return enviar_whatsapp_texto(cliente.telefono, mensaje)
 
 
-5
-
-
 def cliente_esta_en_ventana_servicio(telefono):
+    telefono = normalizar_numero(telefono)
+
     try:
         conversacion = ConversacionWhatsApp.objects.get(numero=telefono)
-
-        return conversacion.actualizado >= (
-            timezone.now() - timedelta(hours=24)
-        )
-
+        return conversacion.actualizado >= timezone.now() - timedelta(hours=24)
     except ConversacionWhatsApp.DoesNotExist:
         return False
+
 
 def enviar_encuesta_7_dias(orden):
     ticket = orden.ticket
