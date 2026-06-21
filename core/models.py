@@ -638,6 +638,8 @@ class OrdenTrabajo(models.Model):
     encuesta_enviada = models.BooleanField(default=False)
     control_menor_enviado = models.BooleanField(default=False)
     renovacion_enviada = models.BooleanField(default=False)
+    fecha_ultimo_control_menor = models.DateField(null=True, blank=True)
+    fecha_ultima_renovacion = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return f"OT Ticket {self.ticket.numero} - {self.estado}"

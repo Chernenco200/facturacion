@@ -69,6 +69,8 @@ from whatsapp.utils import enviar_aviso_lentes_listos
 
 from datetime import timedelta
 
+from dateutil.relativedelta import relativedelta
+
 from whatsapp.utils import (
     enviar_encuesta_7_dias,
     enviar_control_menor_6_meses,
@@ -2882,36 +2884,58 @@ def buscar_producto_codigo(request):
 def seguimiento_whatsapp(request):
     hoy = timezone.localdate()
 
-    encuesta_desde = hoy - timedelta(days=7)
-    control_desde = hoy - timedelta(days=180)
-    renovacion_desde = hoy - timedelta(days=365)
+    # Encuesta: entre 15 y 30 días
+    encuesta_desde = hoy - timedelta(days=30)
+    encuesta_hasta = hoy - timedelta(days=15)
+
+    # Control menores: entre 8 y 9 meses
+    control_desde = hoy - relativedelta(months=9)
+    control_hasta = hoy - relativedelta(months=8)
+
+    # Renovación adultos: entre 16 y 17 meses
+    renovacion_desde = hoy - relativedelta(months=17)
+    renovacion_hasta = hoy - relativedelta(months=16)
 
     encuestas = OrdenTrabajo.objects.select_related(
         "ticket", "ticket__cliente"
     ).filter(
         estado="ENTREGADO",
-        ts_entregado__date__lte=encuesta_desde,
+        ts_entregado__date__gte=encuesta_desde,
+        ts_entregado__date__lte=encuesta_hasta,
         encuesta_enviada=False,
         ticket__cliente__telefono__isnull=False,
+    ).exclude(
+        ticket__cliente__telefono=""
     ).order_by("-ts_entregado")
 
     controles_menores = OrdenTrabajo.objects.select_related(
         "ticket", "ticket__cliente"
     ).filter(
         estado="ENTREGADO",
-        ts_entregado__date__lte=control_desde,
-        control_menor_enviado=False,
+        ts_entregado__date__gte=control_desde,
+        ts_entregado__date__lte=control_hasta,
         ticket__cliente__Edad__lt=18,
         ticket__cliente__telefono__isnull=False,
+    ).filter(
+        Q(fecha_ultimo_control_menor__isnull=True) |
+        Q(fecha_ultimo_control_menor__lte=hoy - relativedelta(months=6))
+    ).exclude(
+        ticket__cliente__telefono=""
     ).order_by("-ts_entregado")
 
     renovaciones = OrdenTrabajo.objects.select_related(
         "ticket", "ticket__cliente"
     ).filter(
         estado="ENTREGADO",
-        ts_entregado__date__lte=renovacion_desde,
-        renovacion_enviada=False,
+        ts_entregado__date__gte=renovacion_desde,
+        ts_entregado__date__lte=renovacion_hasta,
+        ticket__cliente__Edad__gte=18,
         ticket__cliente__telefono__isnull=False,
+    ).filter(
+        Q(fecha_ultima_renovacion__isnull=True) |
+        Q(fecha_ultima_renovacion__lte=hoy - relativedelta(months=12))
+    ).exclude(
+        ticket__cliente__telefono=""
     ).order_by("-ts_entregado")
 
     return render(request, "core/seguimiento_whatsapp.html", {
@@ -2946,9 +2970,15 @@ def enviar_control_menor_manual(request, orden_id):
     if request.method == "POST":
         try:
             enviar_control_menor_6_meses(orden)
-            orden.control_menor_enviado = True
-            orden.save(update_fields=["control_menor_enviado"])
+
+            orden.fecha_ultimo_control_menor = timezone.localdate()
+
+            orden.save(update_fields=[
+                "fecha_ultimo_control_menor"
+            ])
+
             messages.success(request, "Control de menor enviado correctamente.")
+
         except Exception as e:
             messages.error(request, f"Error enviando control: {e}")
 
@@ -2963,10 +2993,19 @@ def enviar_renovacion_manual(request, orden_id):
     if request.method == "POST":
         try:
             enviar_renovacion_anual(orden)
-            orden.renovacion_enviada = True
-            orden.save(update_fields=["renovacion_enviada"])
+
+            orden.fecha_ultima_renovacion = timezone.localdate()
+
+            orden.save(update_fields=[
+                "fecha_ultima_renovacion"
+            ])
+
             messages.success(request, "Recordatorio de renovación enviado correctamente.")
+
         except Exception as e:
             messages.error(request, f"Error enviando renovación: {e}")
 
     return redirect("seguimiento_whatsapp")
+
+
+

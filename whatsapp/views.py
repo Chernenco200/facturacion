@@ -53,7 +53,7 @@ def responder_mensaje(numero, texto):
     # Si el cliente está en modo humano, el bot no responde
 # Si el cliente está en modo humano, solo vuelve al bot si saluda o pide menú
     if conversacion.modo == "HUMANO":
-        if texto in ["hola", "buenas","buenos dias", "buenos días" "menu", "menú", "0", "0️⃣"]:
+        if texto in ["hola","hi", "buenas","buenos dias", "buenos días", "buenas tardes", "buenas noches", "menu", "menú", "0", "0️⃣"]:
             conversacion.modo = "BOT"
             conversacion.estado = "INICIO"
             conversacion.save()
@@ -106,7 +106,7 @@ def responder_mensaje(numero, texto):
     # Saludo / menú
     if texto in [
         "hola",
-        "Hi",
+        "hi",
         "buenas",
         "buenos dias",
         "buenos días",
