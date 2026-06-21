@@ -107,29 +107,7 @@ def avisar_asesor(mensaje):
     return enviar_whatsapp_texto(numero_asesor, mensaje)
 
 
-def enviar_agradecimiento_ticket(ticket):
-    cliente = ticket.cliente
 
-    if not cliente.telefono:
-        print("Cliente sin teléfono. No se envía WhatsApp.")
-        return False
-
-    mensaje = (
-        f"Hola {cliente.nombre} 😊\n\n"
-        f"Gracias por tu compra en Óptica IC.\n\n"
-        f"Tu N° de ticket es: {ticket.numero}\n\n"
-        f"Tu pedido pasará por estas etapas:\n"
-        f"1️⃣ Pedido enviado al laboratorio\n"
-        f"2️⃣ En proceso de laboratorio\n"
-        f"3️⃣ En taller de Biselado\n"
-        f"4️⃣ Contro de calidad\n"
-        f"5️⃣ Listo para recoger ✅\n\n"
-        f"Puedes consultar el estado de tu ticket escribiendo Menú a este número y seleccionando la opción 2 :\n"
-        f"Óptica IC\n"
-        f"Innovación y Calidad"
-    )
-
-    return enviar_whatsapp_texto(cliente.telefono, mensaje)
 
 
 
@@ -204,6 +182,40 @@ def cliente_esta_en_ventana_servicio(telefono):
     except ConversacionWhatsApp.DoesNotExist:
         return False
 
+
+def enviar_agradecimiento_ticket(ticket):
+    cliente = ticket.cliente
+
+    if not cliente.telefono:
+        print("Cliente sin teléfono. No se envía WhatsApp.")
+        return False
+
+    mensaje = (
+        f"Hola {cliente.nombre} 😊\n\n"
+        f"Gracias por tu compra en Óptica IC.\n\n"
+        f"Tu N° de ticket es: {ticket.numero}\n\n"
+        f"Tu pedido pasará por estas etapas:\n"
+        f"1️⃣ Pedido enviado al laboratorio\n"
+        f"2️⃣ En proceso de laboratorio\n"
+        f"3️⃣ En taller de Biselado\n"
+        f"4️⃣ Contro de calidad\n"
+        f"5️⃣ Listo para recoger ✅\n\n"
+        f"Puedes consultar el estado de tu ticket escribiendo Menú a este número y seleccionando la opción 2 :\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
+    )
+
+    if cliente_esta_en_ventana_servicio(cliente.telefono):
+        return enviar_whatsapp_texto(cliente.telefono, mensaje)
+
+    return enviar_whatsapp_template(
+        numero=cliente.telefono,
+        template_name="encuesta_7_dias",
+        parametros=[
+            cliente.nombre,
+            str(ticket.numero).zfill(6),
+        ],
+    )
 
 def enviar_encuesta_7_dias(orden):
     ticket = orden.ticket
