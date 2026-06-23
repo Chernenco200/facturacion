@@ -2884,17 +2884,17 @@ def buscar_producto_codigo(request):
 def seguimiento_whatsapp(request):
     hoy = timezone.localdate()
 
-    # Encuesta: entre 15 y 30 días
+    # Encuesta: entre 7 y 30 días
     encuesta_desde = hoy - timedelta(days=30)
-    encuesta_hasta = hoy - timedelta(days=15)
+    encuesta_hasta = hoy - timedelta(days=7)
 
     # Control menores: entre 8 y 9 meses
     control_desde = hoy - relativedelta(months=9)
-    control_hasta = hoy - relativedelta(months=8)
+    control_hasta = hoy - relativedelta(months=6)
 
     # Renovación adultos: entre 16 y 17 meses
     renovacion_desde = hoy - relativedelta(months=17)
-    renovacion_hasta = hoy - relativedelta(months=16)
+    renovacion_hasta = hoy - relativedelta(months=12)
 
     encuestas = OrdenTrabajo.objects.select_related(
         "ticket", "ticket__cliente"

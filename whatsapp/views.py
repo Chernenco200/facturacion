@@ -125,7 +125,6 @@ def responder_mensaje(numero, texto):
             numero,
             "Nuestro horario de atención es de lunes a sábado de 9:00 a.m. a 7:45 p.m."
             " Domingos de 10:30 a.m. a 6:30 p.m."
-            " Hoy por el día del padre no atenderemos"
         )
         return
 
