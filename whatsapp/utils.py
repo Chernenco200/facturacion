@@ -221,6 +221,12 @@ def enviar_encuesta_7_dias(orden):
     ticket = orden.ticket
     cliente = ticket.cliente
 
+    print("=== ENVIAR ENCUESTA 7 DIAS ===")
+    print("ORDEN:", orden.id)
+    print("TICKET:", ticket.numero)
+    print("CLIENTE:", cliente.nombre if cliente else None)
+    print("TELEFONO:", cliente.telefono if cliente else None)
+
     if not cliente or not cliente.telefono:
         print("Cliente sin teléfono. No se envía WhatsApp.")
         return False
@@ -235,14 +241,16 @@ def enviar_encuesta_7_dias(orden):
     )
 
     if cliente_esta_en_ventana_servicio(cliente.telefono):
+        print("Cliente dentro de ventana 24h. Enviando texto libre.")
         return enviar_whatsapp_texto(cliente.telefono, mensaje)
+
+    print("Cliente fuera de ventana 24h. Enviando plantilla encuesta_7_dias.")
 
     return enviar_whatsapp_template(
         numero=cliente.telefono,
         template_name="encuesta_7_dias",
         parametros=[
             cliente.nombre,
-            str(ticket.numero).zfill(6),
         ],
     )
 

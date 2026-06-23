@@ -2947,16 +2947,23 @@ def seguimiento_whatsapp(request):
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def enviar_encuesta_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
     if request.method == "POST":
         try:
-            enviar_encuesta_7_dias(orden)
-            orden.encuesta_enviada = True
-            orden.save(update_fields=["encuesta_enviada"])
-            messages.success(request, "Encuesta enviada correctamente.")
+            enviado = enviar_encuesta_7_dias(orden)
+
+            if enviado:
+                orden.encuesta_enviada = True
+                orden.save(update_fields=["encuesta_enviada"])
+                messages.success(request, "Encuesta enviada correctamente.")
+            else:
+                messages.error(request, "No se pudo enviar la encuesta. Revisa teléfono, plantilla o ventana de WhatsApp.")
+
         except Exception as e:
+            print("ERROR ENVIANDO ENCUESTA:", e)
             messages.error(request, f"Error enviando encuesta: {e}")
 
     return redirect("seguimiento_whatsapp")
