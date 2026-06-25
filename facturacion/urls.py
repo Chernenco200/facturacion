@@ -21,10 +21,13 @@ from django.conf.urls.static import static  # ✅ necesario
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    path("", include("whatsapp.urls")),
+    path("accounts/", include("accounts.urls")),
     path('', include('core.urls')),
 
-    path("accounts/", include("accounts.urls")),
-    path("", include("whatsapp.urls")),
+
+
 ]
 
 # ✅ Agrega esta línea al final
