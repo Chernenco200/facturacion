@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+    .chat-container {
+        max-width: 900px;
+        margin: auto;
+        background: #f1f1f1;
+        padding: 20px;
+        border-radius: 10px;
+    }
+
+    .mensaje {
+        padding: 10px 15px;
+        margin: 8px 0;
+        border-radius: 12px;
+        max-width: 70%;
+        clear: both;
+    }
+
+    .entrante {
+        background: white;
+        float: left;
+    }
+
+    .saliente {
+        background: #dcf8c6;
+        float: right;
+    }
+
+    .hora {
+        font-size: 11px;
+        color: #666;
+        margin-top: 5px;
+    }
+
+    .clearfix {
+        clear: both;
+    }
+</style>
+
+<div class="chat-container">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3>Chat con {{ numero }}</h3>
+
+            {% if conversacion.modo == "HUMANO" %}
+                <span class="badge bg-warning text-dark">Modo humano activado</span>
+            {% else %}
+                <span class="badge bg-success">Bot activo</span>
+            {% endif %}
+        </div>
+
+        <div>
+            <a href="{% url 'bandeja_whatsapp' %}" class="btn btn-secondary btn-sm">
+                Volver
+            </a>
+
+            <a href="{% url 'cambiar_modo_whatsapp' numero %}" 
+               class="btn btn-primary btn-sm">
+                {% if conversacion.modo == "HUMANO" %}
+                    Activar bot
+                {% else %}
+                    Activar humano
+                {% endif %}
+            </a>
+        </div>
+    </div>
+
+    <hr>
+
+    <div>
+        {% for m in mensajes %}
+            <div class="mensaje {% if m.tipo == 'ENTRANTE' %}entrante{% else %}saliente{% endif %}">
+                
+                {% if m.archivo %}
+                    <p>
+                        <a href="{{ m.archivo.url }}" target="_blank">
+                            📎 Ver archivo
+                        </a>
+                    </p>
+                {% endif %}
+
+                {% if m.mensaje %}
+                    <div>{{ m.mensaje|linebreaksbr }}</div>
+                {% endif %}
+
+                <div class="hora">
+                    {{ m.creado|date:"d/m/Y H:i" }}
+                </div>
+            </div>
+
+            <div class="clearfix"></div>
+        {% empty %}
+            <p>No hay mensajes todavía.</p>
+        {% endfor %}
+    </div>
+
+    <hr>
+
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="mb-2">
+            <textarea 
+                name="mensaje" 
+                class="form-control" 
+                rows="3" 
+                placeholder="Escribe un mensaje..."></textarea>
+        </div>
+
+        <div class="mb-2">
+            <input 
+                type="file" 
+                name="archivo" 
+                class="form-control" 
+                accept="application/pdf">
+        </div>
+
+        <button type="submit" class="btn btn-success">
+            Enviar
+        </button>
+    </form>
+
+</div>
+
+{% endblock %}

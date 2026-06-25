@@ -7,8 +7,8 @@ import json
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import ConversacionWhatsApp, CitaWhatsApp
-from .utils import enviar_whatsapp_texto, avisar_asesor
+from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp
+from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf
 
 from core.models import TicketVenta, OrdenTrabajo
 
@@ -40,6 +40,20 @@ def responder_mensaje(numero, texto):
             "estado": "INICIO",
         }
     )
+
+    MensajeWhatsApp.objects.create(
+        numero=numero,
+        nombre=nombre_contacto,
+        tipo="ENTRANTE",
+        mensaje=texto,
+        wa_message_id=message_id,
+    )
+
+    if conversacion.modo == "BOT":
+        responder_mensaje(numero, texto)
+    else:
+        print("Conversación en modo HUMANO. El bot no responde.")
+
 
     # Volver al bot
     if texto in ["0", "0️⃣", "menu", "menú", "menu principal", "menú principal"]:
@@ -312,4 +326,131 @@ def consultar_estado_ticket(numero, texto_ticket):
     enviar_whatsapp_texto(numero, mensaje)
     
     return True
+
+
+@login_required
+def bandeja_whatsapp(request):
+    conversaciones = (
+        MensajeWhatsApp.objects
+        .values("numero")
+        .annotate(ultimo=Max("creado"))
+        .order_by("-ultimo")
+    )
+
+    lista = []
+
+    for conv in conversaciones:
+        numero = conv["numero"]
+
+        ultimo_msg = MensajeWhatsApp.objects.filter(
+            numero=numero
+        ).order_by("-creado").first()
+
+        conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+            numero=numero,
+            defaults={
+                "modo": "BOT",
+                "estado": "INICIO",
+            }
+        )
+
+        no_leidos = MensajeWhatsApp.objects.filter(
+            numero=numero,
+            tipo="ENTRANTE",
+            leido=False
+        ).count()
+
+        lista.append({
+            "numero": numero,
+            "nombre": ultimo_msg.nombre,
+            "ultimo_mensaje": ultimo_msg.mensaje,
+            "ultimo": ultimo_msg.creado,
+            "modo": conversacion.modo,
+            "no_leidos": no_leidos,
+        })
+
+    return render(request, "whatsapp/bandeja.html", {
+        "conversaciones": lista
+    })
+
+
+@login_required
+def chat_whatsapp(request, numero):
+    conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+        numero=numero,
+        defaults={
+            "modo": "BOT",
+            "estado": "INICIO",
+        }
+    )
+
+    mensajes = MensajeWhatsApp.objects.filter(numero=numero)
+
+    MensajeWhatsApp.objects.filter(
+        numero=numero,
+        tipo="ENTRANTE",
+        leido=False
+    ).update(leido=True)
+
+    if request.method == "POST":
+        texto = request.POST.get("mensaje", "").strip()
+        archivo = request.FILES.get("archivo")
+
+        if texto:
+            enviado = enviar_whatsapp_texto(numero, texto)
+
+            if enviado:
+                MensajeWhatsApp.objects.create(
+                    numero=numero,
+                    tipo="SALIENTE",
+                    mensaje=texto,
+                )
+
+        if archivo:
+            media_id = subir_media_whatsapp(archivo)
+
+            if media_id:
+                enviado_pdf = enviar_whatsapp_pdf(
+                    numero=numero,
+                    media_id=media_id,
+                    filename=archivo.name,
+                    caption=texto if texto else ""
+                )
+
+                if enviado_pdf:
+                    MensajeWhatsApp.objects.create(
+                        numero=numero,
+                        tipo="SALIENTE",
+                        mensaje=texto if texto else "PDF enviado",
+                        archivo=archivo,
+                    )
+
+        return redirect("chat_whatsapp", numero=numero)
+
+    return render(request, "whatsapp/chat.html", {
+        "numero": numero,
+        "mensajes": mensajes,
+        "conversacion": conversacion,
+    })
+
+
+@login_required
+def cambiar_modo_whatsapp(request, numero):
+    conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+        numero=numero,
+        defaults={
+            "modo": "BOT",
+            "estado": "INICIO",
+        }
+    )
+
+    if conversacion.modo == "BOT":
+        conversacion.modo = "HUMANO"
+    else:
+        conversacion.modo = "BOT"
+        conversacion.estado = "INICIO"
+
+    conversacion.save()
+
+    return redirect("chat_whatsapp", numero=numero)
     
