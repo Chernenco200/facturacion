@@ -236,16 +236,43 @@ def whatsapp_webhook(request):
             print("===================================")
 
             value = data["entry"][0]["changes"][0]["value"]
+
             messages = value.get("messages", [])
+            contacts = value.get("contacts", [])
+
+            nombre_contacto = ""
+            if contacts:
+                nombre_contacto = contacts[0].get("profile", {}).get("name", "")
 
             if messages:
                 message = messages[0]
                 numero = message["from"]
                 tipo = message.get("type")
+                message_id = message.get("id")
+
+                conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+                    numero=numero,
+                    defaults={
+                        "modo": "BOT",
+                        "estado": "INICIO",
+                    }
+                )
 
                 if tipo == "text":
                     texto = message["text"]["body"]
-                    responder_mensaje(numero, texto)
+
+                    MensajeWhatsApp.objects.create(
+                        numero=numero,
+                        nombre=nombre_contacto,
+                        tipo="ENTRANTE",
+                        mensaje=texto,
+                        wa_message_id=message_id,
+                    )
+
+                    if conversacion.modo == "BOT":
+                        responder_mensaje(numero, texto)
+                    else:
+                        print("Conversación en modo HUMANO. El bot no responde.")
 
         except Exception as e:
             print("ERROR WEBHOOK:", e)
