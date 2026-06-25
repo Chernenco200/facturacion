@@ -44,21 +44,7 @@ def responder_mensaje(numero, texto):
         }
     )
 
-    MensajeWhatsApp.objects.create(
-        numero=numero,
-        nombre=nombre_contacto,
-        tipo="ENTRANTE",
-        mensaje=texto,
-        wa_message_id=message_id,
-    )
-
-    if conversacion.modo == "BOT":
-        responder_mensaje(numero, texto)
-    else:
-        print("Conversación en modo HUMANO. El bot no responde.")
-
-
-    # Volver al bot
+    # Volver al bot / menú principal
     if texto in ["0", "0️⃣", "menu", "menú", "menu principal", "menú principal"]:
         conversacion.modo = "BOT"
         conversacion.estado = "INICIO"
@@ -67,17 +53,8 @@ def responder_mensaje(numero, texto):
         enviar_menu_principal(numero)
         return
 
-    # Si el cliente está en modo humano, el bot no responde
-# Si el cliente está en modo humano, solo vuelve al bot si saluda o pide menú
+    # Si está en modo humano, el bot no responde
     if conversacion.modo == "HUMANO":
-        if texto in ["hola","hi", "buenas","buenos dias", "buenos días", "buenas tardes", "buenas noches", "menu", "menú", "0", "0️⃣"]:
-            conversacion.modo = "BOT"
-            conversacion.estado = "INICIO"
-            conversacion.save()
-
-            enviar_menu_principal(numero)
-            return
-
         print(f"Cliente {numero} está en modo HUMANO. Bot no responde.")
         return
 
@@ -107,18 +84,17 @@ def responder_mensaje(numero, texto):
         )
         return
 
+    # Si el cliente estaba consultando ticket
     if conversacion.estado == "ESPERANDO_TICKET":
         encontrado = consultar_estado_ticket(numero, texto_original)
 
         if encontrado:
             conversacion.estado = "INICIO"
-            conversacion.save()
         else:
             conversacion.estado = "ESPERANDO_TICKET"
-            conversacion.save()
 
+        conversacion.save()
         return
-
 
     # Saludo / menú
     if texto in [
@@ -140,11 +116,12 @@ def responder_mensaje(numero, texto):
     if texto in ["1", "1️⃣"] or "horario" in texto:
         enviar_whatsapp_texto(
             numero,
-            "Nuestro horario de atención es de lunes a sábado de 9:00 a.m. a 7:45 p.m."
-            " Domingos de 10:30 a.m. a 6:30 p.m."
+            "Nuestro horario de atención es de lunes a sábado de 9:00 a.m. a 7:45 p.m. "
+            "Domingos de 10:30 a.m. a 6:30 p.m."
         )
         return
 
+    # Consulta directa tipo: ticket 000123
     if texto.startswith("ticket"):
         consultar_estado_ticket(numero, texto_original)
         return
@@ -162,7 +139,13 @@ def responder_mensaje(numero, texto):
         return
 
     # Ubicación
-    if texto in ["3", "3️⃣"] or "ubicacion" in texto or "ubicación" in texto or "direccion" in texto or "dirección" in texto:
+    if (
+        texto in ["3", "3️⃣"]
+        or "ubicacion" in texto
+        or "ubicación" in texto
+        or "direccion" in texto
+        or "dirección" in texto
+    ):
         enviar_whatsapp_texto(
             numero,
             "Estamos ubicados en: Jr Camaná 560 - Cercado de Lima.\n\n"
