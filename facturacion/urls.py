@@ -21,9 +21,6 @@ from django.conf.urls.static import static  # ✅ necesario
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-
-    path("whatsapp/prueba/", lambda request: HttpResponse("WHATSAPP OK")),
-
     path("", include("whatsapp.urls")),
     path("accounts/", include("accounts.urls")),
     path('', include('core.urls')),

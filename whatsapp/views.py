@@ -13,6 +13,7 @@ from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, e
 from core.models import TicketVenta, OrdenTrabajo
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Max
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
