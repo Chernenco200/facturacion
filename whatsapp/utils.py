@@ -335,3 +335,82 @@ def enviar_aviso_lentes_listos(orden):
             cliente.nombre,
         ],
     )
+
+
+
+
+def subir_media_whatsapp(archivo):
+    access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+    phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
+
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/media"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+
+    files = {
+        "file": (
+            archivo.name,
+            archivo,
+            "application/pdf"
+        )
+    }
+
+    data = {
+        "messaging_product": "whatsapp",
+        "type": "application/pdf",
+    }
+
+    response = requests.post(
+        url,
+        headers=headers,
+        files=files,
+        data=data,
+        timeout=30
+    )
+
+    print("SUBIR MEDIA STATUS:", response.status_code)
+    print("SUBIR MEDIA RESPUESTA:", response.text)
+
+    if response.status_code not in [200, 201]:
+        return None
+
+    return response.json().get("id")
+
+
+def enviar_whatsapp_pdf(numero, media_id, filename="documento.pdf", caption=""):
+    access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+    phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
+
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    data = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "document",
+        "document": {
+            "id": media_id,
+            "filename": filename,
+        }
+    }
+
+    if caption:
+        data["document"]["caption"] = caption
+
+    response = requests.post(
+        url,
+        headers=headers,
+        json=data,
+        timeout=30
+    )
+
+    print("ENVIAR PDF STATUS:", response.status_code)
+    print("ENVIAR PDF RESPUESTA:", response.text)
+
+    return response.status_code in [200, 201]
