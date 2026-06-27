@@ -24,7 +24,7 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
 def enviar_menu_principal(numero):
     mensaje = (
-        "Hola, soy Bootija, asistende virtual de Óptica IC 👓\n\n"
+        "Hola, soy Botija, asistende virtual de Óptica IC 👓\n\n"
         "¿En qué puedo ayudarte?\n\n"
         "1️⃣ Horario de atención\n"
         "2️⃣ Estado de mi ticket\n"
