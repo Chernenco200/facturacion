@@ -196,10 +196,10 @@ def enviar_agradecimiento_ticket(ticket):
         f"Tu N° de ticket es: {ticket.numero}\n\n"
         f"Tu pedido pasará por estas etapas:\n"
         f"1️⃣ Pedido enviado al laboratorio\n"
-        f"2️⃣ En proceso de laboratorio\n"
-        f"3️⃣ En taller de Biselado\n"
-        f"4️⃣ Contro de calidad\n"
-        f"5️⃣ Listo para recoger ✅\n\n"
+        f"2️⃣ En taller de Biselado\n"
+        f"3️⃣ Contro de calidad\n"
+        f"4️⃣ Listo para recoger ✅\n\n"
+
         f"Puedes consultar el estado de tu ticket escribiendo Menú a este número y seleccionando la opción 2 :\n"
         f"Óptica IC\n"
         f"Innovación y Calidad"
@@ -263,9 +263,8 @@ def enviar_control_menor_6_meses(orden):
 
     mensaje = (
         f"Hola {cliente.nombre} 😊\n\n"
-        f"Te recordamos que hoy se cumplen 6 meses desde que adquiriste tus lentes.\n\n"
-        f"Los menores deben realizar controles visuales periódicos según lo que indican los médicos.\n\n"
-        f"Puedes escribirnos para separar una cita de control.\n\n"
+        f"Te recordamos que hoy se cumplen 6 meses desde que adquiriste lentes con nosotros.\n\n"
+        f"Puedes escribir 'Cita' para separar una cita de control. Recuerda que en menores es recomendable realizar evaluaciones semestrales\n\n"
         f"Óptica IC\n"
         f"Innovación y Calidad"
     )

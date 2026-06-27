@@ -467,3 +467,8 @@ def cambiar_modo_whatsapp(request, numero):
 
     return redirect("chat_whatsapp", numero=numero)
     
+
+
+
+respuesta = responder_con_openai(texto)
+    
