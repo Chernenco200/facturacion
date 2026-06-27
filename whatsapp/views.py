@@ -470,5 +470,4 @@ def cambiar_modo_whatsapp(request, numero):
 
 
 
-respuesta = responder_con_openai(texto)
     
