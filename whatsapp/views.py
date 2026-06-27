@@ -15,6 +15,8 @@ from core.models import TicketVenta, OrdenTrabajo
 from django.contrib.auth.decorators import login_required
 from django.db.models import Max
 
+from .ai import responder_con_openai
+
 
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
