@@ -3,7 +3,7 @@ import requests
 
 from django.utils import timezone
 from datetime import timedelta
-from .models import ConversacionWhatsApp
+from .models import ConversacionWhatsApp, MensajeWhatsApp
 
 from django.conf import settings
 
@@ -413,3 +413,16 @@ def enviar_whatsapp_pdf(numero, media_id, filename="documento.pdf", caption=""):
     print("ENVIAR PDF RESPUESTA:", response.text)
 
     return response.status_code in [200, 201]
+
+
+def enviar_whatsapp_texto_y_guardar(numero, mensaje):
+    enviado = enviar_whatsapp_texto(numero, mensaje)
+
+    if enviado:
+        MensajeWhatsApp.objects.create(
+            numero=numero,
+            tipo="SALIENTE",
+            mensaje=mensaje,
+        )
+
+    return enviado    

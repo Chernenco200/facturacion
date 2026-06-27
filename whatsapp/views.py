@@ -8,7 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp
-from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf
+from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar
 
 from core.models import TicketVenta, OrdenTrabajo
 
@@ -33,7 +33,7 @@ def enviar_menu_principal(numero):
         "5️⃣ Hablar con un asesor\n\n"
         "0️⃣ Menú principal"
     )
-    enviar_whatsapp_texto(numero, mensaje)
+    enviar_whatsapp_texto_y_guardar(numero, mensaje)
 
 
 def responder_mensaje(numero, texto):
@@ -80,7 +80,7 @@ def responder_mensaje(numero, texto):
         conversacion.estado = "ASESOR"
         conversacion.save()
 
-        enviar_whatsapp_texto(
+        enviar_whatsapp_texto_y_guardar(
             numero,
             "Gracias 😊 Hemos recibido tus datos para la cita.\n\n"
             "Un asesor de Óptica IC te confirmará la disponibilidad en breve.\n\n"
@@ -113,7 +113,7 @@ def responder_mensaje(numero, texto):
 
     # Horario
     if texto in ["1", "1️⃣"] or "horario" in texto:
-        enviar_whatsapp_texto(
+        enviar_whatsapp_texto_y_guardar(
             numero,
             "Nuestro horario de atención es de lunes a sábado de 9:00 a.m. a 7:45 p.m. "
             "Domingos de 10:30 a.m. a 6:30 p.m."
@@ -130,7 +130,7 @@ def responder_mensaje(numero, texto):
         conversacion.estado = "ESPERANDO_TICKET"
         conversacion.save()
 
-        enviar_whatsapp_texto(
+        enviar_whatsapp_texto_y_guardar(
             numero,
             "Por favor escribe el número de tu ticket.\n\n"
             "Ejemplo: 000123"
@@ -145,7 +145,7 @@ def responder_mensaje(numero, texto):
         or "direccion" in texto
         or "dirección" in texto
     ):
-        enviar_whatsapp_texto(
+        enviar_whatsapp_texto_y_guardar(
             numero,
             "Estamos ubicados en: Jr Camaná 560 - Cercado de Lima.\n\n"
             "Ref: Entre Av. Emancipación y Jr. Huancavelica"
@@ -157,7 +157,7 @@ def responder_mensaje(numero, texto):
         conversacion.estado = "ESPERANDO_DATOS_CITA"
         conversacion.save()
 
-        enviar_whatsapp_texto(
+        enviar_whatsapp_texto_y_guardar(
             numero,
             "Claro 😊 Para separar una cita, envíanos en un solo mensaje:\n\n"
             "1. Nombre completo\n"
@@ -182,7 +182,7 @@ def responder_mensaje(numero, texto):
         conversacion.estado = "ASESOR"
         conversacion.save()
 
-        enviar_whatsapp_texto(
+        enviar_whatsapp_texto_y_guardar(
             numero,
             "Un asesor de Óptica IC te atenderá en breve.\n\n"
             "Para volver al menú principal escribe 0️⃣"
@@ -197,7 +197,7 @@ def responder_mensaje(numero, texto):
 
     print("RESPUESTA OPENAI:", respuesta_ia)
 
-    enviar_whatsapp_texto(numero, respuesta_ia)
+    enviar_whatsapp_texto_y_guardar(numero, respuesta_ia)
     return
 
 
@@ -275,7 +275,7 @@ def consultar_estado_ticket(numero, texto_ticket):
     numero_ticket = numero_ticket.lstrip("0")
 
     if not numero_ticket:
-        enviar_whatsapp_texto(
+        enviar_whatsapp_texto_y_guardar(
             numero,
             "Por favor escribe el número de ticket.\n\n"
             "Ejemplo: 000123"
@@ -285,7 +285,7 @@ def consultar_estado_ticket(numero, texto_ticket):
     try:
         ticket = TicketVenta.objects.get(numero=numero_ticket)
     except TicketVenta.DoesNotExist:
-        enviar_whatsapp_texto(
+        enviar_whatsapp_texto_y_guardar(
             numero,
             "No encontramos ese número de ticket.\n\n"
             "Verifica el número e intenta nuevamente.\n\n"
@@ -296,7 +296,7 @@ def consultar_estado_ticket(numero, texto_ticket):
     orden = OrdenTrabajo.objects.filter(ticket=ticket).last()
 
     if not orden:
-        enviar_whatsapp_texto(
+        enviar_whatsapp_texto_y_guardar(
             numero,
             f"Encontramos tu ticket N° {ticket.numero}, pero aún no tiene orden de trabajo registrada."
         )
@@ -340,7 +340,7 @@ def consultar_estado_ticket(numero, texto_ticket):
         "Innovación y Calidad"
     )
 
-    enviar_whatsapp_texto(numero, mensaje)
+    enviar_whatsapp_texto_y_guardar(numero, mensaje)
     
     return True
 
@@ -401,20 +401,12 @@ def chat_whatsapp(request, numero):
         }
     )
 
-    mensajes = MensajeWhatsApp.objects.filter(numero=numero)
-
-    MensajeWhatsApp.objects.filter(
-        numero=numero,
-        tipo="ENTRANTE",
-        leido=False
-    ).update(leido=True)
-
     if request.method == "POST":
         texto = request.POST.get("mensaje", "").strip()
         archivo = request.FILES.get("archivo")
 
         if texto:
-            enviado = enviar_whatsapp_texto(numero, texto)
+            enviado = enviar_whatsapp_texto_y_guardar(numero, texto)
 
             if enviado:
                 MensajeWhatsApp.objects.create(
@@ -443,6 +435,16 @@ def chat_whatsapp(request, numero):
                     )
 
         return redirect("chat_whatsapp", numero=numero)
+
+    MensajeWhatsApp.objects.filter(
+        numero=numero,
+        tipo="ENTRANTE",
+        leido=False
+    ).update(leido=True)
+
+    mensajes = MensajeWhatsApp.objects.filter(
+        numero=numero
+    ).order_by("creado")
 
     return render(request, "whatsapp/chat.html", {
         "numero": numero,
