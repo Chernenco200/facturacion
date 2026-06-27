@@ -15,7 +15,7 @@ from core.models import TicketVenta, OrdenTrabajo
 from django.contrib.auth.decorators import login_required
 from django.db.models import Max
 
-from .ai import responder_con_openai
+
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
@@ -192,12 +192,9 @@ def responder_mensaje(numero, texto):
         )
         return
 
-    print("USANDO OPENAI PARA:", texto_original)
     respuesta_ia = responder_con_openai(texto_original)
-    print("RESPUESTA OPENAI:", respuesta_ia)
     enviar_whatsapp_texto(numero, respuesta_ia)
     return
-
 
 
 @csrf_exempt
