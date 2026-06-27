@@ -192,7 +192,9 @@ def responder_mensaje(numero, texto):
         )
         return
 
+    print("USANDO OPENAI PARA:", texto_original)
     respuesta_ia = responder_con_openai(texto_original)
+    print("RESPUESTA OPENAI:", respuesta_ia)
     enviar_whatsapp_texto(numero, respuesta_ia)
     return
 
