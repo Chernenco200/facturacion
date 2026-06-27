@@ -7,19 +7,18 @@ def responder_con_openai(texto_cliente):
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=[
-                {
-                    "role": "system",
-                    "content": PROMPT_OPTICA_IC,
-                },
-                {
-                    "role": "user",
-                    "content": texto_cliente,
-                },
+                {"role": "system", "content": PROMPT_OPTICA_IC},
+                {"role": "user", "content": texto_cliente},
             ],
             max_output_tokens=200,
         )
 
-        return response.output_text.strip()
+        respuesta = response.output_text.strip()
+
+        if not respuesta:
+            return "Claro 😊 ¿Podrías contarme un poco más para ayudarte mejor?"
+
+        return respuesta
 
     except Exception as e:
         print("ERROR OPENAI:", e)

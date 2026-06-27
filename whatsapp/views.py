@@ -192,7 +192,13 @@ def responder_mensaje(numero, texto):
         )
         return
 
+    # Si no coincide con ninguna opción, responde con OpenAI
+    print("USANDO OPENAI PARA:", texto_original)
+
     respuesta_ia = responder_con_openai(texto_original)
+
+    print("RESPUESTA OPENAI:", respuesta_ia)
+
     enviar_whatsapp_texto(numero, respuesta_ia)
     return
 
@@ -467,6 +473,7 @@ def cambiar_modo_whatsapp(request, numero):
 
     return redirect("chat_whatsapp", numero=numero)
     
+
 
 
 
