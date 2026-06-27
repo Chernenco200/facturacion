@@ -24,8 +24,8 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
 def enviar_menu_principal(numero):
     mensaje = (
-        "Hola, somos Óptica IC 👓\n\n"
-        "Elige una opción:\n\n"
+        "Hola, soy Bootija, asistende virtual de Óptica IC 👓\n\n"
+        "¿En qué puedo ayudarte?\n\n"
         "1️⃣ Horario de atención\n"
         "2️⃣ Estado de mi ticket\n"
         "3️⃣ Ubicación\n"
@@ -104,11 +104,6 @@ def responder_mensaje(numero, texto):
     if texto in [
         "hola",
         "hi",
-        "buenas",
-        "buenos dias",
-        "buenos días",
-        "buenas tardes",
-        "buenas noches",
     ]:
         conversacion.estado = "INICIO"
         conversacion.save()
@@ -194,6 +189,7 @@ def responder_mensaje(numero, texto):
         )
         return
 
+    # Si no coincide con ninguna opción, responde con OpenAI
     # Si no coincide con ninguna opción, responde con OpenAI
     print("USANDO OPENAI PARA:", texto_original)
 
