@@ -242,17 +242,33 @@ def enviar_encuesta_7_dias(orden):
 
     if cliente_esta_en_ventana_servicio(cliente.telefono):
         print("Cliente dentro de ventana 24h. Enviando texto libre.")
-        return enviar_whatsapp_texto(cliente.telefono, mensaje)
+        enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
+    else:
+        print("Cliente fuera de ventana 24h. Enviando plantilla encuesta_7_dias.")
+        enviado = enviar_whatsapp_template(
+            numero=cliente.telefono,
+            template_name="encuesta_7_dias",
+            parametros=[
+                cliente.nombre,
+            ],
+        )
 
-    print("Cliente fuera de ventana 24h. Enviando plantilla encuesta_7_dias.")
+    if enviado:
+        conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+            numero=cliente.telefono,
+            defaults={
+                "modo": "BOT",
+                "estado": "ESPERANDO_ENCUESTA",
+            }
+        )
 
-    return enviar_whatsapp_template(
-        numero=cliente.telefono,
-        template_name="encuesta_7_dias",
-        parametros=[
-            cliente.nombre,
-        ],
-    )
+        conversacion.modo = "BOT"
+        conversacion.estado = "ESPERANDO_ENCUESTA"
+        conversacion.save()
+
+        print("Conversación marcada como ESPERANDO_ENCUESTA")
+
+    return enviado
 
 def enviar_control_menor_6_meses(orden):
     ticket = orden.ticket

@@ -24,7 +24,7 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
 def enviar_menu_principal(numero):
     mensaje = (
-        "Hola, soy Botija, asistende virtual de Óptica IC 👓\n\n"
+        "Hola, soy el asistende virtual de Óptica IC 👓\n\n"
         "¿En qué puedo ayudarte?\n\n"
         "1️⃣ Horario de atención\n"
         "2️⃣ Estado de mi ticket\n"
@@ -60,6 +60,28 @@ def responder_mensaje(numero, texto):
     # Si está en modo humano, el bot no responde
     if conversacion.modo == "HUMANO":
         print(f"Cliente {numero} está en modo HUMANO. Bot no responde.")
+        return
+
+    # ✅ RESPUESTA DE ENCUESTA 1 AL 5
+    if conversacion.estado == "ESPERANDO_ENCUESTA":
+        if texto in ["1", "1️⃣", "2", "2️⃣", "3", "3️⃣", "4", "4️⃣", "5", "5️⃣"]:
+            calificacion = texto.replace("️⃣", "")
+
+            conversacion.estado = "INICIO"
+            conversacion.save()
+
+            enviar_whatsapp_texto_y_guardar(
+                numero,
+                f"¡Gracias por calificar tu experiencia con Óptica IC! 🙌\n\n"
+                f"Tu respuesta fue: {calificacion}/5\n\n"
+                f"Tu opinión nos ayuda a mejorar."
+            )
+            return
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Por favor responde con un número del 1 al 5 😊"
+        )
         return
 
     # Si el cliente estaba enviando datos de cita
@@ -101,10 +123,7 @@ def responder_mensaje(numero, texto):
         return
 
     # Saludo / menú
-    if texto in [
-        "hola",
-        "hi",
-    ]:
+    if texto in ["hola", "hi"]:
         conversacion.estado = "INICIO"
         conversacion.save()
 
@@ -189,8 +208,6 @@ def responder_mensaje(numero, texto):
         )
         return
 
-    # Si no coincide con ninguna opción, responde con OpenAI
-    # Si no coincide con ninguna opción, responde con OpenAI
     print("USANDO OPENAI PARA:", texto_original)
 
     respuesta_ia = responder_con_openai(texto_original)
