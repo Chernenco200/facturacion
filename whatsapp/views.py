@@ -17,6 +17,8 @@ from django.db.models import Max
 
 from .ai import responder_con_openai
 
+from datetime import timedelta
+from django.utils import timezone
 
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
@@ -47,6 +49,21 @@ def responder_mensaje(numero, texto):
             "estado": "INICIO",
         }
     )
+
+        # Cerrar sesión por inactividad
+    if not created:
+        tiempo_inactivo = timezone.now() - conversacion.actualizado
+
+        if tiempo_inactivo > timedelta(minutes=30):
+            conversacion.modo = "BOT"
+            conversacion.estado = "INICIO"
+            conversacion.save()
+
+            enviar_whatsapp_texto_y_guardar(
+                numero,
+                "Tu sesión anterior finalizó por inactividad 😊\n\n"
+                "Puedes continuar escribiendo tu consulta."
+            )
 
     # Volver al bot / menú principal
     if texto in ["0", "0️⃣", "menu", "menú", "menu principal", "menú principal"]:
@@ -210,7 +227,7 @@ def responder_mensaje(numero, texto):
 
     print("USANDO OPENAI PARA:", texto_original)
 
-    respuesta_ia = responder_con_openai(texto_original)
+    respuesta_ia = responder_con_openai(numero, texto_original)
 
     print("RESPUESTA OPENAI:", respuesta_ia)
 

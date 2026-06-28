@@ -1,33 +1,56 @@
+from .models import MensajeWhatsApp, ConversacionWhatsApp
 from .openai_client import client
 from .prompts import PROMPT_OPTICA_IC
 
-def responder_con_openai(texto_cliente):
-    try:
-        print("OPENAI INICIO")
 
-        response = client.responses.create(
-            model="gpt-4.1-mini",
-            input=[
-                {"role": "system", "content": PROMPT_OPTICA_IC},
-                {"role": "user", "content": texto_cliente},
-            ],
-            max_output_tokens=200,
-        )
+def responder_con_openai(numero, texto_actual):
+    ultimos_mensajes = MensajeWhatsApp.objects.filter(
+        numero=numero
+    ).order_by("-creado")[:15]
 
-        print("OPENAI RESPONSE OK")
+    ultimos_mensajes = reversed(list(ultimos_mensajes))
 
-        respuesta = response.output_text.strip()
+    conversacion = ConversacionWhatsApp.objects.filter(numero=numero).first()
 
-        if not respuesta:
-            print("OPENAI RESPUESTA VACIA")
-            return "Claro 😊 ¿Podrías contarme un poco más para ayudarte mejor?"
+    contexto_modo = conversacion.modo if conversacion else "BOT"
+    contexto_estado = conversacion.estado if conversacion else "INICIO"
 
-        return respuesta
+    mensajes = [
+        {
+            "role": "system",
+            "content": PROMPT_OPTICA_IC,
+        },
+        {
+            "role": "system",
+            "content": (
+                f"Contexto actual:\n"
+                f"- Número WhatsApp: {numero}\n"
+                f"- Modo: {contexto_modo}\n"
+                f"- Estado: {contexto_estado}\n"
+            ),
+        },
+    ]
 
-    except Exception as e:
-        print("ERROR OPENAI TIPO:", type(e))
-        print("ERROR OPENAI DETALLE:", repr(e))
-        return (
-            "Disculpa, en este momento no puedo responder esa consulta automáticamente. "
-            "Un asesor de Óptica IC continuará con la atención 😊"
-        )
+    for m in ultimos_mensajes:
+        if not m.mensaje:
+            continue
+
+        role = "user" if m.tipo == "ENTRANTE" else "assistant"
+
+        mensajes.append({
+            "role": role,
+            "content": m.mensaje,
+        })
+
+    mensajes.append({
+        "role": "user",
+        "content": texto_actual,
+    })
+
+    respuesta = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=mensajes,
+        temperature=0.3,
+    )
+
+    return respuesta.choices[0].message.content.strip()
