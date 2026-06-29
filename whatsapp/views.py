@@ -19,7 +19,7 @@ from .ai import responder_con_openai
 
 from datetime import timedelta
 from django.utils import timezone
-from .utils import pasar_a_asesor
+
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
@@ -97,17 +97,24 @@ def responder_mensaje(numero, texto):
     # Confirmación para pasar con asesor sugerida por OpenAI
     if conversacion.estado == "ESPERANDO_CONFIRMACION_ASESOR":
         if texto in ["1", "1️⃣", "si", "sí", "ok", "dale", "quiero", "asesor"]:
-            pasar_a_asesor(numero, texto_original, conversacion)
+
+            avisar_asesor(
+                f"🚨 CLIENTE SOLICITA ASESOR\n\n"
+                f"Cliente WhatsApp: {numero}\n"
+                f"Mensaje recibido: {texto_original}\n\n"
+                f"Responder lo antes posible."
+            )
+
+            conversacion.modo = "HUMANO"
+            conversacion.estado = "ASESOR"
+            conversacion.save()
+
+            enviar_whatsapp_texto_y_guardar(
+                numero,
+                "Perfecto 😊 Un asesor de Óptica IC continuará la conversación en breve.\n\n"
+                "Para volver al menú principal escribe 0️⃣"
+            )
             return
-
-        conversacion.estado = "FINALIZADO"
-        conversacion.save()
-
-        enviar_whatsapp_texto_y_guardar(
-            numero,
-            "Entendido 😊 Si más adelante necesitas ayuda, aquí estaremos."
-        )
-        return
 
         conversacion.estado = "FINALIZADO"
         conversacion.save()
@@ -206,7 +213,6 @@ def responder_mensaje(numero, texto):
             numero,
             "Nuestro horario de atención es de lunes a sábado de 9:00 a.m. a 7:45 p.m. "
             "Domingos de 10:30 a.m. a 6:30 p.m."
-            "Hoy 29 de junio atenderemos de 10:30 am a 6:30 pm"
         )
         return
 
@@ -266,16 +272,23 @@ def responder_mensaje(numero, texto):
         return
 
     # Hablar con asesor directo desde menú
-    if (
-        texto in ["5", "5️⃣"]
-        or "asesor" in texto
-        or "persona" in texto
-        or "humano" in texto
-        or "alguien" in texto
-        or "vendedor" in texto
-        or "ayuda" in texto
-    ):
-        pasar_a_asesor(numero, texto_original, conversacion)
+    if texto in ["5", "5️⃣"] or "asesor" in texto or "persona" in texto:
+        avisar_asesor(
+            f"🚨 CLIENTE SOLICITA ASESOR\n\n"
+            f"Cliente WhatsApp: {numero}\n"
+            f"Mensaje recibido: {texto_original}\n\n"
+            f"Responder lo antes posible."
+        )
+
+        conversacion.modo = "HUMANO"
+        conversacion.estado = "ASESOR"
+        conversacion.save()
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Un asesor de Óptica IC te atenderá en breve.\n\n"
+            "Para volver al menú principal escribe 0️⃣"
+        )
         return
 
     # Si no coincide con ninguna opción, responde con OpenAI
@@ -287,13 +300,23 @@ def responder_mensaje(numero, texto):
 
     # Si OpenAI sugiere asesor, NO pasamos directo a humano.
     # Pedimos confirmación con 1.
-    if respuesta_ia.startswith("[ASESOR]"):
+    if (
+        respuesta_ia.strip().startswith("[ASESOR]")
+        or "comunicarte con un asesor" in respuesta_limpia
+        or "conectarte con un asesor" in respuesta_limpia
+        or "pasarte con un asesor" in respuesta_limpia
+        or "un asesor" in respuesta_limpia
+    ):
         conversacion.estado = "ESPERANDO_CONFIRMACION_ASESOR"
         conversacion.save()
 
         respuesta_ia = respuesta_ia.replace("[ASESOR]", "").strip()
 
-        enviar_whatsapp_texto_y_guardar(numero, respuesta_ia)
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "No cuento con la información suficiente para ayudarte.\n\n"
+            "Si deseas que un asesor de Óptica IC continúe la conversación, responde Sí."
+        )
         return
 
     conversacion.estado = "FINALIZADO"

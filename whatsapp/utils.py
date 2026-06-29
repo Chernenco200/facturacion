@@ -442,22 +442,3 @@ def enviar_whatsapp_texto_y_guardar(numero, mensaje):
         )
 
     return enviado    
-
-
-def pasar_a_asesor(numero, texto_original, conversacion):
-    avisar_asesor(
-        f"🚨 CLIENTE SOLICITA ASESOR\n\n"
-        f"Cliente WhatsApp: {numero}\n"
-        f"Mensaje recibido: {texto_original}\n\n"
-        f"Responder lo antes posible."
-    )
-
-    conversacion.modo = "HUMANO"
-    conversacion.estado = "ASESOR"
-    conversacion.save()
-
-    enviar_whatsapp_texto_y_guardar(
-        numero,
-        "Perfecto 😊 Un asesor de Óptica IC continuará la conversación en breve.\n\n"
-        "Para volver al menú principal escribe 0️⃣"
-    )
