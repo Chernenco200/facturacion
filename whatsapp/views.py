@@ -37,7 +37,6 @@ def enviar_menu_principal(numero):
     )
     enviar_whatsapp_texto_y_guardar(numero, mensaje)
 
-
 def responder_mensaje(numero, texto):
     texto_original = texto.strip()
     texto = texto.lower().strip()
@@ -50,20 +49,36 @@ def responder_mensaje(numero, texto):
         }
     )
 
-        # Cerrar sesión por inactividad
+    ESTADOS_ESPERANDO = [
+        "ESPERANDO_TICKET",
+        "ESPERANDO_DATOS_CITA",
+        "ESPERANDO_ENCUESTA",
+        "ESPERANDO_CONFIRMACION_ASESOR",
+    ]
+
+    # Cierre por inactividad SOLO si estaba esperando una respuesta
     if not created:
         tiempo_inactivo = timezone.now() - conversacion.actualizado
 
-        if tiempo_inactivo > timedelta(minutes=30):
+        if (
+            tiempo_inactivo > timedelta(minutes=30)
+            and conversacion.estado in ESTADOS_ESPERANDO
+        ):
             conversacion.modo = "BOT"
             conversacion.estado = "INICIO"
             conversacion.save()
 
             enviar_whatsapp_texto_y_guardar(
                 numero,
-                "Tu sesión anterior finalizó por inactividad 😊\n\n"
-                "Puedes continuar escribiendo tu consulta."
+                "La sesión anterior terminó porque no recibimos respuesta a tiempo 😊\n\n"
+                "Bienvenido de nuevo. ¿En qué podemos ayudarte?"
             )
+
+    # Si la conversación terminó correctamente antes, se reinicia en silencio
+    if conversacion.estado == "FINALIZADO":
+        conversacion.modo = "BOT"
+        conversacion.estado = "INICIO"
+        conversacion.save()
 
     # Volver al bot / menú principal
     if texto in ["0", "0️⃣", "menu", "menú", "menu principal", "menú principal"]:
@@ -79,12 +94,43 @@ def responder_mensaje(numero, texto):
         print(f"Cliente {numero} está en modo HUMANO. Bot no responde.")
         return
 
-    # ✅ RESPUESTA DE ENCUESTA 1 AL 5
+    # Confirmación para pasar con asesor sugerida por OpenAI
+    if conversacion.estado == "ESPERANDO_CONFIRMACION_ASESOR":
+        if texto in ["1", "1️⃣", "si", "sí", "ok", "dale", "quiero", "asesor"]:
+
+            avisar_asesor(
+                f"🚨 CLIENTE SOLICITA ASESOR\n\n"
+                f"Cliente WhatsApp: {numero}\n"
+                f"Mensaje recibido: {texto_original}\n\n"
+                f"Responder lo antes posible."
+            )
+
+            conversacion.modo = "HUMANO"
+            conversacion.estado = "ASESOR"
+            conversacion.save()
+
+            enviar_whatsapp_texto_y_guardar(
+                numero,
+                "Perfecto 😊 Un asesor de Óptica IC continuará la conversación en breve.\n\n"
+                "Para volver al menú principal escribe 0️⃣"
+            )
+            return
+
+        conversacion.estado = "FINALIZADO"
+        conversacion.save()
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Entendido 😊 Si más adelante necesitas ayuda, aquí estaremos."
+        )
+        return
+
+    # Respuesta de encuesta 1 al 5
     if conversacion.estado == "ESPERANDO_ENCUESTA":
         if texto in ["1", "1️⃣", "2", "2️⃣", "3", "3️⃣", "4", "4️⃣", "5", "5️⃣"]:
             calificacion = texto.replace("️⃣", "")
 
-            conversacion.estado = "INICIO"
+            conversacion.estado = "FINALIZADO"
             conversacion.save()
 
             enviar_whatsapp_texto_y_guardar(
@@ -132,7 +178,7 @@ def responder_mensaje(numero, texto):
         encontrado = consultar_estado_ticket(numero, texto_original)
 
         if encontrado:
-            conversacion.estado = "INICIO"
+            conversacion.estado = "FINALIZADO"
         else:
             conversacion.estado = "ESPERANDO_TICKET"
 
@@ -140,15 +186,29 @@ def responder_mensaje(numero, texto):
         return
 
     # Saludo / menú
-    if texto in ["hola", "hi"]:
+    if texto in ["hola", "hi", "buenos dias", "buenos días", "buenas tardes", "buenas noches"]:
         conversacion.estado = "INICIO"
         conversacion.save()
 
         enviar_menu_principal(numero)
         return
 
+    # Agradecimiento / cierre simple
+    if texto in ["gracias", "muchas gracias", "ok gracias", "listo gracias", "perfecto gracias"]:
+        conversacion.estado = "FINALIZADO"
+        conversacion.save()
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "¡Con gusto! 😊 Estamos para ayudarte."
+        )
+        return
+
     # Horario
     if texto in ["1", "1️⃣"] or "horario" in texto:
+        conversacion.estado = "FINALIZADO"
+        conversacion.save()
+
         enviar_whatsapp_texto_y_guardar(
             numero,
             "Nuestro horario de atención es de lunes a sábado de 9:00 a.m. a 7:45 p.m. "
@@ -158,7 +218,10 @@ def responder_mensaje(numero, texto):
 
     # Consulta directa tipo: ticket 000123
     if texto.startswith("ticket"):
-        consultar_estado_ticket(numero, texto_original)
+        encontrado = consultar_estado_ticket(numero, texto_original)
+
+        conversacion.estado = "FINALIZADO" if encontrado else "ESPERANDO_TICKET"
+        conversacion.save()
         return
 
     # Estado de ticket
@@ -181,6 +244,9 @@ def responder_mensaje(numero, texto):
         or "direccion" in texto
         or "dirección" in texto
     ):
+        conversacion.estado = "FINALIZADO"
+        conversacion.save()
+
         enviar_whatsapp_texto_y_guardar(
             numero,
             "Estamos ubicados en: Jr Camaná 560 - Cercado de Lima.\n\n"
@@ -205,7 +271,7 @@ def responder_mensaje(numero, texto):
         )
         return
 
-    # Hablar con asesor
+    # Hablar con asesor directo desde menú
     if texto in ["5", "5️⃣"] or "asesor" in texto or "persona" in texto:
         avisar_asesor(
             f"🚨 CLIENTE SOLICITA ASESOR\n\n"
@@ -225,16 +291,30 @@ def responder_mensaje(numero, texto):
         )
         return
 
+    # Si no coincide con ninguna opción, responde con OpenAI
     print("USANDO OPENAI PARA:", texto_original)
 
     respuesta_ia = responder_con_openai(numero, texto_original)
 
     print("RESPUESTA OPENAI:", respuesta_ia)
 
+    # Si OpenAI sugiere asesor, NO pasamos directo a humano.
+    # Pedimos confirmación con 1.
+    if respuesta_ia.startswith("[ASESOR]"):
+        conversacion.estado = "ESPERANDO_CONFIRMACION_ASESOR"
+        conversacion.save()
+
+        respuesta_ia = respuesta_ia.replace("[ASESOR]", "").strip()
+
+        enviar_whatsapp_texto_y_guardar(numero, respuesta_ia)
+        return
+
+    conversacion.estado = "FINALIZADO"
+    conversacion.save()
+
     enviar_whatsapp_texto_y_guardar(numero, respuesta_ia)
     return
-
-
+    
 @csrf_exempt
 def whatsapp_webhook(request):
     if request.method == "GET":

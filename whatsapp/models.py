@@ -8,8 +8,17 @@ class ConversacionWhatsApp(models.Model):
         ("HUMANO", "Humano"),
     ]
 
+    ESTADO_CHOICES = [
+        ("INICIO", "Inicio"),
+        ("ESPERANDO_TICKET", "Esperando Ticket"),
+        ("ESPERANDO_DATOS_CITA", "Esperando Datos Cita"),
+        ("ESPERANDO_CONFIRMACION_ASESOR", "Esperando Confirmación Asesor"),
+        ("ASESOR", "Asesor"),
+        ("FINALIZADO", "Finalizado"),
+    ]
+
     modo = models.CharField(max_length=20, choices=MODO_CHOICES, default="BOT")
-    estado = models.CharField(max_length=50, default="INICIO")
+    estado = models.CharField(max_length=50, choices=ESTADO_CHOICES, default="INICIO")
     actualizado = models.DateTimeField(auto_now=True)
 
     def __str__(self):
