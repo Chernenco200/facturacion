@@ -101,7 +101,14 @@
                 <li class="nav-item">
                 <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
                 </li>
-                {% endif %}                
+                {% endif %}
+                
+                                {% if request.user|has_role:"ADMIN,SUPERVISOR, CAJA" %}
+                <li class="nav-item">
+                <a class="nav-link" href="{% url 'bandeja_whatsapp' %}">Dashboard</a>
+                </li>
+                {% endif %}
+
 
                     </ul>
                 </li>

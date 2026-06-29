@@ -197,25 +197,33 @@ def enviar_agradecimiento_ticket(ticket):
         f"Tu pedido pasará por estas etapas:\n"
         f"1️⃣ Pedido enviado al laboratorio\n"
         f"2️⃣ En taller de Biselado\n"
-        f"3️⃣ Contro de calidad\n"
+        f"3️⃣ Control de calidad\n"
         f"4️⃣ Listo para recoger ✅\n\n"
-
-        f"Puedes consultar el estado de tu ticket escribiendo Menú a este número y seleccionando la opción 2 :\n"
+        f"Puedes consultar el estado de tu ticket escribiendo Menú a este número y seleccionando la opción 2.\n\n"
         f"Óptica IC\n"
         f"Innovación y Calidad"
     )
 
     if cliente_esta_en_ventana_servicio(cliente.telefono):
-        return enviar_whatsapp_texto(cliente.telefono, mensaje)
+        enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
+    else:
+        enviado = enviar_whatsapp_template(
+            numero=cliente.telefono,
+            template_name="agradecimiento",
+            parametros=[
+                cliente.nombre,
+                str(ticket.numero).zfill(6),
+            ],
+        )
 
-    return enviar_whatsapp_template(
-        numero=cliente.telefono,
-        template_name="agradecimiento",
-        parametros=[
-            cliente.nombre,
-            str(ticket.numero).zfill(6),
-        ],
-    )
+    if enviado:
+        MensajeWhatsApp.objects.create(
+            numero=cliente.telefono,
+            tipo="BOT",
+            mensaje=mensaje,
+        )
+
+    return enviado
 
 def enviar_encuesta_7_dias(orden):
     ticket = orden.ticket
@@ -241,19 +249,21 @@ def enviar_encuesta_7_dias(orden):
     )
 
     if cliente_esta_en_ventana_servicio(cliente.telefono):
-        print("Cliente dentro de ventana 24h. Enviando texto libre.")
         enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
     else:
-        print("Cliente fuera de ventana 24h. Enviando plantilla encuesta_7_dias.")
         enviado = enviar_whatsapp_template(
             numero=cliente.telefono,
             template_name="encuesta_7_dias",
-            parametros=[
-                cliente.nombre,
-            ],
+            parametros=[cliente.nombre],
         )
 
     if enviado:
+        MensajeWhatsApp.objects.create(
+            numero=cliente.telefono,
+            tipo="BOT",
+            mensaje=mensaje,
+        )
+
         conversacion, created = ConversacionWhatsApp.objects.get_or_create(
             numero=cliente.telefono,
             defaults={
@@ -265,8 +275,6 @@ def enviar_encuesta_7_dias(orden):
         conversacion.modo = "BOT"
         conversacion.estado = "ESPERANDO_ENCUESTA"
         conversacion.save()
-
-        print("Conversación marcada como ESPERANDO_ENCUESTA")
 
     return enviado
 
@@ -280,21 +288,29 @@ def enviar_control_menor_6_meses(orden):
     mensaje = (
         f"Hola {cliente.nombre} 😊\n\n"
         f"Te recordamos que hoy se cumplen 6 meses desde que adquiriste lentes con nosotros.\n\n"
-        f"Puedes escribir 'Cita' para separar una cita de control. Recuerda que en menores es recomendable realizar evaluaciones semestrales\n\n"
+        f"Puedes escribir 'Cita' para separar una cita de control. "
+        f"Recuerda que en menores es recomendable realizar evaluaciones semestrales.\n\n"
         f"Óptica IC\n"
         f"Innovación y Calidad"
     )
 
     if cliente_esta_en_ventana_servicio(cliente.telefono):
-        return enviar_whatsapp_texto(cliente.telefono, mensaje)
+        enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
+    else:
+        enviado = enviar_whatsapp_template(
+            numero=cliente.telefono,
+            template_name="control_6_meses",
+            parametros=[cliente.nombre],
+        )
 
-    return enviar_whatsapp_template(
-        numero=cliente.telefono,
-        template_name="control_6_meses",
-        parametros=[
-            cliente.nombre,
-        ],
-    )
+    if enviado:
+        MensajeWhatsApp.objects.create(
+            numero=cliente.telefono,
+            tipo="BOT",
+            mensaje=mensaje,
+        )
+
+    return enviado
 
 def enviar_renovacion_anual(orden):
     ticket = orden.ticket
@@ -313,15 +329,22 @@ def enviar_renovacion_anual(orden):
     )
 
     if cliente_esta_en_ventana_servicio(cliente.telefono):
-        return enviar_whatsapp_texto(cliente.telefono, mensaje)
+        enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
+    else:
+        enviado = enviar_whatsapp_template(
+            numero=cliente.telefono,
+            template_name="renovacion_anual",
+            parametros=[cliente.nombre],
+        )
 
-    return enviar_whatsapp_template(
-        numero=cliente.telefono,
-        template_name="renovacion_anual",
-        parametros=[
-            cliente.nombre,
-        ],
-    )
+    if enviado:
+        MensajeWhatsApp.objects.create(
+            numero=cliente.telefono,
+            tipo="BOT",
+            mensaje=mensaje,
+        )
+
+    return enviado
 
 def enviar_aviso_lentes_listos(orden):
     ticket = orden.ticket
@@ -341,15 +364,24 @@ def enviar_aviso_lentes_listos(orden):
     )
 
     if cliente_esta_en_ventana_servicio(cliente.telefono):
-        return enviar_whatsapp_texto(cliente.telefono, mensaje)
+        enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
+    else:
+        enviado = enviar_whatsapp_template(
+            numero=cliente.telefono,
+            template_name="lentes_listos",
+            parametros=[
+                cliente.nombre,
+            ],
+        )
 
-    return enviar_whatsapp_template(
-        numero=cliente.telefono,
-        template_name="lentes_listos",
-        parametros=[
-            cliente.nombre,
-        ],
-    )
+    if enviado:
+        MensajeWhatsApp.objects.create(
+            numero=cliente.telefono,
+            tipo="BOT",
+            mensaje=mensaje,
+        )
+
+    return enviado
 
 
 
