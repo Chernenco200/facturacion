@@ -298,6 +298,10 @@ def responder_mensaje(numero, texto):
 
     print("RESPUESTA OPENAI:", respuesta_ia)
 
+    
+    respuesta_limpia = respuesta_ia.strip().lower()
+
+
     # Si OpenAI sugiere asesor, NO pasamos directo a humano.
     # Pedimos confirmación con 1.
     if (
@@ -310,7 +314,6 @@ def responder_mensaje(numero, texto):
         conversacion.estado = "ESPERANDO_CONFIRMACION_ASESOR"
         conversacion.save()
 
-        respuesta_ia = respuesta_ia.replace("[ASESOR]", "").strip()
 
         enviar_whatsapp_texto_y_guardar(
             numero,
