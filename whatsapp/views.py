@@ -19,7 +19,7 @@ from .ai import responder_con_openai
 
 from datetime import timedelta
 from django.utils import timezone
-
+from .utils import pasar_a_asesor
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
