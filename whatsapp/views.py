@@ -225,7 +225,15 @@ def responder_mensaje(numero, texto):
         return
 
     # Estado de ticket
-    if texto in ["2", "2️⃣"] or "estado" in texto or texto == "ticket":
+    if (
+        texto in ["2", "2️⃣"]
+        or "estado" in texto
+        or texto == "ticket"
+        or "ticket" in texto
+        or "lentes" in texto
+        or "listos" in texto
+        or "pedido" in texto
+    ):
         conversacion.estado = "ESPERANDO_TICKET"
         conversacion.save()
 
