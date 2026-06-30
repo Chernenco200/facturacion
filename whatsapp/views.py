@@ -535,13 +535,6 @@ def chat_whatsapp(request, numero):
         if texto:
             enviado = enviar_whatsapp_texto_y_guardar(numero, texto)
 
-            if enviado:
-                MensajeWhatsApp.objects.create(
-                    numero=numero,
-                    tipo="SALIENTE",
-                    mensaje=texto,
-                )
-
         if archivo:
             media_id = subir_media_whatsapp(archivo)
 
