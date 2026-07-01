@@ -492,10 +492,11 @@ def bandeja_whatsapp(request):
     lista = []
 
     for conv in conversaciones:
-        numero = normalizar_numero(conv["numero"])
+        numero_original = conv["numero"]
+        numero = normalizar_numero(numero_original)
 
         ultimo_msg = MensajeWhatsApp.objects.filter(
-            numero=numero
+            numero=numero_original
         ).order_by("-creado").first()
 
         conversacion, created = ConversacionWhatsApp.objects.get_or_create(
@@ -507,7 +508,7 @@ def bandeja_whatsapp(request):
         )
 
         no_leidos = MensajeWhatsApp.objects.filter(
-            numero=numero,
+            numero=numero_original,
             tipo="ENTRANTE",
             leido=False
         ).count()
@@ -515,7 +516,7 @@ def bandeja_whatsapp(request):
         numero_sin_51 = numero[2:] if numero.startswith("51") else numero
 
         cliente = Cliente.objects.filter(
-            telefono__in=[numero, numero_sin_51]
+            telefono=numero_sin_51
         ).first()
 
         nombre_mostrar = (
@@ -537,6 +538,7 @@ def bandeja_whatsapp(request):
     return render(request, "whatsapp/bandeja.html", {
         "conversaciones": lista
     })
+
 @login_required
 def chat_whatsapp(request, numero):
     numero = normalizar_numero(numero)
