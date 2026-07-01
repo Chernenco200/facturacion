@@ -474,3 +474,17 @@ def enviar_whatsapp_texto_y_guardar(numero, mensaje):
         )
 
     return enviado    
+
+
+def nombre_corto_cliente(nombre_completo):
+    if not nombre_completo:
+        return "Cliente"
+
+    partes = nombre_completo.strip().split()
+
+    if len(partes) >= 3:
+        primer_apellido = partes[0].capitalize()
+        primer_nombre = partes[2].capitalize()
+        return f"{primer_nombre} {primer_apellido}"
+
+    return nombre_completo.title()

@@ -7,8 +7,8 @@ import json
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp
-from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar
+from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp, Cliente
+from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar, normalizar_numero, nombre_corto_cliente
 
 from core.models import TicketVenta, OrdenTrabajo
 
@@ -70,7 +70,6 @@ def responder_mensaje(numero, texto):
 
             enviar_whatsapp_texto_y_guardar(
                 numero,
-                "La sesión anterior terminó porque no recibimos respuesta a tiempo 😊\n\n"
                 "Bienvenido de nuevo. ¿En qué podemos ayudarte?"
             )
 
@@ -96,7 +95,7 @@ def responder_mensaje(numero, texto):
 
     # Confirmación para pasar con asesor sugerida por OpenAI
     if conversacion.estado == "ESPERANDO_CONFIRMACION_ASESOR":
-        if texto in ["1", "1️⃣", "si", "sí", "ok", "dale", "quiero", "asesor"]:
+        if texto in ["1", "1️⃣", "si", "sí","sip", "ok", "dale", "quiero", "asesor"]:
 
             avisar_asesor(
                 f"🚨 CLIENTE SOLICITA ASESOR\n\n"
@@ -336,6 +335,7 @@ def responder_mensaje(numero, texto):
     enviar_whatsapp_texto_y_guardar(numero, respuesta_ia)
     return
     
+
 @csrf_exempt
 def whatsapp_webhook(request):
     if request.method == "GET":
@@ -368,7 +368,7 @@ def whatsapp_webhook(request):
 
             if messages:
                 message = messages[0]
-                numero = message["from"]
+                numero = normalizar_numero(message["from"])
                 tipo = message.get("type")
                 message_id = message.get("id")
 
@@ -492,7 +492,7 @@ def bandeja_whatsapp(request):
     lista = []
 
     for conv in conversaciones:
-        numero = conv["numero"]
+        numero = normalizar_numero(conv["numero"])
 
         ultimo_msg = MensajeWhatsApp.objects.filter(
             numero=numero
@@ -512,11 +512,24 @@ def bandeja_whatsapp(request):
             leido=False
         ).count()
 
+        numero_sin_51 = numero[2:] if numero.startswith("51") else numero
+
+        cliente = Cliente.objects.filter(
+            telefono__in=[numero, numero_sin_51]
+        ).first()
+
+        nombre_mostrar = (
+            obtener_nombre_corto(cliente.nombre)
+            if cliente
+            else ultimo_msg.nombre if ultimo_msg and ultimo_msg.nombre
+            else "Cliente"
+        )
+
         lista.append({
             "numero": numero,
-            "nombre": ultimo_msg.nombre,
-            "ultimo_mensaje": ultimo_msg.mensaje,
-            "ultimo": ultimo_msg.creado,
+            "nombre": nombre_mostrar,
+            "ultimo_mensaje": ultimo_msg.mensaje if ultimo_msg else "",
+            "ultimo": ultimo_msg.creado if ultimo_msg else None,
             "modo": conversacion.modo,
             "no_leidos": no_leidos,
         })
@@ -524,10 +537,9 @@ def bandeja_whatsapp(request):
     return render(request, "whatsapp/bandeja.html", {
         "conversaciones": lista
     })
-
-
 @login_required
 def chat_whatsapp(request, numero):
+    numero = normalizar_numero(numero)
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(
         numero=numero,
         defaults={
