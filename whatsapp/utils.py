@@ -123,11 +123,9 @@ def avisar_asesor(mensaje):
 
 #    mensaje = (
 #        f"Hola {cliente.nombre} 😊\n\n"
-#        f"Queremos saber cómo fue tu experiencia en Óptica IC.\n\n"
-#        f"Del 1 al 5, ¿cómo calificarías nuestra atención?\n\n"
-#        f"Ticket N° {str(ticket.numero).zfill(6)}\n\n"
-#        f"Óptica IC\n"
-#        f"Innovación y Calidad"
+#        f"Esperamos que estés disfrutando tus nuevos lentes de Óptica IC.\n\n"
+#        f"Podrías confirmarnos con un like si todo va bien\n\n"
+#        
 #    )
 
 #    return enviar_whatsapp_texto(cliente.telefono, mensaje)
