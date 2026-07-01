@@ -8,7 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp, Cliente
-from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar, normalizar_numero, nombre_corto_cliente
+from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar, nombre_corto_cliente
 
 from core.models import TicketVenta, OrdenTrabajo
 
@@ -368,7 +368,7 @@ def whatsapp_webhook(request):
 
             if messages:
                 message = messages[0]
-                numero = normalizar_numero(message["from"])
+                numero = (message["from"])
                 tipo = message.get("type")
                 message_id = message.get("id")
 
@@ -493,7 +493,7 @@ def bandeja_whatsapp(request):
 
     for conv in conversaciones:
         numero_original = conv["numero"]
-        numero = normalizar_numero(numero_original)
+        numero = (numero_original)
 
         ultimo_msg = MensajeWhatsApp.objects.filter(
             numero=numero_original
@@ -541,7 +541,7 @@ def bandeja_whatsapp(request):
 
 @login_required
 def chat_whatsapp(request, numero):
-    numero = normalizar_numero(numero)
+    numero = (numero)
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(
         numero=numero,
         defaults={
