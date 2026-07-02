@@ -7,7 +7,8 @@ import json
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp, Cliente
+from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp
+from core.models import Cliente
 from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar, nombre_corto_cliente, normalizar_numero
 
 from core.models import TicketVenta, OrdenTrabajo
