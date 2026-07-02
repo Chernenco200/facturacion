@@ -8,10 +8,10 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp
-from core.models import Cliente
+
 from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar, nombre_corto_cliente, normalizar_numero
 
-from core.models import TicketVenta, OrdenTrabajo
+from core.models import TicketVenta, OrdenTrabajo, Cliente
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Max
@@ -20,6 +20,7 @@ from .ai import responder_con_openai
 
 from datetime import timedelta
 from django.utils import timezone
+import traceback
 
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
@@ -483,63 +484,74 @@ def consultar_estado_ticket(numero, texto_ticket):
 
 @login_required
 def bandeja_whatsapp(request):
-    conversaciones = (
-        MensajeWhatsApp.objects
-        .values("numero")
-        .annotate(ultimo=Max("creado"))
-        .order_by("-ultimo")
-    )
-
-    lista = []
-
-    for conv in conversaciones:
-        numero_original = conv["numero"]
-        numero = normalizar_numero(numero_original)
-
-        ultimo_msg = MensajeWhatsApp.objects.filter(
-            numero=numero_original
-        ).order_by("-creado").first()
-
-        conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-            numero=numero,
-            defaults={
-                "modo": "BOT",
-                "estado": "INICIO",
-            }
+    try:
+        conversaciones = (
+            MensajeWhatsApp.objects
+            .values("numero")
+            .annotate(ultimo=Max("creado"))
+            .order_by("-ultimo")
         )
 
-        no_leidos = MensajeWhatsApp.objects.filter(
-            numero=numero_original,
-            tipo="ENTRANTE",
-            leido=False
-        ).count()
+        lista = []
 
-        numero_sin_51 = numero[2:] if numero.startswith("51") else numero
+        for conv in conversaciones:
+            numero_original = conv["numero"]
+            numero = normalizar_numero(numero_original)
 
-        cliente = Cliente.objects.filter(
-            telefono=numero_sin_51
-        ).first()
+            print("NUMERO ORIGINAL:", numero_original)
+            print("NUMERO NORMALIZADO:", numero)
 
-        nombre_mostrar = (
-            obtener_nombre_corto(cliente.nombre)
-            if cliente
-            else ultimo_msg.nombre if ultimo_msg and ultimo_msg.nombre
-            else "Cliente"
-        )
+            ultimo_msg = MensajeWhatsApp.objects.filter(
+                numero=numero_original
+            ).order_by("-creado").first()
 
-        lista.append({
-            "numero": numero,
-            "nombre": nombre_mostrar,
-            "ultimo_mensaje": ultimo_msg.mensaje if ultimo_msg else "",
-            "ultimo": ultimo_msg.creado if ultimo_msg else None,
-            "modo": conversacion.modo,
-            "no_leidos": no_leidos,
+            conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+                numero=numero,
+                defaults={
+                    "modo": "BOT",
+                    "estado": "INICIO",
+                }
+            )
+
+            no_leidos = MensajeWhatsApp.objects.filter(
+                numero=numero_original,
+                tipo="ENTRANTE",
+                leido=False
+            ).count()
+
+            numero_sin_51 = numero[2:] if numero.startswith("51") else numero
+
+            print("NUMERO SIN 51:", numero_sin_51)
+
+            cliente = Cliente.objects.filter(
+                telefono=numero_sin_51
+            ).first()
+
+            print("CLIENTE:", cliente)
+
+            nombre_mostrar = (
+                obtener_nombre_corto(cliente.nombre)
+                if cliente
+                else ultimo_msg.nombre if ultimo_msg and ultimo_msg.nombre
+                else "Cliente"
+            )
+
+            lista.append({
+                "numero": numero,
+                "nombre": nombre_mostrar,
+                "ultimo_mensaje": ultimo_msg.mensaje if ultimo_msg else "",
+                "ultimo": ultimo_msg.creado if ultimo_msg else None,
+                "modo": conversacion.modo,
+                "no_leidos": no_leidos,
+            })
+
+        return render(request, "whatsapp/bandeja.html", {
+            "conversaciones": lista
         })
 
-    return render(request, "whatsapp/bandeja.html", {
-        "conversaciones": lista
-    })
-
+    except Exception:
+        traceback.print_exc()
+        raise
 @login_required
 def chat_whatsapp(request, numero):
     numero = normalizar_numero(numero)
