@@ -7,12 +7,23 @@ from .models import ConversacionWhatsApp, MensajeWhatsApp
 
 from django.conf import settings
 
+def normalizar_numero(numero):
+    if not numero:
+        return None
+
+    numero = str(numero).replace(" ", "").replace("+", "").replace("-", "")
+
+    if len(numero) == 9:
+        numero = "51" + numero
+
+    return numero
+
 
 def enviar_whatsapp_texto(numero, mensaje):
     access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
 
-    numero = (numero)
+    numero = normalizar_numero(numero)
 
     if not numero:
         print("ERROR: número vacío")
@@ -45,7 +56,7 @@ def enviar_whatsapp_template(numero, template_name, parametros):
     access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
 
-    numero = (numero)
+    numero = normalizar_numero(numero)
 
     if not numero:
         print("ERROR: número vacío")
@@ -161,7 +172,7 @@ def avisar_asesor(mensaje):
 
 
 def cliente_esta_en_ventana_servicio(telefono):
-    telefono = (telefono)
+    telefono = normalizar_numero(telefono)
 
     try:
         conversacion = ConversacionWhatsApp.objects.get(numero=telefono)
