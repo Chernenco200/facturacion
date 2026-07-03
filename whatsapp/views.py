@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect 
+from django.shortcuts import render, redirect, get_object_or_404 
 
 # Create your views here.
 import os
@@ -22,7 +22,6 @@ from datetime import timedelta
 from django.utils import timezone
 import traceback
 
-from django.shortcuts import get_object_or_404, 
 from django.contrib import messages
 
 
