@@ -230,9 +230,7 @@ def responder_mensaje(numero, texto):
         or "estado" in texto
         or texto == "ticket"
         or "ticket" in texto
-        or "lentes" in texto
-        or "listos" in texto
-        or "pedido" in texto
+
     ):
         conversacion.estado = "ESPERANDO_TICKET"
         conversacion.save()

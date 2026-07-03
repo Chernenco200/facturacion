@@ -3015,4 +3015,32 @@ def enviar_renovacion_manual(request, orden_id):
     return redirect("seguimiento_whatsapp")
 
 
+@login_required
+def eliminar_encuesta_manual(request, orden_id):
+    orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
+    orden.encuesta_7_dias_enviada = True
+    orden.save()
+
+    messages.success(request, "Encuesta eliminada de la lista.")
+    return redirect("seguimiento_whatsapp")
+
+@login_required
+def eliminar_control_menor_manual(request, orden_id):
+    orden = get_object_or_404(OrdenTrabajo, id=orden_id)
+
+    orden.control_menor_enviado = True
+    orden.save()
+
+    messages.success(request, "Encuesta eliminada de la lista.")
+    return redirect("seguimiento_whatsapp")
+
+@login_required
+def eliminar_renovacion_manual(request, orden_id):
+    orden = get_object_or_404(OrdenTrabajo, id=orden_id)
+
+    orden.renovacion_anual_enviada  = True
+    orden.save()
+
+    messages.success(request, "Encuesta eliminada de la lista.")
+    return redirect("seguimiento_whatsapp")

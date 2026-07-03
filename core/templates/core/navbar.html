@@ -103,9 +103,30 @@
                 </li>
                 {% endif %}
                 
-                                {% if request.user|has_role:"ADMIN,SUPERVISOR, CAJA" %}
-                <li class="nav-item">
-                <a class="nav-link" href="{% url 'bandeja_whatsapp' %}">WSP</a>
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,CAJA" %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle"
+                    href="#"
+                    id="navbarWhatsapp"
+                    role="button"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false">
+                        WSP
+                    </a>
+
+                    <ul class="dropdown-menu" aria-labelledby="navbarWhatsapp">
+                        <li>
+                            <a class="dropdown-item" href="{% url 'bandeja_whatsapp' %}">
+                                📥 Bandeja
+                            </a>
+                        </li>
+
+                        <li>
+                            <a class="dropdown-item" href="{% url 'seguimiento_whatsapp' %}">
+                                📤 Enviar mensajes
+                            </a>
+                        </li>
+                    </ul>
                 </li>
                 {% endif %}
 

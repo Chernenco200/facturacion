@@ -32,10 +32,20 @@
                 <td>{{ orden.ticket.cliente.nombre }}</td>
                 <td>{{ orden.ticket.cliente.telefono }}</td>
                 <td>{{ orden.ts_entregado|date:"d/m/Y H:i" }}</td>
-                <td>
+                <td class="d-flex gap-1">
                     <form method="post" action="{% url 'enviar_encuesta_manual' orden.id %}">
                         {% csrf_token %}
-                        <button class="btn btn-primary btn-sm">Enviar encuesta</button>
+                        <button class="btn btn-primary btn-sm">
+                            Enviar encuesta
+                        </button>
+                    </form>
+
+                    <form method="post" action="{% url 'eliminar_encuesta_manual' orden.id %}"
+                        onsubmit="return confirm('¿Eliminar esta encuesta pendiente?');">
+                        {% csrf_token %}
+                        <button class="btn btn-danger btn-sm">
+                            Eliminar
+                        </button>
                     </form>
                 </td>
             </tr>
@@ -70,10 +80,20 @@
                 <td>{{ orden.ticket.cliente.Edad }}</td>
                 <td>{{ orden.ticket.cliente.telefono }}</td>
                 <td>{{ orden.ts_entregado|date:"d/m/Y H:i" }}</td>
-                <td>
+                <td class="d-flex gap-1">
                     <form method="post" action="{% url 'enviar_control_menor_manual' orden.id %}">
                         {% csrf_token %}
-                        <button class="btn btn-warning btn-sm">Enviar control</button>
+                        <button class="btn btn-warning btn-sm">
+                            Enviar control
+                        </button>
+                    </form>
+
+                    <form method="post" action="{% url 'eliminar_control_menor_manual' orden.id %}"
+                        onsubmit="return confirm('¿Eliminar este control pendiente?');">
+                        {% csrf_token %}
+                        <button class="btn btn-danger btn-sm">
+                            Eliminar
+                        </button>
                     </form>
                 </td>
             </tr>
@@ -106,10 +126,20 @@
                 <td>{{ orden.ticket.cliente.nombre }}</td>
                 <td>{{ orden.ticket.cliente.telefono }}</td>
                 <td>{{ orden.ts_entregado|date:"d/m/Y H:i" }}</td>
-                <td>
+                <td class="d-flex gap-1">
                     <form method="post" action="{% url 'enviar_renovacion_manual' orden.id %}">
                         {% csrf_token %}
-                        <button class="btn btn-success btn-sm">Enviar renovación</button>
+                        <button class="btn btn-success btn-sm">
+                            Enviar renovación
+                        </button>
+                    </form>
+
+                    <form method="post" action="{% url 'eliminar_renovacion_manual' orden.id %}"
+                        onsubmit="return confirm('¿Eliminar esta renovación pendiente?');">
+                        {% csrf_token %}
+                        <button class="btn btn-danger btn-sm">
+                            Eliminar
+                        </button>
                     </form>
                 </td>
             </tr>
