@@ -555,6 +555,10 @@ def bandeja_whatsapp(request):
 @login_required
 def chat_whatsapp(request, numero):
     numero = normalizar_numero(numero)
+    numero_sin_51 = numero[2:] if numero.startswith("51") else numero
+
+    posibles_numeros = [numero, numero_sin_51]
+
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(
         numero=numero,
         defaults={
@@ -592,13 +596,13 @@ def chat_whatsapp(request, numero):
         return redirect("chat_whatsapp", numero=numero)
 
     MensajeWhatsApp.objects.filter(
-        numero=numero,
+        numero__in=posibles_numeros,
         tipo="ENTRANTE",
         leido=False
     ).update(leido=True)
 
     mensajes = MensajeWhatsApp.objects.filter(
-        numero=numero
+        numero__in=posibles_numeros
     ).order_by("creado")
 
     return render(request, "whatsapp/chat.html", {
@@ -606,8 +610,6 @@ def chat_whatsapp(request, numero):
         "mensajes": mensajes,
         "conversacion": conversacion,
     })
-
-
 @login_required
 def cambiar_modo_whatsapp(request, numero):
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(
