@@ -527,7 +527,7 @@ def bandeja_whatsapp(request):
             ).count()
 
             nombre_mostrar = (
-                obtener_nombre_corto(cliente.nombre)
+                nombre_corto_cliente(cliente.nombre)
                 if cliente
                 else ultimo_msg.nombre if ultimo_msg and ultimo_msg.nombre
                 else "Cliente"
