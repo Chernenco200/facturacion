@@ -22,6 +22,10 @@ from datetime import timedelta
 from django.utils import timezone
 import traceback
 
+from django.shortcuts import get_object_or_404, 
+from django.contrib import messages
+
+
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
 
