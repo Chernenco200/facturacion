@@ -581,8 +581,7 @@ def chat_whatsapp(request, numero):
                     MensajeWhatsApp.objects.create(
                         numero=numero,
                         tipo="SALIENTE",
-                        mensaje=texto if texto else "PDF enviado",
-                        archivo=archivo,
+                        mensaje=texto if texto else f"PDF enviado: {archivo.name}",
                     )
 
         return redirect("chat_whatsapp", numero=numero)
