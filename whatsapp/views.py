@@ -519,7 +519,7 @@ def bandeja_whatsapp(request):
             ).count()
 
             nombre_mostrar = (
-                obtener_nombre_corto(cliente.nombre)
+                nombre_corto_cliente(cliente.nombre)
                 if cliente
                 else ultimo_msg.nombre if ultimo_msg and ultimo_msg.nombre
                 else "Cliente"
@@ -528,8 +528,8 @@ def bandeja_whatsapp(request):
             lista.append({
                 "numero": numero,
                 "nombre": nombre_mostrar,
-                "ultimo_mensaje": ultimo_msg.mensaje,
-                "ultimo": ultimo_msg.creado,
+                "ultimo_mensaje": ultimo_msg.mensaje if ultimo_msg else "",
+                "ultimo": ultimo_msg.creado if ultimo_msg else None,
                 "modo": conversacion.modo,
                 "no_leidos": no_leidos,
             })
@@ -543,7 +543,7 @@ def bandeja_whatsapp(request):
         print(e)
         traceback.print_exc()
         raise
-        
+
 @login_required
 def chat_whatsapp(request, numero):
     numero = normalizar_numero(numero)
