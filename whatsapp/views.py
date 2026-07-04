@@ -484,59 +484,66 @@ def consultar_estado_ticket(numero, texto_ticket):
 
 @login_required
 def bandeja_whatsapp(request):
-    mensajes = MensajeWhatsApp.objects.all().order_by("-creado")
+    try:
+        mensajes = MensajeWhatsApp.objects.all().order_by("-creado")
 
-    grupos = {}
+        grupos = {}
 
-    for msg in mensajes:
-        numero_normalizado = normalizar_numero(msg.numero)
+        for msg in mensajes:
+            numero_normalizado = normalizar_numero(msg.numero)
 
-        if numero_normalizado not in grupos:
-            grupos[numero_normalizado] = msg
+            if numero_normalizado not in grupos:
+                grupos[numero_normalizado] = msg
 
-    lista = []
+        lista = []
 
-    for numero, ultimo_msg in grupos.items():
-        numero_sin_51 = numero[2:] if numero.startswith("51") else numero
+        for numero, ultimo_msg in grupos.items():
+            numero_sin_51 = numero[2:] if numero.startswith("51") else numero
 
-        cliente = Cliente.objects.filter(
-            telefono=numero_sin_51
-        ).first()
+            cliente = Cliente.objects.filter(
+                telefono=numero_sin_51
+            ).first()
 
-        conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-            numero=numero,
-            defaults={
-                "modo": "BOT",
-                "estado": "INICIO",
-            }
-        )
+            conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+                numero=numero,
+                defaults={
+                    "modo": "BOT",
+                    "estado": "INICIO",
+                }
+            )
 
-        no_leidos = MensajeWhatsApp.objects.filter(
-            numero__in=[numero, numero_sin_51],
-            tipo="ENTRANTE",
-            leido=False
-        ).count()
+            no_leidos = MensajeWhatsApp.objects.filter(
+                numero__in=[numero, numero_sin_51],
+                tipo="ENTRANTE",
+                leido=False
+            ).count()
 
-        nombre_mostrar = (
-            obtener_nombre_corto(cliente.nombre)
-            if cliente
-            else ultimo_msg.nombre if ultimo_msg and ultimo_msg.nombre
-            else "Cliente"
-        )
+            nombre_mostrar = (
+                obtener_nombre_corto(cliente.nombre)
+                if cliente
+                else ultimo_msg.nombre if ultimo_msg and ultimo_msg.nombre
+                else "Cliente"
+            )
 
-        lista.append({
-            "numero": numero,
-            "nombre": nombre_mostrar,
-            "ultimo_mensaje": ultimo_msg.mensaje,
-            "ultimo": ultimo_msg.creado,
-            "modo": conversacion.modo,
-            "no_leidos": no_leidos,
+            lista.append({
+                "numero": numero,
+                "nombre": nombre_mostrar,
+                "ultimo_mensaje": ultimo_msg.mensaje,
+                "ultimo": ultimo_msg.creado,
+                "modo": conversacion.modo,
+                "no_leidos": no_leidos,
+            })
+
+        return render(request, "whatsapp/bandeja.html", {
+            "conversaciones": lista
         })
 
-    return render(request, "whatsapp/bandeja.html", {
-        "conversaciones": lista
-    })
-
+    except Exception as e:
+        print("ERROR EN BANDEJA WHATSAPP:")
+        print(e)
+        traceback.print_exc()
+        raise
+        
 @login_required
 def chat_whatsapp(request, numero):
     numero = normalizar_numero(numero)
