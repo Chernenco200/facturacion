@@ -3019,7 +3019,7 @@ def enviar_renovacion_manual(request, orden_id):
 def eliminar_encuesta_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
-    orden.encuesta_7_dias_enviada = True
+    orden.encuesta_enviada = True
     orden.save()
 
     messages.success(request, "Encuesta eliminada de la lista.")
