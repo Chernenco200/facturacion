@@ -202,57 +202,37 @@ def avisar_asesor(mensaje):
 #    return enviar_whatsapp_texto(cliente.telefono, mensaje)
 
 
-def cliente_esta_en_ventana_servicio(telefono):
-    telefono = normalizar_numero(telefono)
 
+def cliente_esta_en_ventana_servicio(numero):
     try:
-        conversacion = ConversacionWhatsApp.objects.get(numero=telefono)
-        return conversacion.actualizado >= timezone.now() - timedelta(hours=24)
-    except ConversacionWhatsApp.DoesNotExist:
+        numero = normalizar_numero(numero)
+    except ValueError:
         return False
+
+    numero_sin_51 = numero[2:] if numero.startswith("51") else numero
+    hace_24h = timezone.now() - timedelta(hours=24)
+
+    return MensajeWhatsApp.objects.filter(
+        numero__in=[numero, numero_sin_51],
+        tipo="ENTRANTE",
+        creado__gte=hace_24h
+    ).exists()
 
 
 def enviar_agradecimiento_ticket(ticket):
-    cliente = ticket.cliente
+    numero = normalizar_numero(cliente.telefono)
 
-    if not cliente.telefono:
-        print("Cliente sin teléfono. No se envía WhatsApp.")
-        return False
-
-    mensaje = (
-        f"Hola {cliente.nombre} 😊\n\n"
-        f"Gracias por tu compra en Óptica IC.\n\n"
-        f"Tu N° de ticket para que puedas hacer seguimiento es: {ticket.numero}\n\n"
-        f"Tu pedido pasará por estas etapas:\n"
-        f"1️⃣ En laboratorio\n"
-        f"2️⃣ En taller de Biselado\n"
-        f"3️⃣ Control de calidad\n"
-        f"4️⃣ Listo para recoger ✅\n\n"
-        f"Puedes consultar el estado de tu ticket escribiendo Menú a este número y seleccionando la opción 2.\n\n"
-        f"Óptica IC\n"
-        f"Innovación y Calidad"
-    )
-
-    if cliente_esta_en_ventana_servicio(cliente.telefono):
-        enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
+    if cliente_esta_en_ventana_servicio(numero):
+        enviado = enviar_whatsapp_texto(numero, mensaje)
     else:
         enviado = enviar_whatsapp_template(
-            numero=cliente.telefono,
+            numero=numero,
             template_name="agradecimiento",
             parametros=[
                 cliente.nombre,
                 str(ticket.numero).zfill(6),
             ],
         )
-
-    if enviado:
-        MensajeWhatsApp.objects.create(
-            numero=cliente.telefono,
-            tipo="BOT",
-            mensaje=mensaje,
-        )
-
-    return enviado
 
 def enviar_encuesta_7_dias(orden):
     ticket = orden.ticket
