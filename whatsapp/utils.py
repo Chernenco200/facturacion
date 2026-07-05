@@ -218,9 +218,28 @@ def cliente_esta_en_ventana_servicio(numero):
         creado__gte=hace_24h
     ).exists()
 
-
 def enviar_agradecimiento_ticket(ticket):
+    cliente = ticket.cliente
+
+    if not cliente or not cliente.telefono:
+        print("Cliente sin teléfono. No se envía WhatsApp.")
+        return False
+
     numero = normalizar_numero(cliente.telefono)
+
+    mensaje = (
+        f"Hola {cliente.nombre} 😊\n\n"
+        f"Gracias por tu compra en Óptica IC.\n\n"
+        f"Tu N° de ticket para que puedas hacer seguimiento es: {ticket.numero}\n\n"
+        f"Tu pedido pasará por estas etapas:\n"
+        f"1️⃣ En laboratorio\n"
+        f"2️⃣ En taller de Biselado\n"
+        f"3️⃣ Control de calidad\n"
+        f"4️⃣ Listo para recoger ✅\n\n"
+        f"Puedes consultar el estado de tu ticket escribiendo Menú a este número y seleccionando la opción 2.\n\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
+    )
 
     if cliente_esta_en_ventana_servicio(numero):
         enviado = enviar_whatsapp_texto(numero, mensaje)
@@ -233,6 +252,15 @@ def enviar_agradecimiento_ticket(ticket):
                 str(ticket.numero).zfill(6),
             ],
         )
+
+    if enviado:
+        MensajeWhatsApp.objects.create(
+            numero=numero,
+            tipo="BOT",
+            mensaje=mensaje,
+        )
+
+    return enviado
 
 def enviar_encuesta_7_dias(orden):
     ticket = orden.ticket
