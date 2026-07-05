@@ -8,16 +8,22 @@ from .models import ConversacionWhatsApp, MensajeWhatsApp
 from django.conf import settings
 
 def normalizar_numero(numero):
-    if not numero:
-        return None
+    numero = str(numero).strip()
+    numero = numero.replace("+", "").replace(" ", "").replace("-", "")
 
-    numero = str(numero).replace(" ", "").replace("+", "").replace("-", "")
+    # Si accidentalmente viene como 5151...
+    while numero.startswith("5151") and len(numero) > 11:
+        numero = numero[2:]
 
-    if len(numero) == 9:
+    # Si viene como 9 dígitos peruano
+    if len(numero) == 9 and numero.startswith("9"):
         numero = "51" + numero
 
-    return numero
+    # Validación final
+    if not (numero.startswith("51") and len(numero) == 11):
+        raise ValueError(f"Número WhatsApp inválido: {numero}")
 
+    return numero
 
 def enviar_whatsapp_texto(numero, mensaje):
     access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
@@ -27,6 +33,11 @@ def enviar_whatsapp_texto(numero, mensaje):
 
     if not numero:
         print("ERROR: número vacío")
+        return False
+
+    # Validación adicional
+    if not (numero.startswith("51") and len(numero) == 11):
+        print(f"ERROR: número inválido -> {numero}")
         return False
 
     url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
@@ -52,14 +63,15 @@ def enviar_whatsapp_texto(numero, mensaje):
 
     return response.status_code in [200, 201]
 
+
 def enviar_whatsapp_template(numero, template_name, parametros):
     access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
 
-    numero = normalizar_numero(numero)
-
-    if not numero:
-        print("ERROR: número vacío")
+    try:
+        numero = normalizar_numero(numero)
+    except ValueError as e:
+        print("ERROR NÚMERO TEMPLATE:", e)
         return False
 
     url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
@@ -92,6 +104,8 @@ def enviar_whatsapp_template(numero, template_name, parametros):
 
     response = requests.post(url, headers=headers, json=data)
 
+    print("TEMPLATE:", template_name)
+    print("NUMERO TEMPLATE:", numero)
     print("STATUS TEMPLATE:", response.status_code)
     print("RESPUESTA TEMPLATE:", response.text)
 
@@ -458,17 +472,25 @@ def enviar_whatsapp_pdf(numero, media_id, filename="documento.pdf", caption=""):
     return response.status_code in [200, 201]
 
 
-def enviar_whatsapp_texto_y_guardar(numero, mensaje):
-    enviado = enviar_whatsapp_texto(numero, mensaje)
+def enviar_whatsapp_texto_y_guardar(numero, texto):
+    try:
+        numero = normalizar_numero(numero)
+    except ValueError as e:
+        print("ERROR NÚMERO:", e)
+        return False
+
+    enviado = enviar_whatsapp_texto(numero, texto)
 
     if enviado:
         MensajeWhatsApp.objects.create(
             numero=numero,
             tipo="SALIENTE",
-            mensaje=mensaje,
+            mensaje=texto,
         )
+        return True
 
-    return enviado    
+    print("No se guardó el mensaje porque WhatsApp no confirmó envío.")
+    return False    
 
 
 def nombre_corto_cliente(nombre_completo):
