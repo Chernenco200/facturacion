@@ -29,7 +29,21 @@ def enviar_whatsapp_texto(numero, mensaje):
     access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
 
-    numero = normalizar_numero(numero)
+    # Guardamos el número tal como llega a la función
+    numero_original = numero
+
+    try:
+        numero = normalizar_numero(numero)
+    except ValueError as e:
+        print("ERROR NÚMERO:", e)
+        return False
+
+    print("===================================")
+    print("ENVIANDO MENSAJE WHATSAPP")
+    print("Número original:", numero_original)
+    print("Número normalizado:", numero)
+    print("Mensaje:", mensaje)
+    print("===================================")
 
     if not numero:
         print("ERROR: número vacío")
@@ -55,6 +69,9 @@ def enviar_whatsapp_texto(numero, mensaje):
             "body": mensaje
         }
     }
+
+    # Esto muestra exactamente el JSON que se envía a Meta
+    print("JSON ENVIADO A META:", data)
 
     response = requests.post(url, headers=headers, json=data)
 
