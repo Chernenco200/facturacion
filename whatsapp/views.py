@@ -490,7 +490,11 @@ def bandeja_whatsapp(request):
         grupos = {}
 
         for msg in mensajes:
-            numero_normalizado = normalizar_numero(msg.numero)
+            try:
+                numero_normalizado = normalizar_numero(msg.numero)
+            except ValueError:
+                print("Número inválido ignorado en bandeja:", msg.numero)
+                continue
 
             if numero_normalizado not in grupos:
                 grupos[numero_normalizado] = msg

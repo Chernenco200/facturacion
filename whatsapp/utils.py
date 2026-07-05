@@ -205,9 +205,9 @@ def enviar_agradecimiento_ticket(ticket):
     mensaje = (
         f"Hola {cliente.nombre} 😊\n\n"
         f"Gracias por tu compra en Óptica IC.\n\n"
-        f"Tu N° de ticket es: {ticket.numero}\n\n"
+        f"Tu N° de ticket para que puedas hacer seguimiento es: {ticket.numero}\n\n"
         f"Tu pedido pasará por estas etapas:\n"
-        f"1️⃣ Pedido enviado al laboratorio\n"
+        f"1️⃣ En laboratorio\n"
         f"2️⃣ En taller de Biselado\n"
         f"3️⃣ Control de calidad\n"
         f"4️⃣ Listo para recoger ✅\n\n"
