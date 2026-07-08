@@ -46,6 +46,7 @@ def responder_mensaje(numero, texto):
     texto = texto.lower().strip()
 
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+        numero = normalizar_numero(numero)
         numero=numero,
         defaults={
             "modo": "BOT",
@@ -607,6 +608,7 @@ def chat_whatsapp(request, numero):
     })
 @login_required
 def cambiar_modo_whatsapp(request, numero):
+    numero = normalizar_numero(numero)
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(
         numero=numero,
         defaults={
