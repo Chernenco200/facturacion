@@ -47,6 +47,14 @@ def responder_mensaje(numero, texto):
     texto_original = texto.strip()
     texto = texto.lower().strip()
 
+    # Limpieza extra para opciones simples
+    texto_opcion = (
+        texto
+        .replace("️⃣", "")
+        .replace("️", "")
+        .strip()
+    )
+
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(
         numero=numero,
         defaults={
@@ -55,41 +63,21 @@ def responder_mensaje(numero, texto):
         }
     )
 
-    ESTADOS_ESPERANDO = [
-        "ESPERANDO_TICKET",
-        "ESPERANDO_DATOS_CITA",
-        "ESPERANDO_ENCUESTA",
-        "ESPERANDO_CONFIRMACION_ASESOR",
-    ]
+    print("DEBUG RESPONDER_MENSAJE")
+    print("NUMERO:", numero)
+    print("TEXTO_ORIGINAL:", repr(texto_original))
+    print("TEXTO:", repr(texto))
+    print("TEXTO_OPCION:", repr(texto_opcion))
+    print("MODO:", conversacion.modo)
+    print("ESTADO:", conversacion.estado)
 
-    # Cierre por inactividad SOLO si estaba esperando una respuesta
-    if not created:
-        tiempo_inactivo = timezone.now() - conversacion.actualizado
-
-        if (
-            tiempo_inactivo > timedelta(minutes=30)
-            and conversacion.estado in ESTADOS_ESPERANDO
-        ):
-            conversacion.modo = "BOT"
-            conversacion.estado = "INICIO"
-            conversacion.save()
-
-            enviar_whatsapp_texto_y_guardar(
-                numero,
-                "Bienvenido de nuevo. ¿En qué podemos ayudarte?"
-            )
-
-    # Si la conversación terminó correctamente antes, se reinicia en silencio
-    if conversacion.estado == "FINALIZADO":
+    # ✅ VOLVER AL BOT: debe ir ANTES del modo HUMANO
+    if texto_opcion in ["0", "menu", "menú", "menu principal", "menú principal"]:
         conversacion.modo = "BOT"
         conversacion.estado = "INICIO"
         conversacion.save()
 
-    # Volver al bot / menú principal
-    if texto in ["0", "0️⃣", "menu", "menú", "menu principal", "menú principal"]:
-        conversacion.modo = "BOT"
-        conversacion.estado = "INICIO"
-        conversacion.save()
+        print("VOLVIENDO A BOT Y ENVIANDO MENÚ")
 
         enviar_menu_principal(numero)
         return
