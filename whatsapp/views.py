@@ -42,11 +42,13 @@ def enviar_menu_principal(numero):
     enviar_whatsapp_texto_y_guardar(numero, mensaje)
 
 def responder_mensaje(numero, texto):
+    numero = normalizar_numero(numero)
+
     texto_original = texto.strip()
     texto = texto.lower().strip()
 
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-        numero = normalizar_numero(numero),
+        numero=numero,
         defaults={
             "modo": "BOT",
             "estado": "INICIO",
