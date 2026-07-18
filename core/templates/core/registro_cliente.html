@@ -194,41 +194,390 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+
     const dniInput = document.getElementById('id_DNI');
     const nombreInput = document.getElementById('id_nombre');
+    const telefonoInput = document.getElementById('id_telefono');
+    const edadInput = document.getElementById('id_Edad');
     const btnBuscarDni = document.getElementById('btn-buscar-dni');
 
-    function buscarPorDni() {
-        const dni = dniInput ? dniInput.value.trim() : '';
-        if (!dni) {
-            alert('Ingrese un DNI primero.');
+    if (!dniInput || !nombreInput) {
+        return;
+    }
+
+    // =====================================================
+    // CAMPO OCULTO CON EL ID DEL CLIENTE SELECCIONADO
+    // =====================================================
+    let clienteId = document.getElementById("cliente_existente_id");
+
+    if (!clienteId) {
+        clienteId = document.createElement("input");
+        clienteId.type = "hidden";
+        clienteId.id = "cliente_existente_id";
+        clienteId.name = "cliente_existente_id";
+        nombreInput.form.appendChild(clienteId);
+    }
+
+    // =====================================================
+    // LISTA DESPLEGABLE PARA NOMBRE
+    // =====================================================
+    const listaClientesNombre = document.createElement("div");
+
+    listaClientesNombre.id = "lista-clientes-nombre";
+    listaClientesNombre.className =
+        "list-group position-absolute";
+
+    listaClientesNombre.style.display = "none";
+    listaClientesNombre.style.zIndex = "9999";
+    listaClientesNombre.style.maxHeight = "250px";
+    listaClientesNombre.style.overflowY = "auto";
+    listaClientesNombre.style.width =
+        nombreInput.offsetWidth + "px";
+
+    nombreInput.parentNode.style.position = "relative";
+    nombreInput.parentNode.appendChild(listaClientesNombre);
+
+    // =====================================================
+    // LISTA DESPLEGABLE PARA DNI
+    // =====================================================
+    const listaClientesDni = document.createElement("div");
+
+    listaClientesDni.id = "lista-clientes-dni";
+    listaClientesDni.className =
+        "list-group position-absolute";
+
+    listaClientesDni.style.display = "none";
+    listaClientesDni.style.zIndex = "9999";
+    listaClientesDni.style.maxHeight = "250px";
+    listaClientesDni.style.overflowY = "auto";
+    listaClientesDni.style.width =
+        dniInput.offsetWidth + "px";
+
+    dniInput.parentNode.style.position = "relative";
+    dniInput.parentNode.appendChild(listaClientesDni);
+
+    // =====================================================
+    // COMPLETAR DATOS DEL CLIENTE Y CARGAR RECETA
+    // =====================================================
+    function seleccionarCliente(cliente) {
+
+        clienteId.value = cliente.id;
+
+        dniInput.value = cliente.dni || "";
+        nombreInput.value = cliente.nombre || "";
+
+        if (telefonoInput) {
+            telefonoInput.value = cliente.telefono || "";
+        }
+
+        if (edadInput) {
+            edadInput.value = cliente.edad || "";
+        }
+
+        listaClientesNombre.style.display = "none";
+        listaClientesDni.style.display = "none";
+
+        cargarUltimaMedida(cliente.id);
+    }
+
+    // =====================================================
+    // CARGAR LA ÚLTIMA MEDIDA
+    // =====================================================
+    function cargarUltimaMedida(clienteIdSeleccionado) {
+
+        fetch(
+            "{% url 'ultima_medida_cliente' %}?cliente_id=" +
+            encodeURIComponent(clienteIdSeleccionado)
+        )
+        .then(response => {
+
+            if (!response.ok) {
+                throw new Error(
+                    "No se pudo consultar la última medida."
+                );
+            }
+
+            return response.json();
+        })
+        .then(data => {
+
+            if (!data.existe) {
+                console.log(
+                    "El cliente no tiene medidas anteriores."
+                );
+                return;
+            }
+
+            const campos = [
+                "esf_lejos_OD",
+                "cil_lejos_OD",
+                "eje_lejos_OD",
+                "DIP_lejos_OD",
+                "Add_lejos_OD",
+                "AV_lejos_OD",
+
+                "esf_lejos_OI",
+                "cil_lejos_OI",
+                "eje_lejos_OI",
+                "DIP_lejos_OI",
+                "Add_lejos_OI",
+                "AV_lejos_OI",
+
+                "esf_cerca_OD",
+                "cil_cerca_OD",
+                "eje_cerca_OD",
+                "DIP_cerca_OD",
+                "AV_cerca_OD",
+
+                "esf_cerca_OI",
+                "cil_cerca_OI",
+                "eje_cerca_OI",
+                "DIP_cerca_OI",
+                "AV_cerca_OI"
+            ];
+
+            campos.forEach(function(nombreCampo) {
+
+                const input = document.getElementById(
+                    "id_" + nombreCampo
+                );
+
+                if (
+                    input &&
+                    data[nombreCampo] !== null &&
+                    data[nombreCampo] !== undefined
+                ) {
+                    input.value = data[nombreCampo];
+                }
+
+            });
+
+            const descripcionInput =
+                document.getElementById("id_descripcion");
+
+            if (descripcionInput) {
+                descripcionInput.value =
+                    data.descripcion || "";
+            }
+
+        })
+        .catch(error => {
+            console.error(
+                "Error cargando la última medida:",
+                error
+            );
+        });
+    }
+
+    // =====================================================
+    // BUSCAR CLIENTES POR NOMBRE
+    // =====================================================
+    let temporizadorNombre;
+
+    nombreInput.addEventListener("input", function() {
+
+        const texto = nombreInput.value.trim();
+
+        clienteId.value = "";
+        clearTimeout(temporizadorNombre);
+
+        if (texto.length < 2) {
+            listaClientesNombre.innerHTML = "";
+            listaClientesNombre.style.display = "none";
             return;
         }
 
-        // Llamamos a la vista consulta_dni
-        fetch("{% url 'consulta_dni' %}?dni=" + encodeURIComponent(dni))
+        temporizadorNombre = setTimeout(function() {
+
+            fetch(
+                "{% url 'buscar_clientes_por_nombre' %}?q=" +
+                encodeURIComponent(texto)
+            )
             .then(response => response.json())
-            .then(data => {
-                if (data.nombre) {
-                    if (nombreInput) nombreInput.value = data.nombre;
-                } else {
-                    alert(data.error || 'No se encontró información para ese DNI.');
+            .then(clientes => {
+
+                listaClientesNombre.innerHTML = "";
+
+                if (clientes.length === 0) {
+                    listaClientesNombre.style.display = "none";
+                    return;
                 }
+
+                clientes.forEach(cliente => {
+
+                    const item = document.createElement("button");
+
+                    item.type = "button";
+                    item.className =
+                        "list-group-item " +
+                        "list-group-item-action text-start";
+
+                    item.innerHTML =
+                        "<strong>" +
+                        cliente.nombre +
+                        "</strong><br>" +
+                        "<small>" +
+                        "DNI: " +
+                        (cliente.dni || "Sin DNI") +
+                        " | Tel: " +
+                        (cliente.telefono || "") +
+                        "</small>";
+
+                    item.addEventListener("click", function() {
+                        seleccionarCliente(cliente);
+                    });
+
+                    listaClientesNombre.appendChild(item);
+                });
+
+                listaClientesNombre.style.display = "block";
             })
-            .catch(err => {
-                console.error(err);
-                alert('Error consultando el DNI.');
+            .catch(error => {
+                console.error(
+                    "Error buscando por nombre:",
+                    error
+                );
             });
+
+        }, 300);
+    });
+
+    // =====================================================
+    // BUSCAR CLIENTES POR DNI PARCIAL
+    // =====================================================
+    let temporizadorDni;
+
+    dniInput.addEventListener("input", function() {
+
+        const texto = dniInput.value.trim();
+
+        clienteId.value = "";
+        clearTimeout(temporizadorDni);
+
+        if (texto.length < 2) {
+            listaClientesDni.innerHTML = "";
+            listaClientesDni.style.display = "none";
+            return;
+        }
+
+        temporizadorDni = setTimeout(function() {
+
+            fetch(
+                "{% url 'buscar_clientes_por_dni' %}?q=" +
+                encodeURIComponent(texto)
+            )
+            .then(response => response.json())
+            .then(clientes => {
+
+                listaClientesDni.innerHTML = "";
+
+                if (clientes.length === 0) {
+                    listaClientesDni.style.display = "none";
+                    return;
+                }
+
+                clientes.forEach(cliente => {
+
+                    const item = document.createElement("button");
+
+                    item.type = "button";
+                    item.className =
+                        "list-group-item " +
+                        "list-group-item-action text-start";
+
+                    item.innerHTML =
+                        "<strong>" +
+                        (cliente.dni || "Sin DNI") +
+                        "</strong><br>" +
+                        "<small>" +
+                        (cliente.nombre || "") +
+                        " | Tel: " +
+                        (cliente.telefono || "") +
+                        "</small>";
+
+                    item.addEventListener("click", function() {
+                        seleccionarCliente(cliente);
+                    });
+
+                    listaClientesDni.appendChild(item);
+                });
+
+                listaClientesDni.style.display = "block";
+            })
+            .catch(error => {
+                console.error(
+                    "Error buscando por DNI:",
+                    error
+                );
+            });
+
+        }, 300);
+    });
+
+    // =====================================================
+    // BOTÓN: CONSULTAR DNI NUEVO EN RENIEC
+    // =====================================================
+    function buscarPorDni() {
+
+        const dni = dniInput.value.trim();
+
+        if (!dni) {
+            alert("Ingrese un DNI primero.");
+            return;
+        }
+
+        fetch(
+            "{% url 'consulta_dni' %}?dni=" +
+            encodeURIComponent(dni)
+        )
+        .then(response => response.json())
+        .then(data => {
+
+            if (data.nombre) {
+                clienteId.value = "";
+                nombreInput.value = data.nombre;
+            } else {
+                alert(
+                    data.error ||
+                    "No se encontró información para ese DNI."
+                );
+            }
+
+        })
+        .catch(error => {
+            console.error(error);
+            alert("Error consultando el DNI.");
+        });
     }
 
     if (btnBuscarDni) {
-        btnBuscarDni.addEventListener('click', buscarPorDni);
+        btnBuscarDni.addEventListener(
+            "click",
+            buscarPorDni
+        );
     }
 
-    // opcional: también al salir del input DNI
-    // if (dniInput) {
-    //     dniInput.addEventListener('blur', buscarPorDni);
-    // }
+    // =====================================================
+    // OCULTAR LISTAS AL HACER CLIC FUERA
+    // =====================================================
+    document.addEventListener("click", function(event) {
+
+        if (
+            event.target !== nombreInput &&
+            !listaClientesNombre.contains(event.target)
+        ) {
+            listaClientesNombre.style.display = "none";
+        }
+
+        if (
+            event.target !== dniInput &&
+            !listaClientesDni.contains(event.target)
+        ) {
+            listaClientesDni.style.display = "none";
+        }
+
+    });
+
 });
 </script>
 

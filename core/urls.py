@@ -40,7 +40,7 @@ urlpatterns = [
     path('compras/detalles/<int:detalle_id>/eliminar/', views.eliminar_detalle_compra, name='eliminar_detalle_compra'),
 
     
-    path('clientes/buscar_por_dni/', views.buscar_cliente_por_dni, name='buscar_cliente_por_dni'),
+    path('clientes/buscar_por_dni/', views.buscar_clientes_por_dni, name='buscar_clientes_por_dni'),
 # Lista / editar / eliminar / historial (lo de antes)
     path('clientes/', views.lista_clientes, name='lista_clientes'),
     path('clientes/nuevo/', views.crear_cliente, name='crear_cliente'),
@@ -127,5 +127,8 @@ urlpatterns = [
     path("seguimiento-whatsapp/eliminar-encuesta/<int:orden_id>/", views.eliminar_encuesta_manual, name="eliminar_encuesta_manual"),
     path("seguimiento-whatsapp/eliminar-control-menor/<int:orden_id>/", views.eliminar_control_menor_manual, name="eliminar_control_menor_manual"),
     path("seguimiento-whatsapp/eliminar-renovacion/<int:orden_id>/", views.eliminar_renovacion_manual, name="eliminar_renovacion_manual"),
+
+    path("clientes/buscar-por-nombre/", views.buscar_clientes_por_nombre, name="buscar_clientes_por_nombre"),
+
 
 ]

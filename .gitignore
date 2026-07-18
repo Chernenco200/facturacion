@@ -15,3 +15,5 @@ staticfiles/
 .vscode/
 .DS_Store
 Thumbs.db
+
+importaciones/

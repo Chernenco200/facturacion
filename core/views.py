@@ -823,8 +823,7 @@ def guardar_ticket(request):
         "fecha_emision": fecha_emision.strftime("%Y-%m-%d"),
     })
 
-def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos=None,
-                          fecha_emision=None, hora_emision=None, fecha_entrega=None, hora_entrega=None, telefono=None, cliente=None, vendedor=None, receta=None):
+def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos=None, fecha_emision=None, hora_emision=None, fecha_entrega=None, hora_entrega=None, telefono=None, cliente=None, vendedor=None, receta=None):
     """
     Dibuja la 2da hoja (Orden de trabajo) en el canvas 'p'.
     Usa el mismo tamaño de página térmica (90mm x 270mm).
@@ -1449,24 +1448,31 @@ def eliminar_detalle_compra(request, detalle_id):
 
 @require_GET
 @role_required("ADMIN", "SUPERVISOR", "TALLER", "CAJA","VENDEDOR")
-def buscar_cliente_por_dni(request):
-    dni = request.GET.get('dni', '').strip()
-    data = {'existe': False}
+def buscar_clientes_por_dni(request):
+    texto = request.GET.get("q", "").strip()
 
-    if dni:
-        try:
-            cliente = Cliente.objects.get(DNI=dni)
-            data.update({
-                'existe': True,
-                'id': cliente.id,
-                'nombre': cliente.nombre or '',
-                'telefono': cliente.telefono or '',
-                'edad': cliente.Edad or '',
-            })
-        except Cliente.DoesNotExist:
-            pass
+    if not texto:
+        return JsonResponse([], safe=False)
 
-    return JsonResponse(data)
+    clientes = (
+        Cliente.objects
+        .filter(DNI__icontains=texto)
+        .order_by("DNI")[:10]
+    )
+
+    resultados = []
+
+    for cliente in clientes:
+        resultados.append({
+            "id": cliente.id,
+            "dni": cliente.DNI or "",
+            "nombre": cliente.nombre or "",
+            "telefono": cliente.telefono or "",
+            "edad": cliente.Edad or "",
+        })
+
+    return JsonResponse(resultados, safe=False)
+    
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR")
 def lista_clientes(request):
     clientes = Cliente.objects.all().order_by('-id')
@@ -1623,7 +1629,7 @@ def ultima_medida_cliente(request):
     medida = (
         MedidaVista.objects
             .filter(cliente_id=cliente_id)
-            .order_by('-fecha_registro')   # tu campo real
+            .order_by('-fecha_registro', "-id")   # tu campo real
             .first()
     )
 
@@ -1637,11 +1643,18 @@ def ultima_medida_cliente(request):
         'esf_lejos_OD': medida.esf_lejos_OD,
         'cil_lejos_OD': medida.cil_lejos_OD,
         'eje_lejos_OD': medida.eje_lejos_OD,
-
+        'DIP_lejos_OD': medida.DIP_lejos_OD,
+        #'Add_lejos_OD': medida.Add_lejos_OD,
+        'AV_lejos_OD': medida.AV_lejos_OD,
+        
         # CAMPO 2: LEJOS OI
         'esf_lejos_OI': medida.esf_lejos_OI,
         'cil_lejos_OI': medida.cil_lejos_OI,
         'eje_lejos_OI': medida.eje_lejos_OI,
+        'DIP_lejos_OI': medida.DIP_lejos_OI,
+        'Add_lejos_OI': medida.Add_lejos_OI,
+        'AV_lejos_OI': medida.AV_lejos_OI,
+
 
         # CAMPO 3: ADD (OD)
         'Add_lejos_OD': medida.Add_lejos_OD,
@@ -2929,8 +2942,10 @@ def seguimiento_whatsapp(request):
         estado="ENTREGADO",
         ts_entregado__date__gte=renovacion_desde,
         ts_entregado__date__lte=renovacion_hasta,
-        ticket__cliente__Edad__gte=18,
         ticket__cliente__telefono__isnull=False,
+    ).filter(
+        Q(ticket__cliente__Edad__gte=18) |
+        Q(ticket__cliente__Edad__isnull=True)
     ).filter(
         Q(fecha_ultima_renovacion__isnull=True) |
         Q(fecha_ultima_renovacion__lte=hoy - relativedelta(months=12))
@@ -2946,7 +2961,6 @@ def seguimiento_whatsapp(request):
 
 
 @login_required
-@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def enviar_encuesta_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
@@ -3044,3 +3058,29 @@ def eliminar_renovacion_manual(request, orden_id):
 
     messages.success(request, "Encuesta eliminada de la lista.")
     return redirect("seguimiento_whatsapp")
+
+
+def buscar_clientes_por_nombre(request):
+    texto = request.GET.get("q", "").strip()
+
+    if len(texto) < 2:
+        return JsonResponse([], safe=False)
+
+    clientes = (
+        Cliente.objects
+        .filter(nombre__icontains=texto)
+        .order_by("nombre")[:10]
+    )
+
+    resultados = []
+
+    for cliente in clientes:
+        resultados.append({
+            "id": cliente.id,
+            "dni": cliente.DNI or "Sin DNI",
+            "nombre": cliente.nombre,
+            "telefono": cliente.telefono or "",
+            "edad": cliente.Edad or "",
+        })
+
+    return JsonResponse(resultados, safe=False)
