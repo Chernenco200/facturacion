@@ -215,7 +215,7 @@ def responder_mensaje(numero, texto):
         enviar_whatsapp_texto_y_guardar(
             numero,
             "Nuestro horario de atención es de lunes a sábado de 9:00 a.m. a 7:45 p.m. "
-            "Domingos de 10:30 a.m. a 6:30 p.m."
+            "Domingos de 10:30 a.m. a 6:00 p.m."
         )
         return
 
@@ -311,30 +311,146 @@ def responder_mensaje(numero, texto):
     respuesta_limpia = respuesta_ia.strip().lower()
 
 
-    # Si OpenAI sugiere asesor, NO pasamos directo a humano.
-    # Pedimos confirmación con 1.
-    if (
-        respuesta_ia.strip().startswith("[ASESOR]")
-        or "comunicarte con un asesor" in respuesta_limpia
-        or "conectarte con un asesor" in respuesta_limpia
-        or "pasarte con un asesor" in respuesta_limpia
-        or "un asesor" in respuesta_limpia
-    ):
+    # Si ninguna regla directa de Django coincide,
+    # OpenAI analiza el mensaje y puede activar un flujo de Django.
+    print("USANDO OPENAI PARA:", texto_original)
+
+    try:
+        respuesta_ia = responder_con_openai(numero, texto_original)
+    except Exception as error:
+        print("ERROR OPENAI:", error)
+
         conversacion.estado = "ESPERANDO_CONFIRMACION_ASESOR"
         conversacion.save()
 
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "No pude procesar correctamente tu consulta en este momento.\n\n"
+            "Si deseas que un asesor de Óptica IC continúe la conversación, responde *Sí*."
+        )
+        return
+
+    print("RESPUESTA OPENAI:", respuesta_ia)
+
+    respuesta_limpia = respuesta_ia.strip()
+    respuesta_mayuscula = respuesta_limpia.upper()
+    respuesta_minuscula = respuesta_limpia.lower()
+
+    # ==========================================================
+    # INTENCIÓN: ESTADO DE TICKET, PEDIDO O LENTES
+    # ==========================================================
+    if "[INTENCION:ESTADO_TICKET]" in respuesta_mayuscula:
+        conversacion.modo = "BOT"
+        conversacion.estado = "ESPERANDO_TICKET"
+        conversacion.save()
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Claro 😊 Para revisar el estado de tus lentes, "
+            "por favor escribe el número de tu ticket.\n\n"
+            "Ejemplo: 000123"
+        )
+        return
+
+    # ==========================================================
+    # INTENCIÓN: HORARIO
+    # ==========================================================
+    if "[INTENCION:HORARIO]" in respuesta_mayuscula:
+        conversacion.modo = "BOT"
+        conversacion.estado = "FINALIZADO"
+        conversacion.save()
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Nuestro horario de atención es:\n\n"
+            "Lunes a sábado: 9:00 a.m. a 7:45 p.m.\n"
+            "Domingos: 10:30 a.m. a 6:30 p.m."
+        )
+        return
+
+    # ==========================================================
+    # INTENCIÓN: UBICACIÓN
+    # ==========================================================
+    if "[INTENCION:UBICACION]" in respuesta_mayuscula:
+        conversacion.modo = "BOT"
+        conversacion.estado = "FINALIZADO"
+        conversacion.save()
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Estamos ubicados en Jr. Camaná 560, Cercado de Lima.\n\n"
+            "Referencia: entre Av. Emancipación y Jr. Huancavelica."
+        )
+        return
+
+    # ==========================================================
+    # INTENCIÓN: CITA
+    # ==========================================================
+    if "[INTENCION:CITA]" in respuesta_mayuscula:
+        conversacion.modo = "BOT"
+        conversacion.estado = "ESPERANDO_DATOS_CITA"
+        conversacion.save()
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Claro 😊 Para separar una cita, envíanos en un solo mensaje:\n\n"
+            "1. Nombre completo\n"
+            "2. Día deseado\n"
+            "3. Hora aproximada\n"
+            "4. Motivo de consulta\n\n"
+            "Ejemplo:\n"
+            "Juan Pérez, martes 5:00 p.m., medida de vista"
+        )
+        return
+
+    # ==========================================================
+    # INTENCIÓN: ASESOR SOLICITADO POR EL CLIENTE
+    # Todavía no activa modo HUMANO. Primero pide confirmación.
+    # ==========================================================
+    if "[INTENCION:ASESOR]" in respuesta_mayuscula:
+        conversacion.modo = "BOT"
+        conversacion.estado = "ESPERANDO_CONFIRMACION_ASESOR"
+        conversacion.save()
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Si deseas que un asesor de Óptica IC continúe la conversación, "
+            "responde *Sí*."
+        )
+        return
+
+    # ==========================================================
+    # OPENAI NO PUEDE RESPONDER CON SEGURIDAD
+    # ==========================================================
+    if (
+        "[ASESOR]" in respuesta_mayuscula
+        or "comunicarte con un asesor" in respuesta_minuscula
+        or "conectarte con un asesor" in respuesta_minuscula
+        or "pasarte con un asesor" in respuesta_minuscula
+        or "contactar con un asesor" in respuesta_minuscula
+    ):
+        conversacion.modo = "BOT"
+        conversacion.estado = "ESPERANDO_CONFIRMACION_ASESOR"
+        conversacion.save()
 
         enviar_whatsapp_texto_y_guardar(
             numero,
             "No cuento con la información suficiente para ayudarte.\n\n"
-            "Si deseas que un asesor de Óptica IC continúe la conversación, responde Sí."
+            "Si deseas que un asesor de Óptica IC continúe la conversación, "
+            "responde *Sí*."
         )
         return
 
+    # ==========================================================
+    # RESPUESTA CONVERSACIONAL NORMAL DE OPENAI
+    # ==========================================================
     conversacion.estado = "FINALIZADO"
     conversacion.save()
 
-    enviar_whatsapp_texto_y_guardar(numero, respuesta_ia)
+    enviar_whatsapp_texto_y_guardar(
+        numero,
+        respuesta_limpia
+    )
     return
     
 
