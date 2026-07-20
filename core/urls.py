@@ -130,5 +130,10 @@ urlpatterns = [
 
     path("clientes/buscar-por-nombre/", views.buscar_clientes_por_nombre, name="buscar_clientes_por_nombre"),
 
+    path(
+        "seguimiento-whatsapp/excluir/<int:cliente_id>/",
+        views.excluir_cliente_reactivacion,
+        name="excluir_cliente_reactivacion",
+    ),
 
 ]

@@ -151,5 +151,76 @@
         </tbody>
     </table>
 
+
+
+
+    <h2>Clientes para reactivación</h2>
+
+    <p>
+        Total encontrados:
+        <strong>{{ clientes_reactivacion|length }}</strong>
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Cliente</th>
+                <th>Teléfono</th>
+                <th>Última compra</th>
+                <th>Máxima compra diaria</th>
+                <th>Categoría</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for item in clientes_reactivacion %}
+            <tr>
+                <td>{{ item.cliente.nombre }}</td>
+                <td>{{ item.cliente.telefono }}</td>
+                <td>{{ item.ultima_compra|date:"d/m/Y" }}</td>
+                <td>S/ {{ item.maxima_compra_dia|floatformat:2 }}</td>
+                <td>{{ item.categoria }}</td>
+
+                <td>
+                    <button
+                        type="button"
+                        class="btn btn-danger btn-sm"
+                        onclick="confirmarExclusion(
+                            '{{ item.cliente.id }}',
+                            '{{ item.cliente.nombre|escapejs }}'
+                        )">
+                        Excluir
+                    </button>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6">
+                    No hay clientes para reactivación.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <form id="form-excluir-reactivacion" method="post" style="display:none;">
+        {% csrf_token %}
+    </form>
+
+    <script>
+    function confirmarExclusion(clienteId, clienteNombre) {
+
+        if (!confirm(`¿Deseas excluir a ${clienteNombre} de la lista de reactivación?`)) {
+            return;
+        }
+
+        const form = document.getElementById("form-excluir-reactivacion");
+        form.action = "/seguimiento-whatsapp/excluir/" + clienteId + "/";
+        form.submit();
+    }
+    </script>
+
+
 </div>
 {% endblock %}

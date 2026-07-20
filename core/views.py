@@ -51,7 +51,7 @@ from django.db import transaction
 
 from decimal import Decimal
 
-from django.db.models import Max, Sum
+from django.db.models import Max, Sum, OuterRef, Subquery
 
 from django.views.decorators.http import require_http_methods
 
@@ -76,6 +76,9 @@ from whatsapp.utils import (
     enviar_control_menor_6_meses,
     enviar_renovacion_anual,
 )
+
+from django.db.models.functions import Coalesce
+
 
 def index(request):
     # Si ya inició sesión, manda al dashboard (o a donde quieras)
@@ -2897,6 +2900,84 @@ def buscar_producto_codigo(request):
 def seguimiento_whatsapp(request):
     hoy = timezone.localdate()
 
+    # ==========================================================
+    # CLIENTES PARA REACTIVACIÓN
+    # ==========================================================
+
+    fecha_limite_reactivacion = hoy - relativedelta(months=12)
+
+    # 1. Total vendido por cliente en cada día
+    compras_diarias = (
+        TicketVenta.objects
+        .filter(cliente_id=OuterRef("pk"))
+        .values(
+            "cliente_id",
+            "fecha_emision",
+        )
+        .annotate(
+            total_dia=Sum("total")
+        )
+        .order_by("-total_dia")
+    )
+
+    # 2. Clientes cuya última compra fue hace 12 meses o más
+    clientes_reactivacion_qs = (
+        Cliente.objects
+        .filter(
+            excluir_reactivacion=False,
+            telefono__isnull=False,
+        )
+        .exclude(
+            telefono=""
+        )
+        .annotate(
+            ultima_compra=Max("ticketventa__fecha_emision"),
+            maxima_compra_dia=Coalesce(
+                Subquery(
+                    compras_diarias.values("total_dia")[:1],
+                    output_field=DecimalField(
+                        max_digits=12,
+                        decimal_places=2,
+                    ),
+                ),
+                Decimal("0.00"),
+            ),
+        )
+        .filter(
+            ultima_compra__isnull=False,
+            ultima_compra__lte=fecha_limite_reactivacion,
+        )
+        .order_by(
+            "-maxima_compra_dia",
+            "ultima_compra",
+        )
+    )
+
+    clientes_reactivacion = []
+
+    for cliente in clientes_reactivacion_qs:
+        monto = cliente.maxima_compra_dia or Decimal("0.00")
+
+        if monto > Decimal("800"):
+            categoria = "BLUE"
+        elif monto > Decimal("300"):
+            categoria = "BLACK"
+        elif monto > Decimal("150"):
+            categoria = "RED"
+        elif monto > Decimal("100"):
+            categoria = "WHITE"
+        else:
+            categoria = "BROWN"
+
+        clientes_reactivacion.append({
+            "cliente": cliente,
+            "ultima_compra": cliente.ultima_compra,
+            "maxima_compra_dia": monto,
+            "categoria": categoria,
+        })
+
+
+
     # Encuesta: entre 7 y 30 días
     encuesta_desde = hoy - timedelta(days=30)
     encuesta_hasta = hoy - timedelta(days=7)
@@ -2957,6 +3038,7 @@ def seguimiento_whatsapp(request):
         "encuestas": encuestas,
         "controles_menores": controles_menores,
         "renovaciones": renovaciones,
+        "clientes_reactivacion": clientes_reactivacion,
     })
 
 
@@ -3084,3 +3166,24 @@ def buscar_clientes_por_nombre(request):
         })
 
     return JsonResponse(resultados, safe=False)
+
+
+
+
+
+
+
+
+def excluir_cliente_reactivacion(request, cliente_id):
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+
+    if request.method == "POST":
+        cliente.excluir_reactivacion = True
+        cliente.save(update_fields=["excluir_reactivacion"])
+
+        messages.success(
+            request,
+            f"{cliente.nombre} fue excluido de la lista de reactivación."
+        )
+
+    return redirect("seguimiento_whatsapp")
