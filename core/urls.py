@@ -136,4 +136,10 @@ urlpatterns = [
         name="excluir_cliente_reactivacion",
     ),
 
+    path(
+        "seguimiento-whatsapp/enviar-reactivacion/<int:cliente_id>/",
+        views.enviar_reactivacion_whatsapp,
+        name="enviar_reactivacion_whatsapp",
+    ),    
+
 ]

@@ -183,13 +183,42 @@
                 <td>{{ item.categoria }}</td>
 
                 <td>
+                    <form
+                        method="post"
+                        action="{% url 'enviar_reactivacion_whatsapp' item.cliente.id %}"
+                        style="display:inline;"
+                        onsubmit="return confirm('¿Enviar mensaje de reactivación a {{ item.cliente.nombre|escapejs }}?');"
+                    >
+                        {% csrf_token %}
+
+                        <input
+                            type="hidden"
+                            name="categoria"
+                            value="{{ item.categoria }}"
+                        >
+
+                        <input
+                            type="hidden"
+                            name="monto_maximo"
+                            value="{{ item.maxima_compra_dia }}"
+                        >
+
+                        <button
+                            type="submit"
+                            class="btn btn-success btn-sm"
+                        >
+                            Enviar
+                        </button>
+                    </form>
+
                     <button
                         type="button"
                         class="btn btn-danger btn-sm"
                         onclick="confirmarExclusion(
                             '{{ item.cliente.id }}',
                             '{{ item.cliente.nombre|escapejs }}'
-                        )">
+                        )"
+                    >
                         Excluir
                     </button>
                 </td>

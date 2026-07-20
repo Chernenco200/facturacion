@@ -16,7 +16,7 @@ from reportlab.platypus import Paragraph, Frame
 from reportlab.lib.styles import ParagraphStyle
 
 from django.shortcuts import render, redirect
-from .models import Venta, Producto, Gasto, Venta, MedidaVista, Cliente, TipoLunas, ReciboCorrelativo, TicketVenta, DetalleTicketVenta, Compra, DetalleCompra, Proveedor, KardexMovimiento, PagoTicket, MovimientoCaja, OrdenTrabajo
+from .models import Venta, Producto, Gasto, Venta, MedidaVista, Cliente, TipoLunas, ReciboCorrelativo, TicketVenta, DetalleTicketVenta, Compra, DetalleCompra, Proveedor, KardexMovimiento, PagoTicket, MovimientoCaja, OrdenTrabajo, ReactivacionWhatsApp
 from .forms import ClienteForm, MedidaVistaForm, TipoLunasForm, ProductoForm, CompraForm, ProveedorForm, DetalleCompraForm
 from django.shortcuts import get_object_or_404
 
@@ -64,7 +64,11 @@ from accounts.forms import LoginForm
 from django.contrib.auth import login
 
 from whatsapp.utils import enviar_agradecimiento_ticket
-from whatsapp.utils import enviar_aviso_lentes_listos
+from whatsapp.utils import (
+    enviar_aviso_lentes_listos,
+    enviar_whatsapp_texto,
+    enviar_whatsapp_template,
+)
 
 
 from datetime import timedelta
@@ -3185,5 +3189,46 @@ def excluir_cliente_reactivacion(request, cliente_id):
             request,
             f"{cliente.nombre} fue excluido de la lista de reactivación."
         )
+
+    return redirect("seguimiento_whatsapp")
+
+
+def enviar_reactivacion_whatsapp(request, cliente_id):
+    cliente = get_object_or_404(Cliente, pk=cliente_id)
+
+    if request.method != "POST":
+        return redirect("seguimiento_whatsapp")
+
+    categoria = request.POST.get("categoria", "")
+    monto_maximo = Decimal(request.POST.get("monto_maximo", "0"))
+
+    enviado = enviar_whatsapp_template(
+        numero=cliente.telefono,
+        template_name="renovacion_anual",
+        parametros=[
+            cliente.nombre,
+        ],
+    )
+
+    if not enviado:
+        messages.error(
+            request,
+            f"No se pudo enviar el mensaje a {cliente.nombre}."
+        )
+        return redirect("seguimiento_whatsapp")
+
+    ReactivacionWhatsApp.objects.create(
+        cliente=cliente,
+        categoria=categoria,
+        monto_maximo=monto_maximo,
+    )
+
+    cliente.fecha_ultima_reactivacion = timezone.localdate()
+    cliente.save(update_fields=["fecha_ultima_reactivacion"])
+
+    messages.success(
+        request,
+        f"Mensaje enviado a {cliente.nombre}."
+    )
 
     return redirect("seguimiento_whatsapp")
