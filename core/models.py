@@ -222,8 +222,40 @@ class Cliente(models.Model):
     fecha_registro = models.DateField(default=timezone.localdate)
     Optometra = models.CharField(max_length=20, choices=OPTOMETRA_CHOICES, null=True, blank=True) 
 
+    fecha_ultima_reactivacion = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    excluir_reactivacion = models.BooleanField(
+        default=False
+    )
+
+
     def __str__(self):
         return self.nombre
+
+class ReactivacionWhatsApp(models.Model):
+    cliente = models.ForeignKey(
+        Cliente,
+        on_delete=models.CASCADE,
+        related_name="reactivaciones"
+    )
+
+    fecha_envio = models.DateTimeField(auto_now_add=True)
+
+    categoria = models.CharField(max_length=10)
+
+    monto_maximo = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    respondio = models.BooleanField(default=False)
+
+    genero_venta = models.BooleanField(default=False)
+
+    observacion = models.TextField(blank=True)
 
 class MedidaVista(models.Model):
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='medidas')
