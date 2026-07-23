@@ -16,7 +16,7 @@ from reportlab.platypus import Paragraph, Frame
 from reportlab.lib.styles import ParagraphStyle
 
 from django.shortcuts import render, redirect
-from .models import Venta, Producto, Gasto, MedidaVista, Cliente, TipoLunas, ReciboCorrelativo, TicketVenta, DetalleTicketVenta, Compra, DetalleCompra, Proveedor, KardexMovimiento, PagoTicket, MovimientoCaja, OrdenTrabajo, ReactivacionWhatsApp, MensajeWhatsApp,
+from .models import Venta, Producto, Gasto, MedidaVista, Cliente, TipoLunas, ReciboCorrelativo, TicketVenta, DetalleTicketVenta, Compra, DetalleCompra, Proveedor, KardexMovimiento, PagoTicket, MovimientoCaja, OrdenTrabajo, ReactivacionWhatsApp, MensajeWhatsApp
 from .forms import ClienteForm, MedidaVistaForm, TipoLunasForm, ProductoForm, CompraForm, ProveedorForm, DetalleCompraForm
 from django.shortcuts import get_object_or_404
 
