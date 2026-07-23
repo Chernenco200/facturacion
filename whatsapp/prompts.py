@@ -24,6 +24,7 @@ Entre Av. Emancipación y Jr. Huancavelica.
 Horario de atención:
 - Lunes a sábado: 9:00 a.m. a 7:45 p.m.
 - Domingos: 10:30 a.m. a 6:00 p.m.
+- Feriados: 10:00 am. a 7:00 p.m. 
 
 Realizamos envíos a provincia.
 
