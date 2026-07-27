@@ -17,6 +17,7 @@ from reportlab.lib.styles import ParagraphStyle
 
 from django.shortcuts import render, redirect
 from .models import Venta, Producto, Gasto, MedidaVista, Cliente, TipoLunas, ReciboCorrelativo, TicketVenta, DetalleTicketVenta, Compra, DetalleCompra, Proveedor, KardexMovimiento, PagoTicket, MovimientoCaja, OrdenTrabajo, ReactivacionWhatsApp
+from whatsapp.models import MensajeWhatsApp
 from .forms import ClienteForm, MedidaVistaForm, TipoLunasForm, ProductoForm, CompraForm, ProveedorForm, DetalleCompraForm
 from django.shortcuts import get_object_or_404
 
@@ -2931,8 +2932,14 @@ def seguimiento_whatsapp(request):
             excluir_reactivacion=False,
             telefono__isnull=False,
         )
-        .exclude(
-            telefono=""
+        .exclude(telefono="")
+        .filter(
+            Q(fecha_ultima_reactivacion__isnull=True)
+            |
+            Q(
+                fecha_ultima_reactivacion__lte=
+                fecha_limite_reactivacion
+            )
         )
         .annotate(
             ultima_compra=Max("ticketventa__fecha_emision"),
@@ -3193,42 +3200,196 @@ def excluir_cliente_reactivacion(request, cliente_id):
     return redirect("seguimiento_whatsapp")
 
 
+def obtener_categoria_reactivacion(monto_maximo):
+    """
+    Determina la categoría del cliente según su máxima compra
+    acumulada en un solo día.
+    """
+
+    if monto_maximo > Decimal("800.00"):
+        return "BLUE"
+
+    if monto_maximo > Decimal("300.00"):
+        return "BLACK"
+
+    if monto_maximo > Decimal("150.00"):
+        return "RED"
+
+    if monto_maximo > Decimal("100.00"):
+        return "WHITE"
+
+    return "BROWN"
+
+
 def enviar_reactivacion_whatsapp(request, cliente_id):
-    cliente = get_object_or_404(Cliente, pk=cliente_id)
+    cliente = get_object_or_404(
+        Cliente,
+        id=cliente_id,
+    )
 
     if request.method != "POST":
         return redirect("seguimiento_whatsapp")
 
-    categoria = request.POST.get("categoria", "")
-    monto_maximo = Decimal(request.POST.get("monto_maximo", "0"))
-
-    enviado = enviar_whatsapp_template(
-        numero=cliente.telefono,
-        template_name="renovacion_anual",
-        parametros=[
-            cliente.nombre,
-        ],
-    )
-
-    if not enviado:
+    if not cliente.telefono:
         messages.error(
             request,
-            f"No se pudo enviar el mensaje a {cliente.nombre}."
+            f"El cliente {cliente.nombre or 'seleccionado'} "
+            f"no tiene teléfono registrado."
         )
         return redirect("seguimiento_whatsapp")
 
-    ReactivacionWhatsApp.objects.create(
-        cliente=cliente,
-        categoria=categoria,
-        monto_maximo=monto_maximo,
+    nombre = (cliente.nombre or "Cliente").strip()
+    numero = str(cliente.telefono).strip()
+
+    # Obtener el monto enviado desde la lista.
+    monto_recibido = (
+        request.POST.get("monto_maximo", "0")
+        .strip()
+        .replace(",", ".")
     )
 
-    cliente.fecha_ultima_reactivacion = timezone.localdate()
-    cliente.save(update_fields=["fecha_ultima_reactivacion"])
+    try:
+        monto_maximo = Decimal(monto_recibido)
+    except (InvalidOperation, TypeError, ValueError):
+        monto_maximo = Decimal("0.00")
 
-    messages.success(
-        request,
-        f"Mensaje enviado a {cliente.nombre}."
+    # Calcular la categoría en el servidor.
+    categoria = obtener_categoria_reactivacion(
+        monto_maximo
     )
+
+    # Elegir la plantilla y el texto que se verá
+    # dentro de la bandeja interna de Django.
+    if categoria in ["BLUE", "BLACK"]:
+        template_name = "reactivacion_clientes_premium"
+
+        mensaje_bandeja = (
+            f"Hola {nombre} 👋\n\n"
+            f"En Óptica IC queremos agradecerte por haber confiado "
+            f"en nosotros. Gracias a clientes como tú seguimos "
+            f"creciendo cada día.\n\n"
+            f"Nos encantaría volver a atenderte y acompañarte en el "
+            f"cuidado de tu salud visual. Si ya es momento de renovar "
+            f"tus lentes o realizar un nuevo examen visual, estaremos "
+            f"felices de recibirte nuevamente.\n\n"
+            f"Como uno de nuestros clientes preferentes, queremos "
+            f"brindarte una atención personalizada para ayudarte a "
+            f"encontrar la mejor solución para tu visión.\n\n"
+            f"📍 Jr. Camaná 560, Cercado de Lima.\n\n"
+            f"Botones:\n"
+            f"• Reservar cita\n"
+            f"• Hablar con un asesor\n"
+            f"• Ver promociones\n\n"
+            f"Óptica IC\n"
+            f"Innovación y Calidad"
+        )
+
+    else:
+        template_name = "reactivacion_clientes"
+
+        mensaje_bandeja = (
+            f"Hola {nombre} 👋\n\n"
+            f"Ha pasado un tiempo desde tu última visita a "
+            f"Óptica IC.\n\n"
+            f"Queremos invitarte a realizar un nuevo control visual "
+            f"y evaluar si ya es momento de renovar tus lentes.\n\n"
+            f"Será un gusto volver a atenderte.\n\n"
+            f"📍 Jr. Camaná 560, Cercado de Lima.\n\n"
+            f"Botones:\n"
+            f"• Reservar cita\n"
+            f"• Hablar con un asesor\n"
+            f"• Ver promociones\n\n"
+            f"Óptica IC\n"
+            f"Innovación y Calidad"
+        )
+
+    try:
+        # En reactivación siempre se usa plantilla,
+        # porque son clientes sin conversación reciente.
+        enviado = enviar_whatsapp_template(
+            numero=numero,
+            template_name=template_name,
+            parametros=[
+                nombre,
+            ],
+        )
+
+        if not enviado:
+            messages.error(
+                request,
+                f"Meta no aceptó el mensaje para {nombre}. "
+                f"Revisa el teléfono y la plantilla "
+                f"'{template_name}'."
+            )
+            return redirect("seguimiento_whatsapp")
+
+        # Meta aceptó el envío. Ahora registramos
+        # todos los cambios locales en una transacción.
+        with transaction.atomic():
+
+            # Registrar el mensaje para mostrarlo
+            # dentro de /whatsapp/bandeja/
+            MensajeWhatsApp.objects.create(
+                numero=numero,
+                nombre=nombre,
+                tipo="SALIENTE",
+                mensaje=mensaje_bandeja,
+                leido=True,
+            )
+
+            # Crear o actualizar la conversación.
+            # BOT/HUMANO corresponde a ConversacionWhatsApp.modo,
+            # no a MensajeWhatsApp.tipo.
+            conversacion, creada = (
+                ConversacionWhatsApp.objects.get_or_create(
+                    numero=numero,
+                    defaults={
+                        "modo": "BOT",
+                        "estado": "INICIO",
+                    },
+                )
+            )
+
+            conversacion.modo = "BOT"
+            conversacion.estado = "INICIO"
+            conversacion.save(
+                update_fields=[
+                    "modo",
+                    "estado",
+                    "actualizado",
+                ]
+            )
+
+            # Registrar el historial de reactivación.
+            ReactivacionWhatsApp.objects.create(
+                cliente=cliente,
+                categoria=categoria,
+                monto_maximo=monto_maximo,
+            )
+
+            # Esta fecha permitirá retirar al cliente
+            # de la lista de reactivación.
+            cliente.fecha_ultima_reactivacion = (
+                timezone.localdate()
+            )
+            cliente.save(
+                update_fields=[
+                    "fecha_ultima_reactivacion",
+                ]
+            )
+
+        messages.success(
+            request,
+            f"Mensaje de reactivación enviado a {nombre} "
+            f"con la plantilla '{template_name}'."
+        )
+
+    except Exception as e:
+        print("ERROR ENVIANDO REACTIVACIÓN:", repr(e))
+
+        messages.error(
+            request,
+            f"Error enviando la reactivación: {e}"
+        )
 
     return redirect("seguimiento_whatsapp")
