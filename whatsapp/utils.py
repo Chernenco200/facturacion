@@ -538,6 +538,15 @@ def nombre_corto_cliente(nombre_completo):
     return nombre_completo.title()
 
 
+import traceback
+
+from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect
+
+from core.models import Cliente
+from whatsapp.utils import enviar_reactivacion
+
+
 def enviar_reactivacion_whatsapp(request, cliente_id):
     cliente = get_object_or_404(Cliente, pk=cliente_id)
 
@@ -545,22 +554,27 @@ def enviar_reactivacion_whatsapp(request, cliente_id):
         ok = enviar_reactivacion(cliente)
 
         if ok:
-            messages.success(request, "Reactivación enviada.")
+            messages.success(
+                request,
+                "Reactivación enviada."
+            )
         else:
-            messages.error(request, "No se pudo enviar.")
+            messages.error(
+                request,
+                "No se pudo enviar."
+            )
 
     except Exception as error:
-        print("=" * 60)
+        print("=" * 70)
         print("ERROR EN enviar_reactivacion_whatsapp")
         print(f"Cliente ID: {cliente_id}")
-        print(f"Cliente: {cliente.nombre}")
         print(f"Error: {repr(error)}")
         traceback.print_exc()
-        print("=" * 60)
+        print("=" * 70)
 
         messages.error(
             request,
-            "Ocurrió un error al enviar la reactivación. Revisa los logs."
+            "Ocurrió un error al enviar la reactivación."
         )
 
     return redirect("seguimiento_whatsapp")
