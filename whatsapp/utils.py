@@ -3,7 +3,7 @@ import requests
 
 from django.utils import timezone
 from datetime import timedelta
-from .models import ConversacionWhatsApp, MensajeWhatsApp, 
+from .models import ConversacionWhatsApp, MensajeWhatsApp 
 
 from django.conf import settings
 
