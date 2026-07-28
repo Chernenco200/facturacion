@@ -12,7 +12,6 @@ import traceback
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from core.models import Cliente
-from .utils import enviar_reactivacion
 
 def normalizar_numero(numero):
     numero = str(numero).strip()
