@@ -544,7 +544,7 @@ def nombre_corto_cliente(nombre_completo):
 
 
 
-def enviar_reactivacion(cliente):
+def enviar_reactivacion_whatsupp(cliente):
     print("=== ENVIAR REACTIVACIÓN ===")
     print("CLIENTE ID:", cliente.id if cliente else None)
     print("CLIENTE:", cliente.nombre if cliente else None)

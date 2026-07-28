@@ -69,7 +69,6 @@ from whatsapp.utils import (
     enviar_aviso_lentes_listos,
     enviar_whatsapp_texto,
     enviar_whatsapp_template,
-    enviar_reactivacion_whatsapp,
 )
 
 
