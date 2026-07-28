@@ -13,6 +13,11 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from core.models import Cliente
 
+
+from core.models import ReactivacionWhatsApp
+from whatsapp.models import ConversacionWhatsApp, MensajeWhatsApp
+
+
 def normalizar_numero(numero):
     numero = str(numero).strip()
     numero = numero.replace("+", "").replace(" ", "").replace("-", "")
@@ -538,43 +543,105 @@ def nombre_corto_cliente(nombre_completo):
     return nombre_completo.title()
 
 
-import traceback
 
-from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect
+def enviar_reactivacion(cliente):
+    print("=== ENVIAR REACTIVACIÓN ===")
+    print("CLIENTE ID:", cliente.id if cliente else None)
+    print("CLIENTE:", cliente.nombre if cliente else None)
+    print("TELÉFONO:", cliente.telefono if cliente else None)
 
-from core.models import Cliente
+    if not cliente or not cliente.telefono:
+        print("Cliente sin teléfono. No se envía WhatsApp.")
+        return False
 
+    # Usa aquí el nombre exacto de tu campo.
+    if getattr(cliente, "excluir_reactivacion", False):
+        print("Cliente excluido de reactivaciones.")
+        return False
 
+    nombre = nombre_corto_cliente(cliente.nombre)
 
-def enviar_reactivacion_whatsapp(request, cliente_id):
-    cliente = get_object_or_404(Cliente, pk=cliente_id)
+    mensaje = (
+        f"Hola {nombre} 😊\n\n"
+        f"En Óptica IC queremos seguir acompañándote en el cuidado "
+        f"de tu salud visual.\n\n"
+        f"Ha pasado un tiempo desde tu última compra y queremos invitarte "
+        f"a realizar una revisión de tus lentes y medida.\n\n"
+        f"Puedes responder este mensaje para recibir más información "
+        f"o agendar una cita.\n\n"
+        f"Óptica IC\n"
+        f"Innovación y Calidad"
+    )
 
-    try:
-        ok = enviar_reactivacion(cliente)
+    # Mientras no estén aprobadas las plantillas específicas de reactivación,
+    # puedes usar temporalmente renovacion_anual.
+    template_name = "renovacion_anual"
 
-        if ok:
-            messages.success(
-                request,
-                "Reactivación enviada."
-            )
-        else:
-            messages.error(
-                request,
-                "No se pudo enviar."
-            )
-
-    except Exception as error:
-        print("=" * 70)
-        print("ERROR EN enviar_reactivacion_whatsapp")
-        print(f"Cliente ID: {cliente_id}")
-        print(f"Error: {repr(error)}")
-        traceback.print_exc()
-        print("=" * 70)
-
-        messages.error(
-            request,
-            "Ocurrió un error al enviar la reactivación."
+    if cliente_esta_en_ventana_servicio(cliente.telefono):
+        enviado = enviar_whatsapp_texto(
+            cliente.telefono,
+            mensaje,
+        )
+    else:
+        enviado = enviar_whatsapp_template(
+            numero=cliente.telefono,
+            template_name=template_name,
+            parametros=[nombre],
         )
 
-    return redirect("seguimiento_whatsapp")
+    if not enviado:
+        print("Meta no confirmó el envío de la reactivación.")
+        return False
+
+    # Registrar el mensaje para que aparezca en la bandeja.
+    MensajeWhatsApp.objects.create(
+        numero=cliente.telefono,
+        tipo="BOT",
+        mensaje=mensaje,
+    )
+
+    # Crear o actualizar la conversación.
+    conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+        numero=cliente.telefono,
+        defaults={
+            "modo": "BOT",
+            "estado": "INICIO",
+        },
+    )
+
+    conversacion.modo = "BOT"
+    conversacion.estado = "INICIO"
+    conversacion.save(
+        update_fields=[
+            "modo",
+            "estado",
+            "actualizado",
+        ]
+    )
+
+    # Historial específico de reactivación.
+    ReactivacionWhatsApp.objects.create(
+        cliente=cliente,
+        fecha_envio=timezone.now(),
+        plantilla=template_name,
+        estado="ENVIADO",
+    )
+
+    # Actualizar al cliente para que desaparezca de la lista hasta
+    # que vuelva a cumplirse el periodo definido.
+    cliente.fecha_ultima_reactivacion = timezone.now()
+
+    if cliente.reactivaciones_enviadas is None:
+        cliente.reactivaciones_enviadas = 0
+
+    cliente.reactivaciones_enviadas += 1
+
+    cliente.save(
+        update_fields=[
+            "fecha_ultima_reactivacion",
+            "reactivaciones_enviadas",
+        ]
+    )
+
+    print("Reactivación enviada y registrada correctamente.")
+    return True
