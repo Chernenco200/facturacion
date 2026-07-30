@@ -17,6 +17,8 @@ from core.models import Cliente
 from core.models import ReactivacionWhatsApp
 from whatsapp.models import ConversacionWhatsApp, MensajeWhatsApp
 
+import logging
+logger = logging.getLogger(__name__)
 
 def normalizar_numero(numero):
     numero = str(numero).strip()
@@ -543,83 +545,168 @@ def nombre_corto_cliente(nombre_completo):
     return nombre_completo.title()
 
 
-
-def enviar_reactivacion_whatsupp(cliente):
+def enviar_reactivacion(cliente):
     print("=== ENVIAR REACTIVACIÓN ===")
     print("CLIENTE ID:", cliente.id if cliente else None)
     print("CLIENTE:", cliente.nombre if cliente else None)
     print("TELÉFONO:", cliente.telefono if cliente else None)
 
+    # ==========================================================
+    # 1. VALIDACIONES
+    # ==========================================================
     if not cliente or not cliente.telefono:
         print("Cliente sin teléfono. No se envía WhatsApp.")
         return False
 
-    # Usa aquí el nombre exacto de tu campo.
     if getattr(cliente, "excluir_reactivacion", False):
         print("Cliente excluido de reactivaciones.")
         return False
 
+    # ==========================================================
+    # 2. NOMBRE CORTO
+    # ==========================================================
     nombre = nombre_corto_cliente(cliente.nombre)
 
-    mensaje = (
-        f"Hola {nombre} 😊\n\n"
-        f"En Óptica IC queremos seguir acompañándote en el cuidado "
-        f"de tu salud visual.\n\n"
-        f"Ha pasado un tiempo desde tu última compra y queremos invitarte "
-        f"a realizar una revisión de tus lentes y medida.\n\n"
-        f"Puedes responder este mensaje para recibir más información "
-        f"o agendar una cita.\n\n"
-        f"Óptica IC\n"
-        f"Innovación y Calidad"
+    # ==========================================================
+    # 3. CALCULAR LA MÁXIMA COMPRA DIARIA
+    # ==========================================================
+    compras_por_dia = (
+        TicketVenta.objects
+        .filter(cliente=cliente)
+        .values("fecha_emision")
+        .annotate(total_dia=Sum("total"))
+        .order_by("-total_dia")
     )
 
-    # Mientras no estén aprobadas las plantillas específicas de reactivación,
-    # puedes usar temporalmente renovacion_anual.
-    template_name = "renovacion_anual"
+    primera_compra = compras_por_dia.first()
 
+    if primera_compra:
+        maxima_compra_dia = (
+            primera_compra.get("total_dia")
+            or Decimal("0.00")
+        )
+    else:
+        maxima_compra_dia = Decimal("0.00")
+
+    print("MÁXIMA COMPRA DIARIA:", maxima_compra_dia)
+
+    # ==========================================================
+    # 4. DETERMINAR CATEGORÍA
+    # ==========================================================
+    if maxima_compra_dia >= Decimal("800"):
+        categoria = "BLUE"
+    elif maxima_compra_dia >= Decimal("300"):
+        categoria = "BLACK"
+    elif maxima_compra_dia >= Decimal("150"):
+        categoria = "RED"
+    elif maxima_compra_dia >= Decimal("100"):
+        categoria = "WHITE"
+    else:
+        categoria = "BROWN"
+
+    print("CATEGORÍA:", categoria)
+
+    # Premium: BLUE y BLACK
+    es_premium = categoria in {
+        "BLUE",
+        "BLACK",
+    }
+
+    print("ES PREMIUM:", es_premium)
+
+    # ==========================================================
+    # 5. ELEGIR PLANTILLA Y MENSAJE
+    # ==========================================================
+    if es_premium:
+        template_name = "reactivar_cliente_premium"
+
+        mensaje = (
+            f"Hola {nombre} 😊\n\n"
+            f"Eres uno de nuestros clientes premium de Óptica IC y "
+            f"queremos seguir acompañándote en el cuidado de tu salud "
+            f"visual.\n\n"
+            f"Ha pasado un tiempo desde tu última compra. Queremos "
+            f"invitarte a realizar una revisión de tus lentes y medida.\n\n"
+            f"Puedes responder este mensaje para recibir más información "
+            f"o agendar una cita.\n\n"
+            f"Óptica IC\n"
+            f"Innovación y Calidad"
+        )
+
+    else:
+        template_name = "reactivacion_clientes"
+
+        mensaje = (
+            f"Hola {nombre} 😊\n\n"
+            f"En Óptica IC queremos seguir acompañándote en el cuidado "
+            f"de tu salud visual.\n\n"
+            f"Ha pasado un tiempo desde tu última compra y queremos "
+            f"invitarte a realizar una revisión de tus lentes y medida.\n\n"
+            f"Puedes responder este mensaje para recibir más información "
+            f"o agendar una cita.\n\n"
+            f"Óptica IC\n"
+            f"Innovación y Calidad"
+        )
+
+    print("PLANTILLA:", template_name)
+
+    # ==========================================================
+    # 6. ENVIAR TEXTO O PLANTILLA
+    # ==========================================================
     if cliente_esta_en_ventana_servicio(cliente.telefono):
+        print("Cliente dentro de la ventana de servicio.")
+
         enviado = enviar_whatsapp_texto(
             cliente.telefono,
             mensaje,
         )
     else:
+        print("Cliente fuera de la ventana de servicio.")
+
         enviado = enviar_whatsapp_template(
             numero=cliente.telefono,
             template_name=template_name,
             parametros=[nombre],
         )
 
+    # ==========================================================
+    # 7. VERIFICAR ENVÍO
+    # ==========================================================
     if not enviado:
         print("Meta no confirmó el envío de la reactivación.")
         return False
 
-    # Registrar el mensaje para que aparezca en la bandeja.
+    print("Meta confirmó el envío.")
+
+    # ==========================================================
+    # 8. REGISTRAR MENSAJE EN LA BANDEJA
+    # ==========================================================
     MensajeWhatsApp.objects.create(
         numero=cliente.telefono,
         tipo="BOT",
         mensaje=mensaje,
     )
 
-    # Crear o actualizar la conversación.
-    conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-        numero=cliente.telefono,
-        defaults={
-            "modo": "BOT",
-            "estado": "INICIO",
-        },
+    # ==========================================================
+    # 9. CREAR O ACTUALIZAR CONVERSACIÓN
+    # ==========================================================
+    conversacion, created = (
+        ConversacionWhatsApp.objects.get_or_create(
+            numero=cliente.telefono,
+            defaults={
+                "modo": "BOT",
+                "estado": "INICIO",
+            },
+        )
     )
 
     conversacion.modo = "BOT"
     conversacion.estado = "INICIO"
-    conversacion.save(
-        update_fields=[
-            "modo",
-            "estado",
-            "actualizado",
-        ]
-    )
+    conversacion.save()
 
-    # Historial específico de reactivación.
+    # ==========================================================
+    # 10. REGISTRAR TRACKING DE REACTIVACIÓN
+    # ==========================================================
     ReactivacionWhatsApp.objects.create(
         cliente=cliente,
         fecha_envio=timezone.now(),
@@ -627,14 +714,14 @@ def enviar_reactivacion_whatsupp(cliente):
         estado="ENVIADO",
     )
 
-    # Actualizar al cliente para que desaparezca de la lista hasta
-    # que vuelva a cumplirse el periodo definido.
+    # ==========================================================
+    # 11. ACTUALIZAR CLIENTE
+    # ==========================================================
     cliente.fecha_ultima_reactivacion = timezone.now()
 
-    if cliente.reactivaciones_enviadas is None:
-        cliente.reactivaciones_enviadas = 0
-
-    cliente.reactivaciones_enviadas += 1
+    cliente.reactivaciones_enviadas = (
+        cliente.reactivaciones_enviadas or 0
+    ) + 1
 
     cliente.save(
         update_fields=[
@@ -643,5 +730,12 @@ def enviar_reactivacion_whatsupp(cliente):
         ]
     )
 
-    print("Reactivación enviada y registrada correctamente.")
+    print(
+        "Reactivación enviada correctamente.",
+        "Categoría:",
+        categoria,
+        "Plantilla:",
+        template_name,
+    )
+
     return True

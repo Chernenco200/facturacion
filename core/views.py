@@ -85,6 +85,8 @@ from whatsapp.utils import (
 from django.db.models.functions import Coalesce
 
 
+
+
 def index(request):
     # Si ya inició sesión, manda al dashboard (o a donde quieras)
     if request.user.is_authenticated:
@@ -2969,13 +2971,13 @@ def seguimiento_whatsapp(request):
     for cliente in clientes_reactivacion_qs:
         monto = cliente.maxima_compra_dia or Decimal("0.00")
 
-        if monto > Decimal("800"):
+        if monto >= Decimal("800"):
             categoria = "BLUE"
-        elif monto > Decimal("300"):
+        elif monto >= Decimal("300"):
             categoria = "BLACK"
-        elif monto > Decimal("150"):
+        elif monto >= Decimal("150"):
             categoria = "RED"
-        elif monto > Decimal("100"):
+        elif monto >= Decimal("100"):
             categoria = "WHITE"
         else:
             categoria = "BROWN"
