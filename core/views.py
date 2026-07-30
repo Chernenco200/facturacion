@@ -86,6 +86,9 @@ from django.db.models.functions import Coalesce
 
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def index(request):
     # Si ya inició sesión, manda al dashboard (o a donde quieras)
@@ -3223,13 +3226,49 @@ def obtener_categoria_reactivacion(monto_maximo):
     return "BROWN"
 
 def enviar_reactivacion_whatsapp(request, cliente_id):
-    cliente = get_object_or_404(Cliente, pk=cliente_id)
+    try:
+        logger.info(
+            "Inicio de envío de reactivación. cliente_id=%s",
+            cliente_id,
+        )
 
-    ok = enviar_reactivacion(cliente)
+        cliente = get_object_or_404(
+            Cliente,
+            pk=cliente_id,
+        )
 
-    if ok:
-        messages.success(request, "Reactivación enviada.")
-    else:
-        messages.error(request, "No se pudo enviar.")
+        logger.info(
+            "Cliente encontrado: id=%s, nombre=%s, telefono=%s",
+            cliente.id,
+            cliente.nombre,
+            cliente.telefono,
+        )
 
-    return redirect("seguimiento_whatsapp")
+        ok = enviar_reactivacion(cliente)
+
+        if ok:
+            messages.success(
+                request,
+                "Reactivación enviada correctamente.",
+            )
+        else:
+            messages.error(
+                request,
+                "No se pudo enviar la reactivación.",
+            )
+
+        return redirect("seguimiento_whatsapp")
+
+    except Exception as error:
+        logger.exception(
+            "ERROR enviando reactivación. cliente_id=%s. Detalle=%s",
+            cliente_id,
+            error,
+        )
+
+        messages.error(
+            request,
+            f"Error al enviar la reactivación: {error}",
+        )
+
+        return redirect("seguimiento_whatsapp")
