@@ -710,9 +710,9 @@ def enviar_reactivacion(cliente):
     # ==========================================================
     ReactivacionWhatsApp.objects.create(
         cliente=cliente,
-        fecha_envio=timezone.now(),
-        plantilla=template_name,
-        estado="ENVIADO",
+        categoria=categoria,
+        monto_maximo=maxima_compra_dia,
+        
     )
 
     # ==========================================================
