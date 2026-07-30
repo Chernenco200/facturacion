@@ -720,14 +720,10 @@ def enviar_reactivacion(cliente):
     # ==========================================================
     cliente.fecha_ultima_reactivacion = timezone.now()
 
-    cliente.reactivaciones_enviadas = (
-        cliente.reactivaciones_enviadas or 0
-    ) + 1
-
     cliente.save(
         update_fields=[
             "fecha_ultima_reactivacion",
-            "reactivaciones_enviadas",
+
         ]
     )
 
