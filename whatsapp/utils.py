@@ -11,14 +11,15 @@ from django.conf import settings
 import traceback
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
-from core.models import Cliente
+from core.models import Cliente, ReactivacionWhatsApp, TicketVenta
 
-
-from core.models import ReactivacionWhatsApp
 from whatsapp.models import ConversacionWhatsApp, MensajeWhatsApp
 
 import logging
 logger = logging.getLogger(__name__)
+
+from decimal import Decimal
+from django.db.models import Sum
 
 def normalizar_numero(numero):
     numero = str(numero).strip()
