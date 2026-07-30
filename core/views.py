@@ -80,6 +80,7 @@ from whatsapp.utils import (
     enviar_encuesta_7_dias,
     enviar_control_menor_6_meses,
     enviar_renovacion_anual,
+    enviar_reactivacion,
 )
 
 from django.db.models.functions import Coalesce
