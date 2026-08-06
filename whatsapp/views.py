@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp
 
-from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar, nombre_corto_cliente, normalizar_numero
+from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar, nombre_corto_cliente, normalizar_numero, enviar_whatsapp_imagen
 
 from core.models import TicketVenta, OrdenTrabajo, Cliente
 
@@ -699,18 +699,45 @@ def chat_whatsapp(request, numero):
             media_id = subir_media_whatsapp(archivo)
 
             if media_id:
-                enviado_pdf = enviar_whatsapp_pdf(
-                    numero=numero,
-                    media_id=media_id,
-                    filename=archivo.name,
-                    caption=texto if texto else ""
-                )
+                tipo_archivo = archivo.content_type or ""
 
-                if enviado_pdf:
+                # PDF
+                if tipo_archivo == "application/pdf":
+                    enviado = enviar_whatsapp_pdf(
+                        numero=numero,
+                        media_id=media_id,
+                        filename=archivo.name,
+                        caption=texto if texto else ""
+                    )
+
+                    mensaje_registro = (
+                        texto if texto else f"PDF enviado: {archivo.name}"
+                    )
+
+                # JPG, JPEG o PNG
+                elif tipo_archivo in ["image/jpeg", "image/png"]:
+                    enviado = enviar_whatsapp_imagen(
+                        numero=numero,
+                        media_id=media_id,
+                        caption=texto if texto else ""
+                    )
+
+                    mensaje_registro = (
+                        texto if texto else f"Imagen enviada: {archivo.name}"
+                    )
+
+                else:
+                    enviado = False
+                    mensaje_registro = ""
+
+                if enviado:
+                    archivo.seek(0)
+
                     MensajeWhatsApp.objects.create(
                         numero=numero,
                         tipo="SALIENTE",
-                        mensaje=texto if texto else f"PDF enviado: {archivo.name}",
+                        mensaje=mensaje_registro,
+                        archivo=archivo,
                     )
 
         return redirect("chat_whatsapp", numero=numero)

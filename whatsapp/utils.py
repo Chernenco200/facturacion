@@ -510,6 +510,40 @@ def enviar_whatsapp_pdf(numero, media_id, filename="documento.pdf", caption=""):
 
     return response.status_code in [200, 201]
 
+def enviar_whatsapp_imagen(numero, media_id, caption=""):
+    access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+    phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
+
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    data = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "image",
+        "image": {
+            "id": media_id,
+        }
+    }
+
+    if caption:
+        data["image"]["caption"] = caption
+
+    response = requests.post(
+        url,
+        headers=headers,
+        json=data,
+        timeout=30
+    )
+
+    print("ENVIAR IMAGEN STATUS:", response.status_code)
+    print("ENVIAR IMAGEN RESPUESTA:", response.text)
+
+    return response.status_code in [200, 201]
 
 def enviar_whatsapp_texto_y_guardar(numero, texto):
     try:
