@@ -558,16 +558,16 @@ def whatsapp_webhook(request):
 
                         print("IMAGEN RECIBIDA Y GUARDADA:", nombre_archivo)
 
-                        else:
-                            MensajeWhatsApp.objects.create(
-                                numero=numero,
-                                nombre=nombre_contacto,
-                                tipo="ENTRANTE",
-                                mensaje="Se recibió una imagen, pero no se pudo descargar.",
-                                wa_message_id=message_id,
-                            )
+                    else:
+                        MensajeWhatsApp.objects.create(
+                            numero=numero,
+                            nombre=nombre_contacto,
+                            tipo="ENTRANTE",
+                            mensaje="Se recibió una imagen, pero no se pudo descargar.",
+                            wa_message_id=message_id,
+                        )
 
-                            print("NO SE PUDO DESCARGAR LA IMAGEN")
+                        print("NO SE PUDO DESCARGAR LA IMAGEN")
 
 
         except Exception as e:
