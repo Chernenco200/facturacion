@@ -559,6 +559,55 @@ def enviar_whatsapp_imagen(numero, media_id, caption=""):
 
     return response.status_code in [200, 201]
 
+
+from django.core.files.base import ContentFile
+def descargar_media_whatsapp(media_id):
+    access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+
+    # 1. Obtener la URL temporal del archivo
+    url_info = f"https://graph.facebook.com/v20.0/{media_id}"
+
+    response_info = requests.get(
+        url_info,
+        headers=headers,
+        timeout=30
+    )
+
+    print("MEDIA INFO STATUS:", response_info.status_code)
+    print("MEDIA INFO RESPUESTA:", response_info.text)
+
+    if response_info.status_code != 200:
+        return None
+
+    datos_media = response_info.json()
+    media_url = datos_media.get("url")
+    mime_type = datos_media.get("mime_type", "")
+
+    if not media_url:
+        return None
+
+    # 2. Descargar el archivo usando el token
+    response_archivo = requests.get(
+        media_url,
+        headers=headers,
+        timeout=60
+    )
+
+    print("DESCARGAR MEDIA STATUS:", response_archivo.status_code)
+
+    if response_archivo.status_code != 200:
+        return None
+
+    return {
+        "contenido": response_archivo.content,
+        "mime_type": mime_type,
+    }
+
+
 def enviar_whatsapp_texto_y_guardar(numero, texto):
     try:
         numero = normalizar_numero(numero)

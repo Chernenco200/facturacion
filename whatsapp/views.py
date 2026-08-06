@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import ConversacionWhatsApp, CitaWhatsApp, MensajeWhatsApp
 
-from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar, nombre_corto_cliente, normalizar_numero, enviar_whatsapp_imagen
+from .utils import enviar_whatsapp_texto, avisar_asesor, subir_media_whatsapp, enviar_whatsapp_pdf, enviar_whatsapp_texto_y_guardar, nombre_corto_cliente, normalizar_numero, enviar_whatsapp_imagen, descargar_media_whatsapp
 
 from core.models import TicketVenta, OrdenTrabajo, Cliente
 
@@ -23,7 +23,7 @@ from django.utils import timezone
 import traceback
 
 from django.contrib import messages
-
+from django.core.files.base import ContentFile
 
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
@@ -522,6 +522,53 @@ def whatsapp_webhook(request):
                         responder_mensaje(numero, texto)
                     else:
                         print("Conversación en modo HUMANO. El bot no responde.")
+
+                elif tipo == "image":
+                    datos_imagen = message.get("image", {})
+
+                    media_id = datos_imagen.get("id")
+                    caption = datos_imagen.get("caption", "")
+                    mime_type = datos_imagen.get("mime_type", "image/jpeg")
+
+                    media_descargado = descargar_media_whatsapp(media_id)
+
+                    if media_descargado:
+                        if mime_type == "image/png":
+                            extension = ".png"
+                        else:
+                            extension = ".jpg"
+
+                        nombre_archivo = f"imagen_{message_id}{extension}"
+
+                        mensaje_imagen = MensajeWhatsApp(
+                            numero=numero,
+                            nombre=nombre_contacto,
+                            tipo="ENTRANTE",
+                            mensaje=caption if caption else "Imagen recibida",
+                            wa_message_id=message_id,
+                        )
+
+                        mensaje_imagen.archivo.save(
+                            nombre_archivo,
+                            ContentFile(media_descargado["contenido"]),
+                            save=False,
+                        )
+
+                        mensaje_imagen.save()
+
+                        print("IMAGEN RECIBIDA Y GUARDADA:", nombre_archivo)
+
+                        else:
+                            MensajeWhatsApp.objects.create(
+                                numero=numero,
+                                nombre=nombre_contacto,
+                                tipo="ENTRANTE",
+                                mensaje="Se recibió una imagen, pero no se pudo descargar.",
+                                wa_message_id=message_id,
+                            )
+
+                            print("NO SE PUDO DESCARGAR LA IMAGEN")
+
 
         except Exception as e:
             print("ERROR WEBHOOK:", e)
