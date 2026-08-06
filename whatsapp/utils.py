@@ -432,8 +432,6 @@ def enviar_aviso_lentes_listos(orden):
     return enviado
 
 
-
-
 def subir_media_whatsapp(archivo):
     access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
@@ -444,17 +442,31 @@ def subir_media_whatsapp(archivo):
         "Authorization": f"Bearer {access_token}",
     }
 
+    tipo_archivo = archivo.content_type or ""
+
+    tipos_permitidos = [
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+    ]
+
+    if tipo_archivo not in tipos_permitidos:
+        print("TIPO DE ARCHIVO NO PERMITIDO:", tipo_archivo)
+        return None
+
+    archivo.seek(0)
+
     files = {
         "file": (
             archivo.name,
             archivo,
-            "application/pdf"
+            tipo_archivo,
         )
     }
 
     data = {
         "messaging_product": "whatsapp",
-        "type": "application/pdf",
+        "type": tipo_archivo,
     }
 
     response = requests.post(
@@ -465,6 +477,7 @@ def subir_media_whatsapp(archivo):
         timeout=30
     )
 
+    print("TIPO DE ARCHIVO:", tipo_archivo)
     print("SUBIR MEDIA STATUS:", response.status_code)
     print("SUBIR MEDIA RESPUESTA:", response.text)
 
@@ -472,6 +485,7 @@ def subir_media_whatsapp(archivo):
         return None
 
     return response.json().get("id")
+
 
 
 def enviar_whatsapp_pdf(numero, media_id, filename="documento.pdf", caption=""):
