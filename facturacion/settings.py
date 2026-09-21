@@ -48,10 +48,12 @@ INSTALLED_APPS = [
     "core",
     "accounts",
     "whatsapp",
+    "contabilidad",
 
     # Cloudinary
     "cloudinary",
     "cloudinary_storage",
+    
 ]
 
 MIDDLEWARE = [

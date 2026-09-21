@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>
+        Cierre anual
+    </title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7fa;
+            color: #17324d;
+        }
+
+        .contenedor {
+            max-width: 1100px;
+            margin: 30px auto;
+            padding: 0 20px 40px;
+        }
+
+        .titulo {
+            margin: 0;
+            font-size: 34px;
+            font-weight: 700;
+        }
+
+        .subtitulo {
+            margin-top: 5px;
+            color: #667085;
+            font-size: 16px;
+        }
+
+        .ejercicio {
+            margin-top: 8px;
+            margin-bottom: 24px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #344054;
+        }
+
+        .tarjeta {
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
+        }
+
+        .seccion {
+            background: #e8f0f5;
+            padding: 15px 20px;
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .contenido {
+            padding: 20px;
+        }
+
+        .tabla {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .tabla th {
+            background: #f8fafc;
+            padding: 12px 14px;
+            text-align: left;
+            border-bottom: 1px solid #e4e7ec;
+            color: #475467;
+            font-size: 14px;
+        }
+
+        .tabla td {
+            padding: 13px 14px;
+            border-bottom: 1px solid #eaecf0;
+        }
+
+        .estado {
+            text-align: center;
+            width: 150px;
+        }
+
+        .control {
+            text-align: center;
+            width: 170px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 11px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .badge-abierto {
+            background: #ecfdf3;
+            color: #067647;
+        }
+
+        .badge-cerrado {
+            background: #f2f4f7;
+            color: #475467;
+        }
+
+        .ok {
+            color: #067647;
+            font-weight: 700;
+        }
+
+        .error {
+            color: #b42318;
+            font-weight: 700;
+        }
+
+        .resumen {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .indicador {
+            border: 1px solid #e4e7ec;
+            border-radius: 9px;
+            padding: 16px;
+        }
+
+        .indicador-titulo {
+            color: #667085;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        .indicador-valor {
+            font-size: 21px;
+            font-weight: 700;
+        }
+
+        .advertencia {
+            background: #fffaeb;
+            border: 1px solid #fedf89;
+            color: #7a2e0e;
+            padding: 15px 17px;
+            border-radius: 8px;
+            line-height: 1.5;
+        }
+
+        .resultado-ok {
+            color: #067647;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .resultado-error {
+            color: #b42318;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .acciones {
+            margin-top: 20px;
+            text-align: right;
+        }
+
+        .boton {
+            padding: 11px 20px;
+            border-radius: 7px;
+            border: none;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .boton-principal {
+            background: #28627f;
+            color: white;
+            cursor: pointer;
+        }
+
+        .boton-principal:hover {
+            background: #204f67;
+        }
+
+        .boton-deshabilitado {
+            background: #d0d5dd;
+            color: #667085;
+            cursor: not-allowed;
+        }
+
+        .mensaje {
+            margin-bottom: 16px;
+            padding: 13px 16px;
+            border-radius: 8px;
+        }
+
+        .mensaje-success {
+            background: #ecfdf3;
+            color: #067647;
+            border: 1px solid #abefc6;
+        }
+
+        .mensaje-error {
+            background: #fef3f2;
+            color: #b42318;
+            border: 1px solid #fecdca;
+        }
+
+        .mensaje-warning {
+            background: #fffaeb;
+            color: #b54708;
+            border: 1px solid #fedf89;
+        }
+
+        @media (max-width: 800px) {
+
+            .resumen {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="contenedor">
+
+    <h1 class="titulo">
+        Cierre anual
+    </h1>
+
+    <div class="subtitulo">
+        Óptica IC
+    </div>
+
+    <div class="ejercicio">
+        Ejercicio {{ anio }}
+    </div>
+
+
+    <!-- =====================================================
+         MENSAJES
+         ===================================================== -->
+
+    {% for message in messages %}
+
+        <div
+            class="
+                mensaje
+
+                {% if message.tags == 'success' %}
+                    mensaje-success
+
+                {% elif message.tags == 'warning' %}
+                    mensaje-warning
+
+                {% else %}
+                    mensaje-error
+
+                {% endif %}
+            "
+        >
+
+            {{ message }}
+
+        </div>
+
+    {% endfor %}
+
+
+    <!-- =====================================================
+         RESUMEN
+         ===================================================== -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            RESUMEN DEL EJERCICIO
+        </div>
+
+        <div class="contenido">
+
+            <div class="resumen">
+
+                <div class="indicador">
+
+                    <div class="indicador-titulo">
+                        Períodos existentes
+                    </div>
+
+                    <div class="indicador-valor">
+                        {{ cantidad_periodos }} / 12
+                    </div>
+
+                </div>
+
+
+                <div class="indicador">
+
+                    <div class="indicador-titulo">
+                        Enero - noviembre
+                    </div>
+
+                    <div class="indicador-valor">
+
+                        {% if enero_noviembre_cerrados %}
+
+                            <span class="ok">
+                                Cerrados
+                            </span>
+
+                        {% else %}
+
+                            <span class="error">
+                                Pendientes
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+
+                <div class="indicador">
+
+                    <div class="indicador-titulo">
+                        Diciembre
+                    </div>
+
+                    <div class="indicador-valor">
+
+                        {% if diciembre_abierto %}
+
+                            <span class="ok">
+                                Abierto
+                            </span>
+
+                        {% elif diciembre %}
+
+                            <span class="error">
+                                {{ diciembre.get_estado_display }}
+                            </span>
+
+                        {% else %}
+
+                            <span class="error">
+                                No existe
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         CHECKLIST DE PERIODOS
+         ===================================================== -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            CHECKLIST DE PERÍODOS CONTABLES
+        </div>
+
+        <table class="tabla">
+
+            <thead>
+
+                <tr>
+
+                    <th>
+                        Mes
+                    </th>
+
+                    <th style="text-align:center;">
+                        Estado
+                    </th>
+
+                    <th style="text-align:center;">
+                        Validación
+                    </th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                {% for periodo in periodos %}
+
+                    <tr>
+
+                        <td>
+                            {{ periodo }}
+                        </td>
+
+                        <td class="estado">
+
+                            {% if periodo.estado == "ABIERTO" %}
+
+                                <span class="badge badge-abierto">
+                                    ABIERTO
+                                </span>
+
+                            {% else %}
+
+                                <span class="badge badge-cerrado">
+                                    CERRADO
+                                </span>
+
+                            {% endif %}
+
+                        </td>
+
+
+                        <td class="control">
+
+                            {% if periodo.mes <= 11 %}
+
+                                {% if periodo.estado == "CERRADO" %}
+
+                                    <span class="ok">
+                                        ✓ OK
+                                    </span>
+
+                                {% else %}
+
+                                    <span class="error">
+                                        ✗ Debe cerrarse
+                                    </span>
+
+                                {% endif %}
+
+                            {% else %}
+
+                                {% if periodo.estado == "ABIERTO" %}
+
+                                    <span class="ok">
+                                        ✓ OK
+                                    </span>
+
+                                {% else %}
+
+                                    <span class="error">
+                                        ✗ Debe permanecer abierto
+                                    </span>
+
+                                {% endif %}
+
+                            {% endif %}
+
+                        </td>
+
+                    </tr>
+
+                {% empty %}
+
+                    <tr>
+
+                        <td
+                            colspan="3"
+                            style="text-align:center;"
+                        >
+                            No existen períodos contables para este año.
+                        </td>
+
+                    </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    <!-- =====================================================
+         VISTA PREVIA DEL CIERRE
+         ===================================================== -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            VISTA PREVIA DEL CIERRE ANUAL
+        </div>
+
+        <div class="contenido">
+
+            <table class="tabla">
+
+                <tbody>
+
+                    <tr>
+
+                        <td>
+                            Ingresos del ejercicio
+                        </td>
+
+                        <td style="text-align:right; font-weight:700;">
+                            S/ {{ ingresos|floatformat:2 }}
+                        </td>
+
+                    </tr>
+
+
+                    <tr>
+
+                        <td>
+                            Costos del ejercicio
+                        </td>
+
+                        <td style="text-align:right; font-weight:700;">
+                            S/ {{ costos|floatformat:2 }}
+                        </td>
+
+                    </tr>
+
+
+                    <tr>
+
+                        <td>
+                            Gastos del ejercicio
+                        </td>
+
+                        <td style="text-align:right; font-weight:700;">
+                            S/ {{ gastos|floatformat:2 }}
+                        </td>
+
+                    </tr>
+
+
+                    <tr>
+
+                        <td style="font-weight:700;">
+                            Resultado del ejercicio
+                        </td>
+
+                        <td
+                            style="
+                                text-align:right;
+                                font-weight:700;
+                                font-size:18px;
+                            "
+                        >
+
+                            {% if tipo_resultado == "UTILIDAD" %}
+
+                                <span class="ok">
+
+                                    S/
+                                    {{ resultado_ejercicio|floatformat:2 }}
+
+                                    — Utilidad
+
+                                </span>
+
+                            {% elif tipo_resultado == "PERDIDA" %}
+
+                                <span class="error">
+
+                                    S/
+                                    {{ resultado_ejercicio|floatformat:2 }}
+
+                                    — Pérdida
+
+                                </span>
+
+                            {% else %}
+
+                                S/ 0.00
+
+                            {% endif %}
+
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+
+            <div
+                class="advertencia"
+                style="margin-top:18px;"
+            >
+
+                Este resultado es únicamente una
+                <strong>vista previa</strong>.
+
+                Mientras no se ejecute el cierre anual,
+                no se modificará ninguna cuenta contable.
+
+                Al ejecutar el cierre, el resultado será
+                trasladado a
+
+                <strong>
+                    59901 - Resultado del ejercicio
+                </strong>.
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         RESULTADO DE LA VALIDACION
+         ===================================================== -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            RESULTADO DE LA VALIDACIÓN
+        </div>
+
+        <div class="contenido">
+
+
+            {% if cierre_existente %}
+
+                <div class="resultado-ok">
+
+                    ✓ El ejercicio {{ anio }} ya tiene
+                    un asiento de cierre anual.
+
+                </div>
+
+                <div
+                    style="
+                        margin-top:12px;
+                        color:#475467;
+                    "
+                >
+
+                    Asiento N.º
+                    <strong>
+                        {{ cierre_existente.numero }}
+                    </strong>
+
+                    ·
+
+                    Fecha
+                    <strong>
+                        {{ cierre_existente.fecha|date:"d/m/Y" }}
+                    </strong>
+
+                </div>
+
+
+            {% elif puede_cerrar_anio %}
+
+                <div class="resultado-ok">
+
+                    ✓ El ejercicio {{ anio }} cumple las
+                    condiciones para ejecutar el cierre anual.
+
+                </div>
+
+
+            {% else %}
+
+                <div class="resultado-error">
+
+                    ✗ El ejercicio {{ anio }} todavía no está
+                    preparado para el cierre anual.
+
+                </div>
+
+            {% endif %}
+
+
+            {% if not cierre_existente %}
+
+                <div
+                    class="advertencia"
+                    style="margin-top:18px;"
+                >
+
+                    <strong>
+                        Regla de cierre:
+                    </strong>
+
+                    enero a noviembre deben encontrarse cerrados
+                    y diciembre debe permanecer abierto para
+                    generar los asientos de cierre del ejercicio.
+
+                </div>
+
+            {% endif %}
+
+
+            <div class="acciones">
+
+
+                {% if cierre_existente %}
+
+                    <button
+                        type="button"
+                        class="
+                            boton
+                            boton-deshabilitado
+                        "
+                        disabled
+                    >
+
+                        Cierre anual generado
+
+                    </button>
+
+
+                {% elif puede_cerrar_anio %}
+
+                    <form
+                        method="post"
+                        onsubmit="
+                            return confirm(
+                                '¿Deseas generar el cierre contable anual del ejercicio {{ anio }}?'
+                            );
+                        "
+                    >
+
+                        {% csrf_token %}
+
+                        <button
+                            type="submit"
+                            class="
+                                boton
+                                boton-principal
+                            "
+                        >
+
+                            Generar cierre anual {{ anio }}
+
+                        </button>
+
+                    </form>
+
+
+                {% else %}
+
+                    <button
+                        type="button"
+                        class="
+                            boton
+                            boton-deshabilitado
+                        "
+                        disabled
+                    >
+
+                        Cierre anual no disponible
+
+                    </button>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+
+    <title>
+        Estado de Cambios en el Patrimonio
+    </title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7fa;
+            color: #17324d;
+        }
+
+        .contenedor {
+            max-width: 1300px;
+            margin: 30px auto;
+            padding: 0 20px 40px;
+        }
+
+        /* =====================================================
+           ENCABEZADO
+           ===================================================== */
+
+        .titulo {
+            margin: 0;
+            font-size: 34px;
+            font-weight: 700;
+            color: #17324d;
+        }
+
+        .subtitulo {
+            margin-top: 6px;
+            margin-bottom: 4px;
+            font-size: 17px;
+            color: #667085;
+        }
+
+        .periodo-reporte {
+            margin-bottom: 24px;
+            font-size: 15px;
+            color: #667085;
+        }
+
+        /* =====================================================
+           FILTRO
+           ===================================================== */
+
+        .filtros {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 18px 22px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
+        }
+
+        .filtros form {
+            display: flex;
+            align-items: end;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .campo label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 7px;
+            color: #344054;
+        }
+
+        .campo input {
+            width: 150px;
+            padding: 9px 11px;
+            border: 1px solid #d0d5dd;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+
+        .boton {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            background: #28627f;
+            color: #ffffff;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .boton:hover {
+            opacity: 0.92;
+        }
+
+        /* =====================================================
+           TARJETA
+           ===================================================== */
+
+        .tarjeta {
+            background: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06);
+        }
+
+        .encabezado-seccion {
+            background: #e8f0f5;
+            padding: 15px 22px;
+            font-weight: 700;
+            font-size: 17px;
+            color: #17324d;
+        }
+
+        /* =====================================================
+           TABLA
+           ===================================================== */
+
+        .tabla-contenedor {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+        }
+
+        thead th {
+            background: #f4f7fa;
+            color: #344054;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 14px 16px;
+            border-bottom: 1px solid #dfe5ea;
+            text-align: right;
+        }
+
+        thead th:first-child {
+            text-align: left;
+            width: 30%;
+        }
+
+        tbody td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #eaecf0;
+            font-size: 15px;
+            vertical-align: middle;
+        }
+
+        tbody td:first-child {
+            text-align: left;
+        }
+
+        tbody td:not(:first-child) {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .fila-movimiento:hover {
+            background: #fafcfd;
+        }
+
+        .concepto {
+            color: #243b53;
+        }
+
+        .importe {
+            color: #243b53;
+        }
+
+        .cero {
+            color: #98a2b3;
+        }
+
+        .negativo {
+            color: #475467;
+        }
+
+        /* =====================================================
+           SALDO FINAL
+           ===================================================== */
+
+        .saldo-final td {
+            background: #dceaf2;
+            color: #17324d;
+            font-weight: 700;
+            font-size: 16px;
+            border-top: 2px solid #c5d7e2;
+            border-bottom: none;
+        }
+
+        /* =====================================================
+           PIE
+           ===================================================== */
+
+        .nota {
+            padding: 14px 20px;
+            background: #f8fafc;
+            color: #667085;
+            font-size: 13px;
+            border-top: 1px solid #eaecf0;
+        }
+
+        @media (max-width: 700px) {
+            .titulo {
+                font-size: 27px;
+            }
+
+            .contenedor {
+                padding: 0 10px 25px;
+            }
+        }
+    </style>
+</head>
+
+
+<body>
+
+<div class="contenedor">
+
+    <!-- =====================================================
+         ENCABEZADO
+         ===================================================== -->
+
+    <h1 class="titulo">
+        Estado de Cambios en el Patrimonio
+    </h1>
+
+    <div class="subtitulo">
+        Óptica IC
+    </div>
+
+    <div class="periodo-reporte">
+        Ejercicio terminado el 31 de diciembre de {{ anio }}
+    </div>
+
+
+    <!-- =====================================================
+         FILTRO
+         ===================================================== -->
+
+    <div class="filtros">
+
+        <form method="get">
+
+            <div class="campo">
+
+                <label for="anio">
+                    Año
+                </label>
+
+                <input
+                    id="anio"
+                    type="number"
+                    name="anio"
+                    value="{{ anio }}"
+                    min="2000"
+                    max="2100"
+                >
+
+            </div>
+
+            <button
+                class="boton"
+                type="submit"
+            >
+                Consultar
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <!-- =====================================================
+         ESTADO DE CAMBIOS
+         ===================================================== -->
+
+    <div class="tarjeta">
+
+        <div class="encabezado-seccion">
+            MOVIMIENTOS DEL PATRIMONIO
+        </div>
+
+        <div class="tabla-contenedor">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Concepto
+                        </th>
+
+                        <th>
+                            Capital aportado
+                        </th>
+
+                        <th>
+                            Resultados acumulados
+                        </th>
+
+                        <th>
+                            Resultado del ejercicio
+                        </th>
+
+                        <th>
+                            Total patrimonio
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    <!-- =========================================
+                         SALDO INICIAL
+                         ========================================= -->
+
+                    <tr class="fila-movimiento">
+
+                        <td class="concepto">
+                            Saldo inicial
+                        </td>
+
+                        <td>
+                            {% if capital_inicial %}
+                                S/ {{ capital_inicial|floatformat:2 }}
+                            {% else %}
+                                <span class="cero">—</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if resultados_acumulados_iniciales %}
+                                S/ {{ resultados_acumulados_iniciales|floatformat:2 }}
+                            {% else %}
+                                <span class="cero">—</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            {% if total_inicial %}
+                                S/ {{ total_inicial|floatformat:2 }}
+                            {% else %}
+                                <span class="cero">—</span>
+                            {% endif %}
+                        </td>
+
+                    </tr>
+
+
+                    <!-- =========================================
+                         APORTES DE CAPITAL
+                         ========================================= -->
+
+                    {% if aportes_capital %}
+
+                    <tr class="fila-movimiento">
+
+                        <td class="concepto">
+                            Aportes de capital
+                        </td>
+
+                        <td>
+                            S/ {{ aportes_capital|floatformat:2 }}
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            S/ {{ aportes_capital|floatformat:2 }}
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+
+                    <!-- =========================================
+                         REDUCCIONES DE CAPITAL
+                         ========================================= -->
+
+                    {% if reducciones_capital %}
+
+                    <tr class="fila-movimiento">
+
+                        <td class="concepto">
+                            Reducciones de capital
+                        </td>
+
+                        <td class="negativo">
+                            (S/ {{ reducciones_capital|floatformat:2 }})
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td class="negativo">
+                            (S/ {{ reducciones_capital|floatformat:2 }})
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+
+                    <!-- =========================================
+                         UTILIDADES ACUMULADAS
+                         ========================================= -->
+
+                    {% if aumento_utilidades %}
+
+                    <tr class="fila-movimiento">
+
+                        <td class="concepto">
+                            Incremento de utilidades acumuladas
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            S/ {{ aumento_utilidades|floatformat:2 }}
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            S/ {{ aumento_utilidades|floatformat:2 }}
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+
+                    {% if disminucion_utilidades %}
+
+                    <tr class="fila-movimiento">
+
+                        <td class="concepto">
+                            Disminución de utilidades acumuladas
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td class="negativo">
+                            (S/ {{ disminucion_utilidades|floatformat:2 }})
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td class="negativo">
+                            (S/ {{ disminucion_utilidades|floatformat:2 }})
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+
+                    <!-- =========================================
+                         PÉRDIDAS ACUMULADAS
+                         ========================================= -->
+
+                    {% if aumento_perdidas %}
+
+                    <tr class="fila-movimiento">
+
+                        <td class="concepto">
+                            Incremento de pérdidas acumuladas
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td class="negativo">
+                            (S/ {{ aumento_perdidas|floatformat:2 }})
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td class="negativo">
+                            (S/ {{ aumento_perdidas|floatformat:2 }})
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+
+                    {% if disminucion_perdidas %}
+
+                    <tr class="fila-movimiento">
+
+                        <td class="concepto">
+                            Disminución de pérdidas acumuladas
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            S/ {{ disminucion_perdidas|floatformat:2 }}
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            S/ {{ disminucion_perdidas|floatformat:2 }}
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+
+                    <!-- =========================================
+                         DIVIDENDOS
+                         ========================================= -->
+
+                    {% if dividendos_declarados %}
+
+                    <tr class="fila-movimiento">
+
+                        <td class="concepto">
+                            Dividendos declarados
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td class="negativo">
+                            (S/ {{ dividendos_declarados|floatformat:2 }})
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td class="negativo">
+                            (S/ {{ dividendos_declarados|floatformat:2 }})
+                        </td>
+
+                    </tr>
+
+                    {% endif %}
+
+
+                    <!-- =========================================
+                         RESULTADO DEL EJERCICIO
+                         ========================================= -->
+
+                    <tr class="fila-movimiento">
+
+                        <td class="concepto">
+                            Resultado del ejercicio
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            <span class="cero">—</span>
+                        </td>
+
+                        <td>
+                            {% if resultado_ejercicio %}
+                                S/ {{ resultado_ejercicio|floatformat:2 }}
+                            {% else %}
+                                <span class="cero">—</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if resultado_ejercicio %}
+                                S/ {{ resultado_ejercicio|floatformat:2 }}
+                            {% else %}
+                                <span class="cero">—</span>
+                            {% endif %}
+                        </td>
+
+                    </tr>
+
+
+                    <!-- =========================================
+                         SALDO FINAL
+                         ========================================= -->
+
+                    <tr class="saldo-final">
+
+                        <td>
+                            SALDO FINAL
+                        </td>
+
+                        <td>
+                            S/ {{ capital_final|floatformat:2 }}
+                        </td>
+
+                        <td>
+                            S/ {{ resultados_acumulados_finales|floatformat:2 }}
+                        </td>
+
+                        <td>
+                            S/ {{ resultado_ejercicio|floatformat:2 }}
+                        </td>
+
+                        <td>
+                            S/ {{ total_final|floatformat:2 }}
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        <div class="nota">
+            El resultado del ejercicio se calcula con base en los asientos
+            contabilizados correspondientes al ejercicio seleccionado.
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>

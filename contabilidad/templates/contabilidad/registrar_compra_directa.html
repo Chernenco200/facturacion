@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Compra directa para venta
+    </title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+    <style>
+
+        body {
+            background-color: #f5f6f8;
+        }
+
+        .contenedor {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .card {
+            border: 0;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, .08);
+        }
+
+        .card-header {
+            background: #ffffff;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .resumen-ticket {
+            background-color: #eef5f8;
+            border-radius: 9px;
+            padding: 18px;
+        }
+
+        .dato-resumen {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 14px;
+            height: 100%;
+        }
+
+        .etiqueta {
+            color: #6c757d;
+            font-size: .85rem;
+        }
+
+        .importe {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .titulo-seccion {
+            font-weight: 700;
+        }
+
+        .subtitulo {
+            color: #6c757d;
+            font-size: .9rem;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="container-fluid py-4 px-4">
+
+<div class="contenedor">
+
+
+    <!-- ===================================================== -->
+    <!-- ENCABEZADO -->
+    <!-- ===================================================== -->
+
+    <div class="mb-4">
+
+        <h2 class="mb-1">
+            Compra directa para venta
+        </h2>
+
+        <div class="text-muted">
+            Registro de la compra asociada al costo de venta
+        </div>
+
+    </div>
+
+
+    <!-- ===================================================== -->
+    <!-- MENSAJES -->
+    <!-- ===================================================== -->
+
+    {% if messages %}
+
+        {% for message in messages %}
+
+            <div
+                class="
+                    alert
+                    {% if message.tags == 'error' %}
+                        alert-danger
+                    {% elif message.tags == 'success' %}
+                        alert-success
+                    {% elif message.tags == 'warning' %}
+                        alert-warning
+                    {% else %}
+                        alert-info
+                    {% endif %}
+                "
+            >
+
+                {{ message }}
+
+            </div>
+
+        {% endfor %}
+
+    {% endif %}
+
+
+    <!-- ===================================================== -->
+    <!-- RESUMEN DEL TICKET -->
+    <!-- ===================================================== -->
+
+    <div class="card mb-4">
+
+        <div class="card-body">
+
+            <div class="resumen-ticket">
+
+                <div class="mb-1">
+
+                    <strong>
+                        Ticket:
+                        {{ detalle_costo.propuesta.ticket.numero|stringformat:"06d" }}
+                    </strong>
+
+                </div>
+
+                <div class="mb-1">
+                    {{ detalle_costo.detalle_ticket.descripcion }}
+                </div>
+
+                <div>
+                    Cantidad:
+                    <strong>
+                        {{ detalle_costo.cantidad|floatformat:2 }}
+                    </strong>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <form method="post">
+
+        {% csrf_token %}
+
+
+        <!-- ================================================= -->
+        <!-- DATOS DE LA COMPRA -->
+        <!-- ================================================= -->
+
+        <div class="card mb-4">
+
+            <div class="card-header">
+
+                <div class="titulo-seccion">
+                    Datos de la compra
+                </div>
+
+                <div class="subtitulo">
+                    Costo, proveedor y comprobante
+                </div>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+
+                    <!-- COSTO UNITARIO -->
+
+                    <div class="col-md-4">
+
+                        <label class="form-label fw-semibold">
+                            Costo unitario
+                        </label>
+
+                        <div class="input-group">
+
+                            <span class="input-group-text">
+                                S/
+                            </span>
+
+                            <input
+                                id="costo_unitario"
+                                type="number"
+                                name="costo_unitario"
+                                class="form-control"
+                                min="0.0001"
+                                step="0.0001"
+                                required
+                                value="{% if compra_existente.costo_unitario %}{{ compra_existente.costo_unitario }}{% endif %}"
+                            >
+
+                        </div>
+
+                        <div class="form-text">
+                            Costo real pagado al proveedor por cada unidad.
+                        </div>
+
+                    </div>
+
+
+                    <!-- CANTIDAD -->
+
+                    <div class="col-md-2">
+
+                        <label class="form-label fw-semibold">
+                            Cantidad
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            value="{{ detalle_costo.cantidad|floatformat:2 }}"
+                            readonly
+                        >
+
+                    </div>
+
+
+                    <!-- PROVEEDOR -->
+
+                    <div class="col-md-6">
+
+                        <label class="form-label fw-semibold">
+                            Proveedor
+                        </label>
+
+                        <input
+                            type="text"
+                            name="proveedor_nombre"
+                            class="form-control"
+                            maxlength="200"
+                            value="{{ compra_existente.proveedor_nombre|default:'' }}"
+                        >
+
+                    </div>
+
+
+                    <!-- FECHA COMPRA -->
+
+                    <div class="col-md-4">
+
+                        <label class="form-label fw-semibold">
+                            Fecha de compra
+                        </label>
+
+                        <input
+                            type="date"
+                            name="fecha_compra"
+                            class="form-control"
+                            required
+                            value="{% if compra_existente.fecha_compra %}{{ compra_existente.fecha_compra|date:'Y-m-d' }}{% endif %}"
+                        >
+
+                    </div>
+
+
+                    <!-- TIPO DOCUMENTO -->
+
+                    <div class="col-md-4">
+
+                        <label class="form-label fw-semibold">
+                            Tipo de documento
+                        </label>
+
+                        <select
+                            name="tipo_documento"
+                            class="form-select"
+                        >
+
+                            <option value="">
+                                Seleccione
+                            </option>
+
+                            <option
+                                value="Factura"
+                                {% if compra_existente.tipo_documento == "Factura" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Factura
+                            </option>
+
+                            <option
+                                value="Boleta"
+                                {% if compra_existente.tipo_documento == "Boleta" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Boleta
+                            </option>
+
+                            <option
+                                value="Recibo"
+                                {% if compra_existente.tipo_documento == "Recibo" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Recibo
+                            </option>
+
+                            <option
+                                value="Sin comprobante"
+                                {% if compra_existente.tipo_documento == "Sin comprobante" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Sin comprobante
+                            </option>
+
+                            <option
+                                value="Otro"
+                                {% if compra_existente.tipo_documento == "Otro" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Otro
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <!-- NÚMERO DOCUMENTO -->
+
+                    <div class="col-md-4">
+
+                        <label class="form-label fw-semibold">
+                            Número de documento
+                        </label>
+
+                        <input
+                            type="text"
+                            name="numero_documento"
+                            class="form-control"
+                            maxlength="100"
+                            value="{{ compra_existente.numero_documento|default:'' }}"
+                        >
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- CONDICIÓN DE PAGO -->
+        <!-- ================================================= -->
+
+        <div class="card mb-4">
+
+            <div class="card-header">
+
+                <div class="titulo-seccion">
+                    Condición de pago
+                </div>
+
+                <div class="subtitulo">
+                    Indique si la compra se pagó totalmente,
+                    quedó al crédito o tuvo un pago parcial.
+                </div>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+
+                    <!-- FORMA DE PAGO -->
+
+                    <div class="col-md-4">
+
+                        <label class="form-label fw-semibold">
+                            Forma de pago
+                        </label>
+
+                        <select
+                            id="forma_pago"
+                            name="forma_pago"
+                            class="form-select"
+                            required
+                        >
+
+                            {% for valor, etiqueta in formas_pago %}
+
+                                <option
+                                    value="{{ valor }}"
+
+                                    {% if compra_existente.forma_pago == valor %}
+                                        selected
+                                    {% endif %}
+                                >
+
+                                    {{ etiqueta }}
+
+                                </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    </div>
+
+
+                    <!-- MONTO PAGADO -->
+
+                    <div class="col-md-4">
+
+                        <label class="form-label fw-semibold">
+                            Monto pagado
+                        </label>
+
+                        <div class="input-group">
+
+                            <span class="input-group-text">
+                                S/
+                            </span>
+
+                            <input
+                                id="monto_pagado"
+                                type="number"
+                                name="monto_pagado"
+                                class="form-control"
+                                min="0"
+                                step="0.01"
+                                value="{{ compra_existente.monto_pagado|default:'0.00' }}"
+                                required
+                            >
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- FECHA DE PAGO -->
+
+                    <div
+                        id="grupo_fecha_pago"
+                        class="col-md-4"
+                    >
+
+                        <label class="form-label fw-semibold">
+                            Fecha de pago
+                        </label>
+
+                        <input
+                            id="fecha_pago"
+                            type="date"
+                            name="fecha_pago"
+                            class="form-control"
+                            value="{% if compra_existente.fecha_pago %}{{ compra_existente.fecha_pago|date:'Y-m-d' }}{% endif %}"
+                        >
+
+                    </div>
+
+
+                    <!-- CUENTA PAGO -->
+
+                    <div
+                        id="grupo_cuenta_pago"
+                        class="col-md-6"
+                    >
+
+                        <label class="form-label fw-semibold">
+                            Cuenta de pago
+                        </label>
+
+                        <select
+                            id="cuenta_pago"
+                            name="cuenta_pago"
+                            class="form-select"
+                        >
+
+                            <option value="">
+                                Seleccione
+                            </option>
+
+                            {% for cuenta in cuentas_pago %}
+
+                                <option
+                                    value="{{ cuenta.id }}"
+
+                                    {% if compra_existente.cuenta_pago_id == cuenta.id %}
+                                        selected
+                                    {% endif %}
+                                >
+
+                                    {{ cuenta.codigo }}
+                                    -
+                                    {{ cuenta.nombre }}
+
+                                </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                        <div class="form-text">
+                            Caja, banco o cuenta equivalente.
+                        </div>
+
+                    </div>
+
+
+                    <!-- CUENTA PROVEEDOR -->
+
+                    <div
+                        id="grupo_cuenta_proveedor"
+                        class="col-md-6"
+                    >
+
+                        <label class="form-label fw-semibold">
+                            Cuenta por pagar al proveedor
+                        </label>
+
+                        <select
+                            id="cuenta_proveedor"
+                            name="cuenta_proveedor"
+                            class="form-select"
+                        >
+
+                            <option value="">
+                                Seleccione
+                            </option>
+
+                            {% for cuenta in cuentas_proveedor %}
+
+                                <option
+                                    value="{{ cuenta.id }}"
+
+                                    {% if compra_existente.cuenta_proveedor_id == cuenta.id %}
+                                        selected
+                                    {% endif %}
+                                >
+
+                                    {{ cuenta.codigo }}
+                                    -
+                                    {{ cuenta.nombre }}
+
+                                </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    </div>
+
+
+                    <!-- VENCIMIENTO -->
+
+                    <div
+                        id="grupo_vencimiento"
+                        class="col-md-4"
+                    >
+
+                        <label class="form-label fw-semibold">
+                            Fecha de vencimiento
+                        </label>
+
+                        <input
+                            type="date"
+                            id="fecha_vencimiento"
+                            name="fecha_vencimiento"
+                            class="form-control"
+                            value="{% if compra_existente.fecha_vencimiento %}{{ compra_existente.fecha_vencimiento|date:'Y-m-d' }}{% endif %}"
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <!-- ========================================= -->
+                <!-- RESUMEN -->
+                <!-- ========================================= -->
+
+                <hr class="my-4">
+
+
+                <div class="row g-3">
+
+
+                    <div class="col-md-4">
+
+                        <div class="dato-resumen">
+
+                            <div class="etiqueta">
+                                Importe de la compra
+                            </div>
+
+                            <div
+                                id="importe_total"
+                                class="importe"
+                            >
+                                S/ 0.00
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="col-md-4">
+
+                        <div class="dato-resumen">
+
+                            <div class="etiqueta">
+                                Pagado inicialmente
+                            </div>
+
+                            <div
+                                id="importe_pagado"
+                                class="importe"
+                            >
+                                S/ 0.00
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="col-md-4">
+
+                        <div class="dato-resumen">
+
+                            <div class="etiqueta">
+                                Saldo por pagar
+                            </div>
+
+                            <div
+                                id="saldo_pendiente"
+                                class="importe"
+                            >
+                                S/ 0.00
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="mensaje_condicion"
+                    class="alert mt-4 mb-0"
+                >
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- OBSERVACIÓN -->
+        <!-- ================================================= -->
+
+        <div class="card mb-4">
+
+            <div class="card-header">
+
+                <strong>
+                    Observación
+                </strong>
+
+            </div>
+
+            <div class="card-body">
+
+                <textarea
+                    name="observacion"
+                    class="form-control"
+                    rows="3"
+                    placeholder="Información adicional de la compra..."
+                >{{ compra_existente.observacion|default:'' }}</textarea>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- ACCIONES -->
+        <!-- ================================================= -->
+
+        <div
+            class="
+                d-flex
+                justify-content-between
+                align-items-center
+                mb-5
+            "
+        >
+
+            <a
+                href="{% url 'contabilidad:validar_costo_venta' detalle_costo.propuesta.id %}"
+                class="btn btn-outline-secondary"
+            >
+                Volver
+            </a>
+
+
+            <button
+                type="submit"
+                class="btn btn-primary px-4"
+            >
+                Guardar compra directa
+            </button>
+
+        </div>
+
+
+    </form>
+
+</div>
+
+</div>
+
+
+<script>
+
+    const CANTIDAD =
+        parseFloat(
+            "{{ detalle_costo.cantidad }}"
+                .replace(",", ".")
+        ) || 0;
+
+
+    const costoUnitario =
+        document.getElementById(
+            "costo_unitario"
+        );
+
+    const formaPago =
+        document.getElementById(
+            "forma_pago"
+        );
+
+    const montoPagado =
+        document.getElementById(
+            "monto_pagado"
+        );
+
+    const fechaPago =
+        document.getElementById(
+            "fecha_pago"
+        );
+
+    const cuentaPago =
+        document.getElementById(
+            "cuenta_pago"
+        );
+
+    const cuentaProveedor =
+        document.getElementById(
+            "cuenta_proveedor"
+        );
+
+
+    const grupoFechaPago =
+        document.getElementById(
+            "grupo_fecha_pago"
+        );
+
+    const grupoCuentaPago =
+        document.getElementById(
+            "grupo_cuenta_pago"
+        );
+
+    const grupoCuentaProveedor =
+        document.getElementById(
+            "grupo_cuenta_proveedor"
+        );
+
+    const grupoVencimiento =
+        document.getElementById(
+            "grupo_vencimiento"
+        );
+
+
+    const importeTotal =
+        document.getElementById(
+            "importe_total"
+        );
+
+    const importePagado =
+        document.getElementById(
+            "importe_pagado"
+        );
+
+    const saldoPendiente =
+        document.getElementById(
+            "saldo_pendiente"
+        );
+
+    const mensajeCondicion =
+        document.getElementById(
+            "mensaje_condicion"
+        );
+
+
+    function obtenerTotalCompra() {
+
+        const costo =
+            parseFloat(
+                costoUnitario.value
+            ) || 0;
+
+        return costo * CANTIDAD;
+
+    }
+
+
+    function actualizarResumen() {
+
+        const total =
+            obtenerTotalCompra();
+
+        let pagado =
+            parseFloat(
+                montoPagado.value
+            ) || 0;
+
+        let saldo =
+            total - pagado;
+
+        if (saldo < 0) {
+            saldo = 0;
+        }
+
+        importeTotal.textContent =
+            "S/ " + total.toFixed(2);
+
+        importePagado.textContent =
+            "S/ " + pagado.toFixed(2);
+
+        saldoPendiente.textContent =
+            "S/ " + saldo.toFixed(2);
+
+    }
+
+
+    function actualizarFormaPago(
+        cambiarMonto = true
+    ) {
+
+        const tipo =
+            formaPago.value;
+
+        const total =
+            obtenerTotalCompra();
+
+
+        // ================================================
+        // CRÉDITO TOTAL
+        // ================================================
+
+        if (tipo === "CREDITO") {
+
+            if (cambiarMonto) {
+                montoPagado.value = "0.00";
+            }
+
+            montoPagado.readOnly = true;
+
+            grupoFechaPago.style.display =
+                "none";
+
+            grupoCuentaPago.style.display =
+                "none";
+
+            grupoCuentaProveedor.style.display =
+                "block";
+
+            grupoVencimiento.style.display =
+                "block";
+
+            fechaPago.required = false;
+
+            cuentaPago.required = false;
+
+            cuentaProveedor.required = true;
+
+            mensajeCondicion.className =
+                "alert alert-warning mt-4 mb-0";
+
+            mensajeCondicion.innerHTML =
+                "<strong>Compra al crédito:</strong> " +
+                "la compra se reconoce ahora, pero no " +
+                "existe salida de dinero. Todo el importe " +
+                "queda registrado como cuenta por pagar.";
+
+        }
+
+
+        // ================================================
+        // PAGO PARCIAL
+        // ================================================
+
+        else if (tipo === "PARCIAL") {
+
+            montoPagado.readOnly = false;
+
+            grupoFechaPago.style.display =
+                "block";
+
+            grupoCuentaPago.style.display =
+                "block";
+
+            grupoCuentaProveedor.style.display =
+                "block";
+
+            grupoVencimiento.style.display =
+                "block";
+
+            fechaPago.required = true;
+
+            cuentaPago.required = true;
+
+            cuentaProveedor.required = true;
+
+            mensajeCondicion.className =
+                "alert alert-info mt-4 mb-0";
+
+            mensajeCondicion.innerHTML =
+                "<strong>Pago parcial:</strong> " +
+                "una parte se reconoce como pagada y " +
+                "el saldo restante queda como cuenta " +
+                "por pagar al proveedor.";
+
+        }
+
+
+        // ================================================
+        // PAGADA TOTALMENTE
+        // ================================================
+
+        else {
+
+            if (cambiarMonto) {
+
+                montoPagado.value =
+                    total.toFixed(2);
+
+            }
+
+            montoPagado.readOnly = true;
+
+            grupoFechaPago.style.display =
+                "block";
+
+            grupoCuentaPago.style.display =
+                "block";
+
+            grupoCuentaProveedor.style.display =
+                "none";
+
+            grupoVencimiento.style.display =
+                "none";
+
+            fechaPago.required = true;
+
+            cuentaPago.required = true;
+
+            cuentaProveedor.required = false;
+
+            mensajeCondicion.className =
+                "alert alert-success mt-4 mb-0";
+
+            mensajeCondicion.innerHTML =
+                "<strong>Compra pagada:</strong> " +
+                "el importe total se paga y no queda " +
+                "deuda pendiente con el proveedor.";
+
+        }
+
+        actualizarResumen();
+
+    }
+
+
+    formaPago.addEventListener(
+        "change",
+        function() {
+
+            actualizarFormaPago(
+                true
+            );
+
+        }
+    );
+
+
+    costoUnitario.addEventListener(
+        "input",
+        function() {
+
+            if (
+                formaPago.value !== "CREDITO"
+                && formaPago.value !== "PARCIAL"
+            ) {
+
+                montoPagado.value =
+                    obtenerTotalCompra().toFixed(2);
+
+            }
+
+            actualizarResumen();
+
+        }
+    );
+
+
+    montoPagado.addEventListener(
+        "input",
+        actualizarResumen
+    );
+
+
+    /*
+     * Al cargar:
+     * si existe una compra previa preservamos
+     * los valores registrados.
+     */
+
+    {% if compra_existente.pk %}
+
+        actualizarFormaPago(
+            false
+        );
+
+    {% else %}
+
+        actualizarFormaPago(
+            true
+        );
+
+    {% endif %}
+
+</script>
+
+
+<script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+></script>
+
+</body>
+
+</html>

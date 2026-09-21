@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Registrar gasto / operación</title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+    <style>
+
+        body {
+            background: #f5f6f8;
+        }
+
+        .contenedor {
+            max-width: 1100px;
+            margin: auto;
+        }
+
+        .card {
+            border: 0;
+            box-shadow: 0 1px 5px rgba(0,0,0,.08);
+        }
+
+        .clasificacion {
+            background: #f8f9fa;
+            border-left: 4px solid #6c757d;
+        }
+
+        .clasificacion-titulo {
+            font-size: .8rem;
+            text-transform: uppercase;
+            color: #6c757d;
+            font-weight: 600;
+        }
+
+        .clasificacion-valor {
+            font-weight: 500;
+        }
+
+        .seccion-titulo {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .requerido {
+            color: #dc3545;
+        }
+
+        .ayuda {
+            font-size: .85rem;
+            color: #6c757d;
+        }
+
+        .concepto-wrapper {
+            position: relative;
+        }
+
+        #resultado-conceptos {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            z-index: 1050;
+            max-height: 260px;
+            overflow-y: auto;
+            background: #fff;
+            border: 1px solid #ced4da;
+            border-radius: .375rem;
+            box-shadow: 0 .4rem 1rem rgba(0,0,0,.12);
+        }
+
+        .concepto-opcion {
+            width: 100%;
+            border: 0;
+            border-bottom: 1px solid #f0f0f0;
+            background: #fff;
+            padding: .65rem .85rem;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .concepto-opcion:last-child {
+            border-bottom: 0;
+        }
+
+        .concepto-opcion:hover,
+        .concepto-opcion.active {
+            background: #f1f5f9;
+        }
+
+        .concepto-vacio {
+            padding: .75rem .85rem;
+            color: #6c757d;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="container-fluid py-4 px-3">
+
+<div class="contenedor">
+
+
+    <!-- ===================================================== -->
+    <!-- ENCABEZADO -->
+    <!-- ===================================================== -->
+
+    <div
+        class="
+            d-flex
+            justify-content-between
+            align-items-center
+            mb-4
+        "
+    >
+
+        <div>
+
+            <h2 class="mb-1">
+                Registrar gasto / operación
+            </h2>
+
+            <div class="text-muted">
+                Registre operaciones que no se generan
+                automáticamente desde facturación.
+            </div>
+
+        </div>
+
+
+        <a
+            href="{% url 'contabilidad:pendientes_contables' %}"
+            class="btn btn-outline-secondary"
+        >
+            Volver
+        </a>
+
+    </div>
+
+
+    <!-- ===================================================== -->
+    <!-- MENSAJES -->
+    <!-- ===================================================== -->
+
+    {% if messages %}
+
+        {% for message in messages %}
+
+            <div
+                class="
+                    alert
+                    {% if message.tags == 'error' %}
+                        alert-danger
+                    {% elif message.tags == 'success' %}
+                        alert-success
+                    {% elif message.tags == 'warning' %}
+                        alert-warning
+                    {% else %}
+                        alert-info
+                    {% endif %}
+                "
+            >
+                {{ message }}
+            </div>
+
+        {% endfor %}
+
+    {% endif %}
+
+
+    <form method="post" id="form-operacion">
+
+        {% csrf_token %}
+
+
+        <!-- ================================================= -->
+        <!-- DATOS DE LA OPERACIÓN -->
+        <!-- ================================================= -->
+
+        <div class="card mb-4">
+
+            <div class="card-header bg-white">
+
+                <span class="seccion-titulo">
+                    1. Datos de la operación
+                </span>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+
+                    <!-- FECHA -->
+
+                    <div class="col-md-3">
+
+                        <label class="form-label">
+                            Fecha
+                            <span class="requerido">*</span>
+                        </label>
+
+                        <input
+                            type="date"
+                            name="fecha"
+                            class="form-control"
+                            value="{{ datos.fecha }}"
+                            required
+                        >
+
+                    </div>
+
+
+                    <!-- CONCEPTO -->
+
+                    <div class="col-md-9">
+
+                        <label class="form-label">
+                            Concepto
+                            <span class="requerido">*</span>
+                        </label>
+
+                        <div class="concepto-wrapper">
+
+                            <input
+                                type="hidden"
+                                name="concepto"
+                                id="concepto"
+                                value="{{ datos.concepto }}"
+                            >
+
+                            <input
+                                type="text"
+                                id="buscar-concepto"
+                                class="form-control"
+                                placeholder="Escriba para buscar: alquiler, luz, publicidad, útiles..."
+                                autocomplete="off"
+                                value=""
+                                required
+                            >
+
+                            <div id="resultado-conceptos">
+
+                                {% for concepto in conceptos %}
+
+                                    <button
+                                        type="button"
+                                        class="concepto-opcion"
+                                        data-id="{{ concepto.id }}"
+                                        data-nombre="{{ concepto.nombre }}"
+                                        data-texto="{{ concepto.nombre|lower }} {{ concepto.palabras_clave|lower }} {{ concepto.sinonimos|lower }}"
+                                    >
+                                        {{ concepto.nombre }}
+                                    </button>
+
+                                {% endfor %}
+
+                                <div
+                                    id="concepto-vacio"
+                                    class="concepto-vacio d-none"
+                                >
+                                    No se encontraron conceptos.
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="ayuda mt-2">
+                            Escriba parte del concepto y selecciónelo de la lista.
+                        </div>
+
+                    </div>
+
+
+                    <!-- DESCRIPCIÓN -->
+
+                    <div class="col-12">
+
+                        <label class="form-label">
+                            Descripción adicional
+                        </label>
+
+                        <input
+                            type="text"
+                            name="descripcion"
+                            class="form-control"
+                            maxlength="300"
+                            value="{{ datos.descripcion }}"
+                            placeholder="Ej.: Alquiler correspondiente a agosto 2026"
+                        >
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- CLASIFICACIÓN AUTOMÁTICA -->
+        <!-- ================================================= -->
+
+        <div
+            class="card mb-4"
+            id="card-clasificacion"
+        >
+
+            <div class="card-header bg-white">
+
+                <span class="seccion-titulo">
+                    Clasificación automática
+                </span>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="clasificacion p-3 rounded">
+
+                    <div class="row g-3">
+
+
+                        <div class="col-md-4">
+
+                            <div class="clasificacion-titulo">
+                                Categoría
+                            </div>
+
+                            <div
+                                class="clasificacion-valor"
+                                id="clasificacion-categoria"
+                            >
+                                Seleccione un concepto
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-4">
+
+                            <div class="clasificacion-titulo">
+                                Centro de costo
+                            </div>
+
+                            <div
+                                class="clasificacion-valor"
+                                id="clasificacion-centro"
+                            >
+                                -
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-4">
+
+                            <div class="clasificacion-titulo">
+                                Cuenta contable
+                            </div>
+
+                            <div
+                                class="clasificacion-valor"
+                                id="clasificacion-cuenta"
+                            >
+                                -
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12">
+
+                            <div class="clasificacion-titulo">
+                                Tipo de operación
+                            </div>
+
+                            <div
+                                class="clasificacion-valor"
+                                id="clasificacion-tipo"
+                            >
+                                -
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="ayuda mt-2">
+                    Esta clasificación proviene del maestro
+                    de conceptos y no puede modificarse
+                    desde esta operación.
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- PROVEEDOR / COMPROBANTE -->
+        <!-- ================================================= -->
+
+        <div class="card mb-4">
+
+            <div class="card-header bg-white">
+
+                <span class="seccion-titulo">
+                    2. Proveedor y comprobante
+                </span>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+
+                    <div
+                        class="col-md-6"
+                        id="grupo-proveedor"
+                    >
+
+                        <label class="form-label">
+                            Proveedor
+                            <span
+                                class="requerido d-none"
+                                id="marca-proveedor"
+                            >
+                                *
+                            </span>
+                        </label>
+
+                        <input
+                            type="text"
+                            name="proveedor_nombre"
+                            id="proveedor_nombre"
+                            class="form-control"
+                            maxlength="200"
+                            value="{{ datos.proveedor_nombre }}"
+                        >
+
+                    </div>
+
+
+                    <div
+                        class="col-md-6"
+                        id="grupo-cliente"
+                    >
+
+                        <label class="form-label">
+                            Cliente
+                            <span
+                                class="requerido d-none"
+                                id="marca-cliente"
+                            >
+                                *
+                            </span>
+                        </label>
+
+                        <input
+                            type="text"
+                            name="cliente_nombre"
+                            id="cliente_nombre"
+                            class="form-control"
+                            maxlength="200"
+                            value="{{ datos.cliente_nombre }}"
+                        >
+
+                    </div>
+
+
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Tipo de documento
+                            <span
+                                class="requerido d-none"
+                                id="marca-comprobante-1"
+                            >
+                                *
+                            </span>
+                        </label>
+
+                        <select
+                            name="tipo_documento"
+                            id="tipo_documento"
+                            class="form-select"
+                        >
+
+                            <option value="">
+                                Sin comprobante
+                            </option>
+
+                            <option
+                                value="Factura"
+                                {% if datos.tipo_documento == "Factura" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Factura
+                            </option>
+
+                            <option
+                                value="Boleta"
+                                {% if datos.tipo_documento == "Boleta" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Boleta
+                            </option>
+
+                            <option
+                                value="Recibo"
+                                {% if datos.tipo_documento == "Recibo" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Recibo
+                            </option>
+
+                            <option
+                                value="Recibo por honorarios"
+                                {% if datos.tipo_documento == "Recibo por honorarios" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Recibo por honorarios
+                            </option>
+
+                            <option
+                                value="Voucher"
+                                {% if datos.tipo_documento == "Voucher" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Voucher
+                            </option>
+
+                            <option
+                                value="Otro"
+                                {% if datos.tipo_documento == "Otro" %}
+                                    selected
+                                {% endif %}
+                            >
+                                Otro
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Número de documento
+                            <span
+                                class="requerido d-none"
+                                id="marca-comprobante-2"
+                            >
+                                *
+                            </span>
+                        </label>
+
+                        <input
+                            type="text"
+                            name="numero_documento"
+                            id="numero_documento"
+                            class="form-control"
+                            maxlength="100"
+                            value="{{ datos.numero_documento }}"
+                            placeholder="Ej.: F001-000123"
+                        >
+
+                    </div>
+
+
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Importe total
+                            <span class="requerido">*</span>
+                        </label>
+
+                        <div class="input-group">
+
+                            <span class="input-group-text">
+                                S/
+                            </span>
+
+                            <input
+                                type="number"
+                                name="importe_total"
+                                id="importe_total"
+                                class="form-control"
+                                min="0.01"
+                                step="0.01"
+                                value="{{ datos.importe_total }}"
+                                required
+                            >
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- FORMA DE PAGO -->
+        <!-- ================================================= -->
+
+        <div class="card mb-4">
+
+            <div class="card-header bg-white">
+
+                <span class="seccion-titulo">
+                    3. Forma de pago
+                </span>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Forma de pago
+                            <span class="requerido">*</span>
+                        </label>
+
+                        <select
+                            name="forma_pago"
+                            id="forma_pago"
+                            class="form-select"
+                            required
+                        >
+
+                            <option value="">
+                                Seleccione
+                            </option>
+
+                            {% for valor, texto in formas_pago %}
+
+                                <option
+                                    value="{{ valor }}"
+                                    {% if datos.forma_pago == valor %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ texto }}
+                                </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    </div>
+
+
+                    <div
+                        class="col-md-4"
+                        id="grupo-monto-pagado"
+                    >
+
+                        <label class="form-label">
+                            Monto pagado
+                        </label>
+
+                        <div class="input-group">
+
+                            <span class="input-group-text">
+                                S/
+                            </span>
+
+                            <input
+                                type="number"
+                                name="monto_pagado"
+                                id="monto_pagado"
+                                class="form-control"
+                                min="0"
+                                step="0.01"
+                                value="{{ datos.monto_pagado }}"
+                            >
+
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        class="col-md-4"
+                        id="grupo-fecha-pago"
+                    >
+
+                        <label class="form-label">
+                            Fecha de pago
+                        </label>
+
+                        <input
+                            type="date"
+                            name="fecha_pago"
+                            id="fecha_pago"
+                            class="form-control"
+                            value="{{ datos.fecha_pago }}"
+                        >
+
+                    </div>
+
+
+                    <div
+                        class="col-md-6"
+                        id="grupo-cuenta-pago"
+                    >
+
+                        <label class="form-label">
+                            Medio / cuenta de pago
+                        </label>
+
+                        <select
+                            name="cuenta_pago"
+                            id="cuenta_pago"
+                            class="form-select"
+                        >
+
+                            <option value="">
+                                Seleccione
+                            </option>
+
+                            {% for cuenta in cuentas_pago %}
+
+                                <option
+                                    value="{{ cuenta.id }}"
+                                    {% if datos.cuenta_pago == cuenta.id|stringformat:"s" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ cuenta.codigo }}
+                                    -
+                                    {{ cuenta.nombre }}
+                                </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    </div>
+
+
+                    <div
+                        class="col-md-6"
+                        id="grupo-cuenta-por-pagar"
+                    >
+
+                        <label class="form-label">
+                            Cuenta por pagar
+                        </label>
+
+                        <select
+                            name="cuenta_por_pagar"
+                            id="cuenta_por_pagar"
+                            class="form-select"
+                        >
+
+                            <option value="">
+                                Seleccione
+                            </option>
+
+                            {% for cuenta in cuentas_por_pagar %}
+
+                                <option
+                                    value="{{ cuenta.id }}"
+                                    {% if datos.cuenta_por_pagar == cuenta.id|stringformat:"s" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ cuenta.codigo }}
+                                    -
+                                    {{ cuenta.nombre }}
+                                </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    </div>
+
+
+                    <div
+                        class="col-md-4"
+                        id="grupo-vencimiento"
+                    >
+
+                        <label class="form-label">
+                            Fecha de vencimiento
+                        </label>
+
+                        <input
+                            type="date"
+                            name="fecha_vencimiento"
+                            id="fecha_vencimiento"
+                            class="form-control"
+                            value="{{ datos.fecha_vencimiento }}"
+                        >
+
+                    </div>
+
+
+                    <!-- RESUMEN -->
+
+                    <div class="col-12">
+
+                        <div class="bg-light rounded p-3">
+
+                            <div class="row">
+
+                                <div class="col-md-4">
+
+                                    <small class="text-muted">
+                                        Total
+                                    </small>
+
+                                    <div
+                                        class="fw-bold"
+                                        id="resumen-total"
+                                    >
+                                        S/ 0.00
+                                    </div>
+
+                                </div>
+
+
+                                <div class="col-md-4">
+
+                                    <small class="text-muted">
+                                        Pagado
+                                    </small>
+
+                                    <div
+                                        class="fw-bold"
+                                        id="resumen-pagado"
+                                    >
+                                        S/ 0.00
+                                    </div>
+
+                                </div>
+
+
+                                <div class="col-md-4">
+
+                                    <small class="text-muted">
+                                        Saldo pendiente
+                                    </small>
+
+                                    <div
+                                        class="fw-bold"
+                                        id="resumen-saldo"
+                                    >
+                                        S/ 0.00
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- OBSERVACIÓN -->
+        <!-- ================================================= -->
+
+        <div class="card mb-4">
+
+            <div class="card-header bg-white">
+
+                <span class="seccion-titulo">
+                    4. Observación
+                </span>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <textarea
+                    name="observacion"
+                    class="form-control"
+                    rows="3"
+                    placeholder="Información adicional de la operación"
+                >{{ datos.observacion }}</textarea>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- BOTONES -->
+        <!-- ================================================= -->
+
+        <div
+            class="
+                d-flex
+                justify-content-between
+                mb-5
+            "
+        >
+
+            <a
+                href="{% url 'contabilidad:pendientes_contables' %}"
+                class="btn btn-outline-secondary"
+            >
+                Cancelar
+            </a>
+
+
+            <button
+                type="submit"
+                class="btn btn-success px-4"
+                onclick="
+                    return confirm(
+                        '¿Registrar y contabilizar esta operación?'
+                    );
+                "
+            >
+                Registrar y contabilizar
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+</div>
+
+
+<!-- ========================================================= -->
+<!-- DATOS DE CLASIFICACIÓN -->
+<!-- ========================================================= -->
+
+{{ clasificacion_conceptos|json_script:"clasificacion-conceptos-data" }}
+
+
+<script>
+
+    const datosConceptos =
+        JSON.parse(
+            document.getElementById(
+                "clasificacion-conceptos-data"
+            ).textContent
+        );
+
+
+    const concepto =
+        document.getElementById(
+            "concepto"
+        );
+
+    const buscador =
+        document.getElementById(
+            "buscar-concepto"
+        );
+
+    const resultadoConceptos =
+        document.getElementById(
+            "resultado-conceptos"
+        );
+
+    const opcionesConcepto =
+        Array.from(
+            document.querySelectorAll(
+                ".concepto-opcion"
+            )
+        );
+
+    const conceptoVacio =
+        document.getElementById(
+            "concepto-vacio"
+        );
+
+    let indiceActivo = -1;
+
+
+    // ========================================================
+    // NORMALIZAR TEXTO
+    // ========================================================
+
+    function normalizarTexto(texto) {
+
+        return (texto || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(
+                /[\u0300-\u036f]/g,
+                ""
+            )
+            .trim();
+
+    }
+
+
+    // ========================================================
+    // MOSTRAR RESULTADOS
+    // ========================================================
+
+    function mostrarResultados() {
+
+        resultadoConceptos.style.display =
+            "block";
+
+    }
+
+
+    // ========================================================
+    // OCULTAR RESULTADOS
+    // ========================================================
+
+    function ocultarResultados() {
+
+        resultadoConceptos.style.display =
+            "none";
+
+        indiceActivo = -1;
+
+        opcionesConcepto.forEach(
+            opcion => {
+                opcion.classList.remove(
+                    "active"
+                );
+            }
+        );
+
+    }
+
+
+    // ========================================================
+    // RESULTADOS VISIBLES
+    // ========================================================
+
+    function obtenerOpcionesVisibles() {
+
+        return opcionesConcepto.filter(
+            opcion =>
+                !opcion.classList.contains(
+                    "d-none"
+                )
+        );
+
+    }
+
+
+    // ========================================================
+    // FILTRAR CONCEPTOS
+    // ========================================================
+
+    function filtrarConceptos() {
+
+        const texto =
+            normalizarTexto(
+                buscador.value
+            );
+
+        concepto.value = "";
+
+        let encontrados = 0;
+
+
+        opcionesConcepto.forEach(
+            opcion => {
+
+                const contenido =
+                    normalizarTexto(
+                        opcion.dataset.texto
+                    );
+
+                const coincide =
+                    texto !== ""
+                    && contenido.includes(
+                        texto
+                    );
+
+
+                opcion.classList.toggle(
+                    "d-none",
+                    !coincide
+                );
+
+
+                if (coincide) {
+                    encontrados++;
+                }
+
+            }
+        );
+
+
+        indiceActivo = -1;
+
+
+        conceptoVacio.classList.toggle(
+            "d-none",
+            encontrados > 0
+        );
+
+
+        if (texto !== "") {
+
+            mostrarResultados();
+
+        } else {
+
+            ocultarResultados();
+
+        }
+
+    }
+
+
+    // ========================================================
+    // SELECCIONAR CONCEPTO
+    // ========================================================
+
+    function seleccionarConcepto(
+        opcion
+    ) {
+
+        concepto.value =
+            opcion.dataset.id;
+
+        buscador.value =
+            opcion.dataset.nombre;
+
+        buscador.setCustomValidity(
+            ""
+        );
+
+        ocultarResultados();
+
+        actualizarClasificacion();
+
+    }
+
+
+    // ========================================================
+    // ESCRIBIR EN BUSCADOR
+    // ========================================================
+
+    buscador.addEventListener(
+        "input",
+        function () {
+
+            buscador.setCustomValidity(
+                ""
+            );
+
+            filtrarConceptos();
+
+            actualizarClasificacion();
+
+        }
+    );
+
+
+    // ========================================================
+    // CLICK EN OPCIÓN
+    // ========================================================
+
+    opcionesConcepto.forEach(
+        opcion => {
+
+            opcion.addEventListener(
+                "click",
+                function () {
+
+                    seleccionarConcepto(
+                        opcion
+                    );
+
+                }
+            );
+
+        }
+    );
+
+
+    // ========================================================
+    // NAVEGACIÓN CON TECLADO
+    // ========================================================
+
+    buscador.addEventListener(
+        "keydown",
+        function (event) {
+
+            const visibles =
+                obtenerOpcionesVisibles();
+
+
+            if (
+                resultadoConceptos.style.display
+                === "none"
+                ||
+                visibles.length === 0
+            ) {
+
+                return;
+
+            }
+
+
+            if (event.key === "ArrowDown") {
+
+                event.preventDefault();
+
+                indiceActivo++;
+
+                if (
+                    indiceActivo
+                    >= visibles.length
+                ) {
+                    indiceActivo = 0;
+                }
+
+            }
+
+
+            else if (
+                event.key === "ArrowUp"
+            ) {
+
+                event.preventDefault();
+
+                indiceActivo--;
+
+                if (
+                    indiceActivo < 0
+                ) {
+                    indiceActivo =
+                        visibles.length - 1;
+                }
+
+            }
+
+
+            else if (
+                event.key === "Enter"
+            ) {
+
+                if (
+                    indiceActivo >= 0
+                    &&
+                    visibles[
+                        indiceActivo
+                    ]
+                ) {
+
+                    event.preventDefault();
+
+                    seleccionarConcepto(
+                        visibles[
+                            indiceActivo
+                        ]
+                    );
+
+                }
+
+                return;
+
+            }
+
+
+            else if (
+                event.key === "Escape"
+            ) {
+
+                ocultarResultados();
+
+                return;
+
+            }
+
+
+            visibles.forEach(
+                opcion => {
+                    opcion.classList.remove(
+                        "active"
+                    );
+                }
+            );
+
+
+            if (
+                indiceActivo >= 0
+                &&
+                visibles[indiceActivo]
+            ) {
+
+                visibles[
+                    indiceActivo
+                ].classList.add(
+                    "active"
+                );
+
+                visibles[
+                    indiceActivo
+                ].scrollIntoView({
+                    block: "nearest"
+                });
+
+            }
+
+        }
+    );
+
+
+    // ========================================================
+    // CLICK FUERA
+    // ========================================================
+
+    document.addEventListener(
+        "click",
+        function (event) {
+
+            if (
+                !buscador.contains(
+                    event.target
+                )
+                &&
+                !resultadoConceptos.contains(
+                    event.target
+                )
+            ) {
+
+                ocultarResultados();
+
+            }
+
+        }
+    );
+
+
+    // ========================================================
+    // CLASIFICACIÓN AUTOMÁTICA
+    // ========================================================
+
+    function actualizarClasificacion() {
+
+        const id =
+            concepto.value;
+
+        const datos =
+            datosConceptos[id];
+
+
+        if (!datos) {
+
+            document.getElementById(
+                "clasificacion-categoria"
+            ).textContent =
+                "Seleccione un concepto";
+
+            document.getElementById(
+                "clasificacion-centro"
+            ).textContent = "-";
+
+            document.getElementById(
+                "clasificacion-cuenta"
+            ).textContent = "-";
+
+            document.getElementById(
+                "clasificacion-tipo"
+            ).textContent = "-";
+
+            return;
+
+        }
+
+
+        document.getElementById(
+            "clasificacion-categoria"
+        ).textContent =
+            datos.categoria;
+
+
+        document.getElementById(
+            "clasificacion-centro"
+        ).textContent =
+            datos.centro;
+
+
+        document.getElementById(
+            "clasificacion-cuenta"
+        ).textContent =
+            datos.cuenta_codigo
+            + " - "
+            + datos.cuenta_nombre;
+
+
+        document.getElementById(
+            "clasificacion-tipo"
+        ).textContent =
+            datos.tipo_operacion;
+
+
+        const proveedor =
+            document.getElementById(
+                "proveedor_nombre"
+            );
+
+        const cliente =
+            document.getElementById(
+                "cliente_nombre"
+            );
+
+        const tipoDocumento =
+            document.getElementById(
+                "tipo_documento"
+            );
+
+        const numeroDocumento =
+            document.getElementById(
+                "numero_documento"
+            );
+
+
+        proveedor.required =
+            datos.requiere_proveedor;
+
+        cliente.required =
+            datos.requiere_cliente;
+
+        tipoDocumento.required =
+            datos.requiere_comprobante;
+
+        numeroDocumento.required =
+            datos.requiere_comprobante;
+
+
+        document.getElementById(
+            "marca-proveedor"
+        ).classList.toggle(
+            "d-none",
+            !datos.requiere_proveedor
+        );
+
+
+        document.getElementById(
+            "marca-cliente"
+        ).classList.toggle(
+            "d-none",
+            !datos.requiere_cliente
+        );
+
+
+        document.getElementById(
+            "marca-comprobante-1"
+        ).classList.toggle(
+            "d-none",
+            !datos.requiere_comprobante
+        );
+
+
+        document.getElementById(
+            "marca-comprobante-2"
+        ).classList.toggle(
+            "d-none",
+            !datos.requiere_comprobante
+        );
+
+    }
+
+
+    // ========================================================
+    // FORMA DE PAGO
+    // ========================================================
+
+    const formaPago =
+        document.getElementById(
+            "forma_pago"
+        );
+
+    const total =
+        document.getElementById(
+            "importe_total"
+        );
+
+    const montoPagado =
+        document.getElementById(
+            "monto_pagado"
+        );
+
+    const fechaPago =
+        document.getElementById(
+            "fecha_pago"
+        );
+
+    const cuentaPago =
+        document.getElementById(
+            "cuenta_pago"
+        );
+
+    const cuentaPorPagar =
+        document.getElementById(
+            "cuenta_por_pagar"
+        );
+
+
+    function actualizarFormaPago(
+        conservarValores = false
+    ) {
+
+        const forma =
+            formaPago.value;
+
+        const importe =
+            parseFloat(
+                total.value
+            ) || 0;
+
+
+        const esCredito =
+            forma === "CREDITO";
+
+        const esParcial =
+            forma === "PARCIAL";
+
+        const esPagado =
+            [
+                "EFECTIVO",
+                "BANCO",
+                "OTRO"
+            ].includes(
+                forma
+            );
+
+
+        if (esCredito) {
+
+            montoPagado.value =
+                "0.00";
+
+            montoPagado.readOnly =
+                true;
+
+            fechaPago.value =
+                "";
+
+            fechaPago.required =
+                false;
+
+            cuentaPago.value =
+                "";
+
+            cuentaPago.required =
+                false;
+
+            cuentaPorPagar.required =
+                true;
+
+
+            document.getElementById(
+                "grupo-fecha-pago"
+            ).classList.add(
+                "d-none"
+            );
+
+            document.getElementById(
+                "grupo-cuenta-pago"
+            ).classList.add(
+                "d-none"
+            );
+
+            document.getElementById(
+                "grupo-cuenta-por-pagar"
+            ).classList.remove(
+                "d-none"
+            );
+
+            document.getElementById(
+                "grupo-vencimiento"
+            ).classList.remove(
+                "d-none"
+            );
+
+        }
+
+
+        else if (esParcial) {
+
+            montoPagado.readOnly =
+                false;
+
+            fechaPago.required =
+                true;
+
+            cuentaPago.required =
+                true;
+
+            cuentaPorPagar.required =
+                true;
+
+
+            document.getElementById(
+                "grupo-fecha-pago"
+            ).classList.remove(
+                "d-none"
+            );
+
+            document.getElementById(
+                "grupo-cuenta-pago"
+            ).classList.remove(
+                "d-none"
+            );
+
+            document.getElementById(
+                "grupo-cuenta-por-pagar"
+            ).classList.remove(
+                "d-none"
+            );
+
+            document.getElementById(
+                "grupo-vencimiento"
+            ).classList.remove(
+                "d-none"
+            );
+
+        }
+
+
+        else if (esPagado) {
+
+            montoPagado.value =
+                importe.toFixed(2);
+
+            montoPagado.readOnly =
+                true;
+
+            fechaPago.required =
+                true;
+
+            cuentaPago.required =
+                true;
+
+            cuentaPorPagar.value =
+                "";
+
+            cuentaPorPagar.required =
+                false;
+
+
+            document.getElementById(
+                "grupo-fecha-pago"
+            ).classList.remove(
+                "d-none"
+            );
+
+            document.getElementById(
+                "grupo-cuenta-pago"
+            ).classList.remove(
+                "d-none"
+            );
+
+            document.getElementById(
+                "grupo-cuenta-por-pagar"
+            ).classList.add(
+                "d-none"
+            );
+
+            document.getElementById(
+                "grupo-vencimiento"
+            ).classList.add(
+                "d-none"
+            );
+
+        }
+
+
+        else {
+
+            montoPagado.readOnly =
+                false;
+
+            fechaPago.required =
+                false;
+
+            cuentaPago.required =
+                false;
+
+            cuentaPorPagar.required =
+                false;
+
+        }
+
+
+        actualizarResumen();
+
+    }
+
+
+    // ========================================================
+    // RESUMEN
+    // ========================================================
+
+    function actualizarResumen() {
+
+        const importe =
+            parseFloat(
+                total.value
+            ) || 0;
+
+        const pagado =
+            parseFloat(
+                montoPagado.value
+            ) || 0;
+
+        const saldo =
+            Math.max(
+                importe - pagado,
+                0
+            );
+
+
+        document.getElementById(
+            "resumen-total"
+        ).textContent =
+            "S/ "
+            + importe.toFixed(2);
+
+
+        document.getElementById(
+            "resumen-pagado"
+        ).textContent =
+            "S/ "
+            + pagado.toFixed(2);
+
+
+        document.getElementById(
+            "resumen-saldo"
+        ).textContent =
+            "S/ "
+            + saldo.toFixed(2);
+
+    }
+
+
+    formaPago.addEventListener(
+        "change",
+        function () {
+
+            actualizarFormaPago();
+
+        }
+    );
+
+
+    total.addEventListener(
+        "input",
+        function () {
+
+            if (
+                [
+                    "EFECTIVO",
+                    "BANCO",
+                    "OTRO"
+                ].includes(
+                    formaPago.value
+                )
+            ) {
+
+                montoPagado.value =
+                    (
+                        parseFloat(
+                            total.value
+                        ) || 0
+                    ).toFixed(2);
+
+            }
+
+            actualizarResumen();
+
+        }
+    );
+
+
+    montoPagado.addEventListener(
+        "input",
+        actualizarResumen
+    );
+
+
+    // ========================================================
+    // VALIDACIÓN FINAL DEL CONCEPTO
+    // ========================================================
+
+    document.getElementById(
+        "form-operacion"
+    ).addEventListener(
+        "submit",
+        function (event) {
+
+            if (!concepto.value) {
+
+                event.preventDefault();
+
+                buscador.setCustomValidity(
+                    "Seleccione un concepto válido de la lista."
+                );
+
+                buscador.reportValidity();
+
+                buscador.focus();
+
+                return false;
+
+            }
+
+            buscador.setCustomValidity(
+                ""
+            );
+
+        }
+    );
+
+
+    // ========================================================
+    // INICIALIZACIÓN DEL CONCEPTO SELECCIONADO
+    // ========================================================
+
+    if (concepto.value) {
+
+        const opcionInicial =
+            opcionesConcepto.find(
+                opcion =>
+                    opcion.dataset.id
+                    === concepto.value
+            );
+
+        if (opcionInicial) {
+
+            buscador.value =
+                opcionInicial.dataset.nombre;
+
+        }
+
+    }
+
+
+    actualizarClasificacion();
+    actualizarFormaPago(true);
+    actualizarResumen();
+
+</script>
+
+
+</body>
+
+</html>

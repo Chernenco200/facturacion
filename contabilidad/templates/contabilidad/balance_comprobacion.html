@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>
+        Balance de Comprobación - Óptica IC
+    </title>
+
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f7fa;
+            margin: 0;
+            color: #243447;
+        }
+
+        .contenedor {
+            max-width: 1400px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .subtitulo {
+            margin-top: 0;
+            color: #667085;
+        }
+
+        .filtros {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 25px;
+            margin-bottom: 20px;
+
+            box-shadow:
+                0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .filtros form {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: end;
+        }
+
+        .campo {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .campo label {
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+
+        select,
+        input {
+            padding: 10px;
+            border: 1px solid #d0d5dd;
+            border-radius: 6px;
+        }
+
+        button {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            background: #285f7d;
+            color: white;
+            cursor: pointer;
+        }
+
+        .tarjeta {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+
+            box-shadow:
+                0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #eaf1f5;
+            text-align: left;
+            padding: 13px 12px;
+            color: #344054;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eaecf0;
+        }
+
+        .numero {
+            text-align: right;
+        }
+
+        .total {
+            font-weight: bold;
+            background: #f8fafc;
+        }
+
+        .estado {
+            margin-top: 20px;
+            padding: 18px 20px;
+            background: white;
+            border-radius: 10px;
+
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            box-shadow:
+                0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .correcto {
+            font-weight: bold;
+            color: #16794b;
+        }
+
+        .error {
+            font-weight: bold;
+            color: #b42318;
+        }
+
+        .vacio {
+            padding: 40px;
+            text-align: center;
+            color: #667085;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="contenedor">
+
+    <h1>
+        Balance de Comprobación
+    </h1>
+
+    <p class="subtitulo">
+        Óptica IC - Sumas y saldos de las cuentas contables
+    </p>
+
+
+    <div class="filtros">
+
+        <form method="get">
+
+            <div class="campo">
+
+                <label>
+                    Periodo
+                </label>
+
+                <select name="periodo">
+
+                    <option value="">
+                        Todos
+                    </option>
+
+                    {% for periodo in periodos %}
+
+                        <option
+                            value="{{ periodo.id }}"
+                            {% if periodo_id == periodo.id|stringformat:"s" %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ periodo }}
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+            <div class="campo">
+
+                <label>
+                    Desde
+                </label>
+
+                <input
+                    type="date"
+                    name="fecha_desde"
+                    value="{{ fecha_desde|default:'' }}"
+                >
+
+            </div>
+
+
+            <div class="campo">
+
+                <label>
+                    Hasta
+                </label>
+
+                <input
+                    type="date"
+                    name="fecha_hasta"
+                    value="{{ fecha_hasta|default:'' }}"
+                >
+
+            </div>
+
+
+            <button type="submit">
+                Consultar
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <div class="tarjeta">
+
+        {% if filas %}
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Código
+                        </th>
+
+                        <th>
+                            Cuenta
+                        </th>
+
+                        <th>
+                            Tipo
+                        </th>
+
+                        <th class="numero">
+                            Sumas Debe
+                        </th>
+
+                        <th class="numero">
+                            Sumas Haber
+                        </th>
+
+                        <th class="numero">
+                            Saldo Deudor
+                        </th>
+
+                        <th class="numero">
+                            Saldo Acreedor
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    {% for fila in filas %}
+
+                        <tr>
+
+                            <td>
+                                {{ fila.codigo }}
+                            </td>
+
+                            <td>
+                                {{ fila.nombre }}
+                            </td>
+
+                            <td>
+                                {{ fila.tipo }}
+                            </td>
+
+                            <td class="numero">
+                                S/ {{ fila.debe|floatformat:2 }}
+                            </td>
+
+                            <td class="numero">
+                                S/ {{ fila.haber|floatformat:2 }}
+                            </td>
+
+                            <td class="numero">
+                                S/ {{ fila.saldo_deudor|floatformat:2 }}
+                            </td>
+
+                            <td class="numero">
+                                S/ {{ fila.saldo_acreedor|floatformat:2 }}
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+
+                    <tr class="total">
+
+                        <td colspan="3">
+                            TOTAL
+                        </td>
+
+                        <td class="numero">
+                            S/ {{ total_debe|floatformat:2 }}
+                        </td>
+
+                        <td class="numero">
+                            S/ {{ total_haber|floatformat:2 }}
+                        </td>
+
+                        <td class="numero">
+                            S/ {{ total_saldo_deudor|floatformat:2 }}
+                        </td>
+
+                        <td class="numero">
+                            S/ {{ total_saldo_acreedor|floatformat:2 }}
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        {% else %}
+
+            <div class="vacio">
+
+                No existen movimientos contabilizados
+                para los filtros seleccionados.
+
+            </div>
+
+        {% endif %}
+
+    </div>
+
+
+    {% if filas %}
+
+        <div class="estado">
+
+            <div>
+
+                {% if cuadrado %}
+
+                    <span class="correcto">
+                        ✓ Sumas Debe y Haber cuadradas
+                    </span>
+
+                {% else %}
+
+                    <span class="error">
+                        ⚠ Las sumas Debe y Haber no cuadran
+                    </span>
+
+                {% endif %}
+
+            </div>
+
+
+            <div>
+
+                {% if saldos_cuadrados %}
+
+                    <span class="correcto">
+                        ✓ Saldos deudores y acreedores cuadrados
+                    </span>
+
+                {% else %}
+
+                    <span class="error">
+                        ⚠ Los saldos no cuadran
+                    </span>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+</body>
+
+</html>

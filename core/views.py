@@ -91,6 +91,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+from contabilidad.services import procesar_venta_contablemente
+from contabilidad.services import contabilizar_cobros_ticket
+
+
 def index(request):
     # Si ya inició sesión, manda al dashboard (o a donde quieras)
     if request.user.is_authenticated:
@@ -730,93 +734,279 @@ def guardar_ticket(request):
     except json.JSONDecodeError:
         return HttpResponseBadRequest("JSON inválido")
 
-    # ✅ 0) Leer y parsear fecha_emision (viene como "DD/MM/YYYY")
-    fecha_emision_str = (data.get("fecha_emision") or "").strip()
+    # ========================================================
+    # 0. FECHA DE EMISIÓN
+    # ========================================================
+
+    fecha_emision_str = (
+        data.get("fecha_emision") or ""
+    ).strip()
+
     if fecha_emision_str:
         try:
-            fecha_emision = datetime.strptime(fecha_emision_str, "%d/%m/%Y").date()
+            fecha_emision = datetime.strptime(
+                fecha_emision_str,
+                "%d/%m/%Y"
+            ).date()
+
         except ValueError:
             fecha_emision = timezone.localdate()
+
     else:
         fecha_emision = timezone.localdate()
 
+    # ========================================================
+    # PROCESAR VENTA
+    # ========================================================
+
     with transaction.atomic():
-        # 1) Obtener/actualizar correlativo
-        correlativo, _ = ReciboCorrelativo.objects.select_for_update().get_or_create(pk=1)
+
+        # ====================================================
+        # 1. CORRELATIVO
+        # ====================================================
+
+        correlativo, _ = (
+            ReciboCorrelativo.objects
+            .select_for_update()
+            .get_or_create(pk=1)
+        )
+
         correlativo.numero_actual += 1
         numero = correlativo.numero_actual
+
         correlativo.save()
 
-        # 2) Buscar cliente por nombre (opcional)
-        nombre_cliente = data.get("cliente") or ""
-        cliente = Cliente.objects.filter(nombre=nombre_cliente).first() if nombre_cliente else None
+        # ====================================================
+        # 2. CLIENTE
+        # ====================================================
 
-        # 3) Montos
-        total = Decimal(str(data.get("total", "0") or "0"))
-        a_cuenta = Decimal(str(data.get("a_cuenta", "0") or "0"))
-        medio_pago = (data.get("medio_pago") or "").strip().upper()
+        nombre_cliente = (
+            data.get("cliente") or ""
+        )
+
+        cliente = (
+            Cliente.objects
+            .filter(nombre=nombre_cliente)
+            .first()
+            if nombre_cliente
+            else None
+        )
+
+        # ====================================================
+        # 3. MONTOS
+        # ====================================================
+
+        total = Decimal(
+            str(
+                data.get("total", "0")
+                or "0"
+            )
+        )
+
+        a_cuenta = Decimal(
+            str(
+                data.get("a_cuenta", "0")
+                or "0"
+            )
+        )
+
+        medio_pago = (
+            data.get("medio_pago") or ""
+        ).strip().upper()
 
         saldo = total - a_cuenta
+
         if saldo < 0:
             saldo = Decimal("0")
 
-        # ✅ 4) Crear TicketVenta GUARDANDO fecha_emision
+        # ====================================================
+        # 4. CREAR TICKET
+        # ====================================================
+
         ticket = TicketVenta.objects.create(
             numero=numero,
             cliente=cliente,
-            vendedor=data.get("vendedor", ""),
+            vendedor=data.get(
+                "vendedor",
+                ""
+            ),
 
-            # ✅ ESTA ES LA CLAVE
             fecha_emision=fecha_emision,
 
-            fecha_entrega=data.get("fecha_entrega", ""),
-            hora_entrega=data.get("hora_entrega", ""),
+            fecha_entrega=data.get(
+                "fecha_entrega",
+                ""
+            ),
+
+            hora_entrega=data.get(
+                "hora_entrega",
+                ""
+            ),
+
             total=total,
             a_cuenta=a_cuenta,
             saldo=saldo,
-            puntos_ic=int(data.get("puntos_ic", 0) or 0),
+
+            puntos_ic=int(
+                data.get(
+                    "puntos_ic",
+                    0
+                )
+                or 0
+            ),
         )
+
+        # ====================================================
+        # 5. ORDEN DE TRABAJO
+        # ====================================================
 
         OrdenTrabajo.objects.create(
             ticket=ticket,
             estado="LAB_PEDIDO",
-            ts_lab_pedido=timezone.now()
+            ts_lab_pedido=timezone.now(),
         )
 
-        # ✅ Enviar WhatsApp de agradecimiento
+        # ====================================================
+        # 6. WHATSAPP
+        # ====================================================
+
         try:
-            enviar_agradecimiento_ticket(ticket)
+            enviar_agradecimiento_ticket(
+                ticket
+            )
+
         except Exception as e:
-            print("ERROR ENVIANDO AGRADECIMIENTO WHATSAPP:", e)
+            print(
+                "ERROR ENVIANDO "
+                "AGRADECIMIENTO WHATSAPP:",
+                e
+            )
 
+        # ====================================================
+        # 7. PAGO INICIAL
+        # ====================================================
 
-        # 5) Pago
-        medios_validos = {"EFECTIVO", "YAPE", "TARJETA", "TRANSFERENCIA"}
-        if a_cuenta > 0 and medio_pago in medios_validos:
+        medios_validos = {
+            "EFECTIVO",
+            "YAPE",
+            "TARJETA",
+            "TRANSFERENCIA",
+        }
+
+        if (
+            a_cuenta > 0
+            and medio_pago in medios_validos
+        ):
+
             PagoTicket.objects.create(
                 ticket=ticket,
                 medio_pago=medio_pago,
-                monto=a_cuenta
+                monto=a_cuenta,
             )
 
-        # 6) Detalles + stock + kardex
+        # ====================================================
+        # 8. DETALLES
+        # ====================================================
+
         productos_afectados = set()
 
-        print("===== DETALLES RECIBIDOS =====")
-        print(data.get("detalles", []))
-        print("TOTAL FILAS:", len(data.get("detalles", [])))
-        print("==============================")
-        for det in data.get("detalles", []):
-            descripcion = det.get("descripcion", "")
-            cantidad = int(det.get("cantidad", 0) or 0)
-            precio = Decimal(str(det.get("precio", "0") or "0"))
-            cod = det.get("cod") or ""
+        print(
+            "===== DETALLES RECIBIDOS ====="
+        )
+
+        print(
+            data.get(
+                "detalles",
+                []
+            )
+        )
+
+        print(
+            "TOTAL FILAS:",
+            len(
+                data.get(
+                    "detalles",
+                    []
+                )
+            )
+        )
+
+        print(
+            "=============================="
+        )
+
+        for det in data.get(
+            "detalles",
+            []
+        ):
+
+            descripcion = det.get(
+                "descripcion",
+                ""
+            )
+
+            cantidad = int(
+                det.get(
+                    "cantidad",
+                    0
+                )
+                or 0
+            )
+
+            precio = Decimal(
+                str(
+                    det.get(
+                        "precio",
+                        "0"
+                    )
+                    or "0"
+                )
+            )
+
+            cod = (
+                det.get("cod")
+                or ""
+            )
 
             producto = None
+
+            # -----------------------------------------------
+            # BUSCAR PRODUCTO POR CÓDIGO
+            # -----------------------------------------------
+
             if cod:
-                producto = Producto.objects.select_for_update().filter(cod=cod).first()
-            if not producto and descripcion:
-                producto = Producto.objects.select_for_update().filter(descripcion=descripcion).first()
+
+                producto = (
+                    Producto.objects
+                    .select_for_update()
+                    .filter(
+                        cod=cod
+                    )
+                    .first()
+                )
+
+            # -----------------------------------------------
+            # SI NO ENCUENTRA POR CÓDIGO,
+            # BUSCAR POR DESCRIPCIÓN
+            # -----------------------------------------------
+
+            if (
+                not producto
+                and descripcion
+            ):
+
+                producto = (
+                    Producto.objects
+                    .select_for_update()
+                    .filter(
+                        descripcion=descripcion
+                    )
+                    .first()
+                )
+
+            # -----------------------------------------------
+            # CREAR DETALLE DEL TICKET
+            # -----------------------------------------------
 
             DetalleTicketVenta.objects.create(
                 ticket_numero=ticket,
@@ -827,14 +1017,135 @@ def guardar_ticket(request):
             )
 
             if producto:
-                productos_afectados.add(producto.id)
+                productos_afectados.add(
+                    producto.id
+                )
 
+        # ====================================================
+        # 9. PROGRAMAR PROCESAMIENTO CONTABLE
+        # ====================================================
+        #
+        # Se ejecuta SOLO después de que la transacción de
+        # venta termine correctamente.
+        #
+        # Si Contabilidad tiene algún problema, no anulamos
+        # ni perdemos la venta comercial.
+        # ====================================================
 
+        ticket_id = ticket.id
+
+        def procesar_contabilidad_despues_de_guardar():
+
+            try:
+
+                ticket_contable = (
+                    TicketVenta.objects
+                    .get(
+                        id=ticket_id
+                    )
+                )
+
+                resultado = (
+                    procesar_venta_contablemente(
+                        ticket_contable
+                    )
+                )
+
+                print(
+                    "===================================="
+                )
+
+                print(
+                    "CONTABILIDAD AUTOMÁTICA "
+                    f"TICKET {ticket_contable.numero}"
+                )
+
+                print(
+                    "Asiento venta:",
+                    (
+                        resultado[
+                            "asiento_venta"
+                        ].numero
+                        if resultado[
+                            "asiento_venta"
+                        ]
+                        else None
+                    )
+                )
+
+                print(
+                    "Propuesta costo:",
+                    (
+                        resultado[
+                            "propuesta_costo"
+                        ].id
+                        if resultado[
+                            "propuesta_costo"
+                        ]
+                        else None
+                    )
+                )
+
+                print(
+                    "Asientos cobro nuevos:",
+                    len(
+                        resultado[
+                            "asientos_cobro"
+                        ]
+                    )
+                )
+
+                print(
+                    "Pagos omitidos:",
+                    resultado[
+                        "pagos_omitidos"
+                    ]
+                )
+
+                print(
+                    "===================================="
+                )
+
+            except Exception as e:
+
+                print(
+                    "===================================="
+                )
+
+                print(
+                    "ERROR PROCESANDO "
+                    "CONTABILIDAD DEL TICKET",
+                    ticket_id,
+                    ":",
+                    e
+                )
+
+                print(
+                    "La venta quedó guardada. "
+                    "La contabilidad puede "
+                    "procesarse posteriormente."
+                )
+
+                print(
+                    "===================================="
+                )
+
+        transaction.on_commit(
+            procesar_contabilidad_despues_de_guardar
+        )
+
+    # ========================================================
+    # 10. RESPUESTA
+    # ========================================================
 
     return JsonResponse({
         "ok": True,
         "numero": numero,
-        "fecha_emision": fecha_emision.strftime("%Y-%m-%d"),
+        "fecha_emision": (
+            fecha_emision.strftime(
+                "%Y-%m-%d"
+            )
+        ),
     })
 
 def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos=None, fecha_emision=None, hora_emision=None, fecha_entrega=None, hora_entrega=None, telefono=None, cliente=None, vendedor=None, receta=None):
@@ -2441,41 +2752,225 @@ def caja_agregar_movimiento(request, fecha):
 
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def registrar_pago_ticket(request, ticket_id):
-    ticket = get_object_or_404(TicketVenta, pk=ticket_id)
+
+    ticket = get_object_or_404(
+        TicketVenta,
+        pk=ticket_id
+    )
 
     if request.method != "POST":
         return redirect("saldos_pendientes")
 
-    medio_pago = (request.POST.get("medio_pago") or "").strip().upper()
-    monto = Decimal(request.POST.get("monto") or "0")
+    medio_pago = (
+        request.POST.get("medio_pago")
+        or ""
+    ).strip().upper()
 
-    medios_validos = {"EFECTIVO", "YAPE", "TARJETA", "TRANSFERENCIA"}
+    monto = Decimal(
+        request.POST.get("monto")
+        or "0"
+    )
+
+    medios_validos = {
+        "EFECTIVO",
+        "YAPE",
+        "TARJETA",
+        "TRANSFERENCIA",
+    }
+
+    # ========================================================
+    # 1. VALIDACIONES
+    # ========================================================
+
     if medio_pago not in medios_validos:
-        messages.error(request, "Medio de pago inválido.")
-        return redirect("saldos_pendientes")
+
+        messages.error(
+            request,
+            "Medio de pago inválido."
+        )
+
+        return redirect(
+            "saldos_pendientes"
+        )
 
     if monto <= 0:
-        messages.error(request, "El monto debe ser mayor a 0.")
-        return redirect("saldos_pendientes")
 
-    saldo_actual = Decimal(ticket.saldo or 0)
+        messages.error(
+            request,
+            "El monto debe ser mayor a 0."
+        )
+
+        return redirect(
+            "saldos_pendientes"
+        )
+
+    saldo_actual = Decimal(
+        ticket.saldo or 0
+    )
+
     if monto > saldo_actual:
-        messages.error(request, f"El monto no puede ser mayor al saldo (S/ {saldo_actual}).")
-        return redirect("saldos_pendientes")
 
-    # 1) Crear pago
-    PagoTicket.objects.create(ticket=ticket, medio_pago=medio_pago, monto=monto)
+        messages.error(
+            request,
+            (
+                "El monto no puede ser mayor "
+                f"al saldo (S/ {saldo_actual})."
+            )
+        )
 
-    # 2) Recalcular a_cuenta y saldo (sin depender de signals)
-    total_pagado = ticket.pagos.aggregate(s=Sum("monto"))["s"] or Decimal("0.00")
-    ticket.a_cuenta = total_pagado
-    ticket.saldo = Decimal(ticket.total or 0) - total_pagado
-    if ticket.saldo < 0:
-        ticket.saldo = Decimal("0.00")
-    ticket.save(update_fields=["a_cuenta", "saldo"])
+        return redirect(
+            "saldos_pendientes"
+        )
 
-    messages.success(request, f"Pago registrado para Ticket #{ticket.numero}.")
-    return redirect("saldos_pendientes")
+    # ========================================================
+    # 2. REGISTRAR PAGO Y ACTUALIZAR TICKET
+    # ========================================================
+
+    with transaction.atomic():
+
+        # ----------------------------------------------------
+        # CREAR PAGO
+        # ----------------------------------------------------
+
+        pago = PagoTicket.objects.create(
+            ticket=ticket,
+            medio_pago=medio_pago,
+            monto=monto,
+        )
+
+        # ----------------------------------------------------
+        # RECALCULAR TOTAL PAGADO
+        # ----------------------------------------------------
+
+        total_pagado = (
+            ticket.pagos
+            .aggregate(
+                s=Sum("monto")
+            )["s"]
+            or Decimal("0.00")
+        )
+
+        ticket.a_cuenta = total_pagado
+
+        ticket.saldo = (
+            Decimal(ticket.total or 0)
+            - total_pagado
+        )
+
+        if ticket.saldo < 0:
+            ticket.saldo = Decimal("0.00")
+
+        ticket.save(
+            update_fields=[
+                "a_cuenta",
+                "saldo",
+            ]
+        )
+
+        # ====================================================
+        # 3. CONTABILIZAR DESPUÉS DEL COMMIT
+        # ====================================================
+        #
+        # El pago comercial queda guardado primero.
+        # Si Contabilidad falla, no perdemos el cobro.
+        # ====================================================
+
+        ticket_id_contable = ticket.id
+        pago_id_contable = pago.id
+
+        def contabilizar_pago_despues():
+
+            try:
+
+                ticket_contable = (
+                    TicketVenta.objects.get(
+                        id=ticket_id_contable
+                    )
+                )
+
+                resultado = (
+                    contabilizar_cobros_ticket(
+                        ticket_contable
+                    )
+                )
+
+                print(
+                    "===================================="
+                )
+
+                print(
+                    "CONTABILIDAD COBRO "
+                    f"TICKET {ticket_contable.numero}"
+                )
+
+                print(
+                    "PagoTicket:",
+                    pago_id_contable
+                )
+
+                print(
+                    "Asientos nuevos:",
+                    len(
+                        resultado[
+                            "asientos_creados"
+                        ]
+                    )
+                )
+
+                print(
+                    "Pagos omitidos:",
+                    resultado[
+                        "pagos_omitidos"
+                    ]
+                )
+
+                print(
+                    "===================================="
+                )
+
+            except Exception as e:
+
+                print(
+                    "===================================="
+                )
+
+                print(
+                    "ERROR CONTABILIZANDO "
+                    "PAGO DEL TICKET",
+                    ticket_id_contable,
+                    ":",
+                    e
+                )
+
+                print(
+                    "El PagoTicket quedó registrado. "
+                    "La contabilización puede "
+                    "realizarse posteriormente."
+                )
+
+                print(
+                    "===================================="
+                )
+
+        transaction.on_commit(
+            contabilizar_pago_despues
+        )
+
+    # ========================================================
+    # 4. MENSAJE
+    # ========================================================
+
+    messages.success(
+        request,
+        (
+            f"Pago registrado para "
+            f"Ticket #{ticket.numero}."
+        )
+    )
+
+    return redirect(
+        "saldos_pendientes"
+    )
 
 @role_required("ADMIN", "SUPERVISOR", "CAJA" ,"VENDEDOR")
 def saldos_pendientes(request):

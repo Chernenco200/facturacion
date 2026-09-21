@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>
+        Estados Financieros
+    </title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7fa;
+            color: #17324d;
+        }
+
+        .contenedor {
+            max-width: 1250px;
+            margin: 30px auto;
+            padding: 0 20px 40px;
+        }
+
+        /* =====================================================
+           ENCABEZADO
+           ===================================================== */
+
+        .titulo {
+            margin: 0;
+            font-size: 34px;
+            font-weight: 700;
+        }
+
+        .empresa {
+            margin-top: 5px;
+            color: #667085;
+            font-size: 16px;
+        }
+
+        /* =====================================================
+           FILTRO
+           ===================================================== */
+
+        .filtros {
+            margin-top: 24px;
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 18px 22px;
+            box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
+        }
+
+        .filtros form {
+            display: flex;
+            align-items: end;
+            gap: 12px;
+        }
+
+        .campo label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 700;
+            color: #344054;
+        }
+
+        .campo input {
+            width: 140px;
+            padding: 9px 10px;
+            border: 1px solid #d0d5dd;
+            border-radius: 6px;
+        }
+
+        .boton {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            background: #28627f;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* =====================================================
+           INDICADORES
+           ===================================================== */
+
+        .resumen {
+            margin-top: 24px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .indicador {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
+        }
+
+        .indicador-titulo {
+            font-size: 13px;
+            color: #667085;
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 9px;
+        }
+
+        .indicador-valor {
+            font-size: 26px;
+            font-weight: 700;
+            color: #17324d;
+        }
+
+        /* =====================================================
+           ESTADOS FINANCIEROS
+           ===================================================== */
+
+        .seccion-titulo {
+            margin-top: 30px;
+            margin-bottom: 14px;
+            font-size: 19px;
+            font-weight: 700;
+        }
+
+        .estados {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 18px;
+        }
+
+        .estado {
+            display: block;
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
+            transition: transform 0.15s ease,
+                        box-shadow 0.15s ease;
+        }
+
+        .estado:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 16px rgba(16, 24, 40, 0.10);
+        }
+
+        .estado-nombre {
+            font-size: 20px;
+            font-weight: 700;
+            color: #17324d;
+            margin-bottom: 8px;
+        }
+
+        .estado-descripcion {
+            color: #667085;
+            line-height: 1.45;
+            margin-bottom: 18px;
+        }
+
+        .estado-link {
+            font-weight: 700;
+            color: #28627f;
+        }
+
+        @media (max-width: 800px) {
+
+            .resumen {
+                grid-template-columns: 1fr;
+            }
+
+            .estados {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="contenedor">
+
+    <!-- =====================================================
+         ENCABEZADO
+         ===================================================== -->
+
+    <h1 class="titulo">
+        Estados Financieros
+    </h1>
+
+    <div class="empresa">
+        Óptica IC · Ejercicio {{ anio }}
+    </div>
+
+
+    <!-- =====================================================
+         FILTRO
+         ===================================================== -->
+
+    <div class="filtros">
+
+        <form method="get">
+
+            <div class="campo">
+
+                <label for="anio">
+                    Año
+                </label>
+
+                <input
+                    id="anio"
+                    type="number"
+                    name="anio"
+                    value="{{ anio }}"
+                    min="2000"
+                    max="2100"
+                >
+
+            </div>
+
+            <button
+                class="boton"
+                type="submit"
+            >
+                Consultar
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <!-- =====================================================
+         RESUMEN
+         ===================================================== -->
+
+    <div class="resumen">
+
+        <div class="indicador">
+
+            <div class="indicador-titulo">
+                Ingresos
+            </div>
+
+            <div class="indicador-valor">
+                S/ {{ ingresos|floatformat:2 }}
+            </div>
+
+        </div>
+
+
+        <div class="indicador">
+
+            <div class="indicador-titulo">
+                Utilidad neta
+            </div>
+
+            <div class="indicador-valor">
+                S/ {{ utilidad_neta|floatformat:2 }}
+            </div>
+
+        </div>
+
+
+        <div class="indicador">
+
+            <div class="indicador-titulo">
+                Efectivo y equivalentes
+            </div>
+
+            <div class="indicador-valor">
+                S/ {{ efectivo|floatformat:2 }}
+            </div>
+
+        </div>
+
+
+        <div class="indicador">
+
+            <div class="indicador-titulo">
+                Activos
+            </div>
+
+            <div class="indicador-valor">
+                S/ {{ total_activo|floatformat:2 }}
+            </div>
+
+        </div>
+
+
+        <div class="indicador">
+
+            <div class="indicador-titulo">
+                Pasivos
+            </div>
+
+            <div class="indicador-valor">
+                S/ {{ total_pasivo|floatformat:2 }}
+            </div>
+
+        </div>
+
+
+        <div class="indicador">
+
+            <div class="indicador-titulo">
+                Patrimonio
+            </div>
+
+            <div class="indicador-valor">
+                S/ {{ total_patrimonio|floatformat:2 }}
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         ACCESO A ESTADOS
+         ===================================================== -->
+
+    <div class="seccion-titulo">
+        Estados financieros
+    </div>
+
+    <div class="estados">
+
+
+        <!-- ESTADO DE RESULTADOS -->
+
+        <a
+            class="estado"
+            href="{% url 'contabilidad:estado_resultados' %}?fecha_desde={{ anio }}-01-01&fecha_hasta={{ anio }}-12-31"
+        >
+
+            <div class="estado-nombre">
+                Estado de Resultados
+            </div>
+
+            <div class="estado-descripcion">
+                Ingresos, costo de ventas y servicios,
+                gastos operativos y utilidad neta.
+            </div>
+
+            <div class="estado-link">
+                Consultar →
+            </div>
+
+        </a>
+
+
+        <!-- BALANCE GENERAL -->
+
+        <a
+            class="estado"
+            href="{% url 'contabilidad:balance_general' %}?fecha_corte={{ anio }}-12-31"
+        >
+
+            <div class="estado-nombre">
+                Balance General
+            </div>
+
+            <div class="estado-descripcion">
+                Activos, pasivos y patrimonio a la fecha
+                de cierre del ejercicio.
+            </div>
+
+            <div class="estado-link">
+                Consultar →
+            </div>
+
+        </a>
+
+
+        <!-- ECP -->
+
+        <a
+            class="estado"
+            href="{% url 'contabilidad:estado_cambios_patrimonio' %}?anio={{ anio }}"
+        >
+
+            <div class="estado-nombre">
+                Estado de Cambios en el Patrimonio
+            </div>
+
+            <div class="estado-descripcion">
+                Evolución del capital, resultados acumulados
+                y resultado del ejercicio.
+            </div>
+
+            <div class="estado-link">
+                Consultar →
+            </div>
+
+        </a>
+
+
+        <!-- EFE -->
+
+        <a
+            class="estado"
+            href="{% url 'contabilidad:estado_flujo_efectivo' %}?anio={{ anio }}"
+        >
+
+            <div class="estado-nombre">
+                Estado de Flujo de Efectivo
+            </div>
+
+            <div class="estado-descripcion">
+                Flujos de operación, inversión,
+                financiamiento y conciliación del efectivo.
+            </div>
+
+            <div class="estado-link">
+                Consultar →
+            </div>
+
+        </a>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>

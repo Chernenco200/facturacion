@@ -1,0 +1,542 @@
+
+{% extends "core/base.html" %}
+
+{% block content %}
+
+<style>
+    .concepto-page {
+        max-width: 1250px;
+        margin: 0 auto;
+        padding: 20px 15px 45px;
+        color: #243247;
+    }
+
+    .concepto-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 22px;
+    }
+
+    .concepto-header h2 {
+        margin: 0 0 5px;
+        color: #20354e;
+        font-weight: 700;
+        font-size: 27px;
+    }
+
+    .concepto-header p {
+        margin: 0;
+        color: #718096;
+        font-size: 13px;
+    }
+
+    .concepto-card {
+        background: #fff;
+        border: 1px solid #e1e7ef;
+        border-radius: 9px;
+        margin-bottom: 17px;
+        overflow: hidden;
+        box-shadow: 0 2px 7px rgba(20,40,70,.035);
+    }
+
+    .concepto-card-header {
+        background: #f3f7fb;
+        border-bottom: 1px solid #e1e7ef;
+        padding: 13px 18px;
+        font-weight: 700;
+        color: #294866;
+        font-size: 14px;
+    }
+
+    .concepto-card-body {
+        padding: 19px;
+    }
+
+    .concepto-page .form-group {
+        margin-bottom: 15px;
+    }
+
+    .concepto-page .form-group > label {
+        display: block;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+
+    .concepto-page .form-control {
+        width: 100%;
+        height: 39px;
+        border: 1px solid #d7e0eb;
+        border-radius: 6px;
+        box-shadow: none;
+        font-size: 13px;
+        color: #243247;
+    }
+
+    .concepto-page .form-control:focus {
+        border-color: #4785bd;
+        box-shadow: 0 0 0 2px rgba(71,133,189,.09);
+    }
+
+    .concepto-page textarea.form-control {
+        height: auto;
+        min-height: 75px;
+        resize: vertical;
+    }
+
+    .concepto-page .help-block {
+        font-size: 11px;
+        color: #8793a2;
+        margin: 5px 0 0;
+    }
+
+    .concepto-checks {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .concepto-check {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        background: #f8fafc;
+        border: 1px solid #e7ecf2;
+        border-radius: 6px;
+        padding: 11px 12px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #475569;
+        cursor: pointer;
+        margin: 0;
+    }
+
+    .concepto-check input {
+        margin: 0;
+        flex-shrink: 0;
+        width: 15px;
+        height: 15px;
+    }
+
+    .concepto-check:hover {
+        background: #f0f6fc;
+    }
+
+    .concepto-help {
+        background: #eef6fc;
+        border-left: 3px solid #4085ba;
+        border-radius: 4px;
+        padding: 10px 13px;
+        color: #41627d;
+        font-size: 12px;
+        margin-top: 3px;
+    }
+
+    .concepto-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 16px 19px;
+        background: #f8fafc;
+        border-top: 1px solid #e1e7ef;
+    }
+
+    .concepto-actions .btn {
+        border-radius: 6px;
+        padding: 9px 22px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .concepto-errors {
+        display: block;
+        color: #c0392b;
+        font-size: 11px;
+        margin-top: 5px;
+    }
+
+    .concepto-errors ul {
+        padding-left: 16px;
+        margin-bottom: 0;
+    }
+
+    .concepto-divider {
+        border-top: 1px solid #edf0f5;
+        margin: 5px 0 18px;
+    }
+
+    @media (max-width: 767px) {
+        .concepto-checks {
+            grid-template-columns: 1fr;
+        }
+
+        .concepto-header {
+            align-items: stretch;
+        }
+
+        .concepto-header .btn {
+            width: 100%;
+        }
+
+        .concepto-actions {
+            flex-direction: column-reverse;
+        }
+
+        .concepto-actions .btn {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="concepto-page">
+
+    <!-- ENCABEZADO -->
+
+    <div class="concepto-header">
+
+        <div>
+            <h2>{{ titulo }}</h2>
+            <p>
+                Configura la clasificación contable y las reglas
+                de registro del concepto.
+            </p>
+        </div>
+
+        <a href="{% url 'contabilidad:lista_conceptos_contables' %}"
+           class="btn btn-default">
+            <span class="glyphicon glyphicon-arrow-left"></span>
+            Volver al catálogo
+        </a>
+
+    </div>
+
+    <form method="post" novalidate>
+
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <!-- 1. INFORMACIÓN GENERAL -->
+
+        <div class="concepto-card">
+
+            <div class="concepto-card-header">
+                1. Información general
+            </div>
+
+            <div class="concepto-card-body">
+
+                <div class="row">
+
+                    <div class="col-md-3 form-group">
+                        <label>{{ form.codigo.label }}</label>
+                        {{ form.codigo }}
+                        <span class="concepto-errors">
+                            {{ form.codigo.errors }}
+                        </span>
+                    </div>
+
+                    <div class="col-md-9 form-group">
+                        <label>{{ form.nombre.label }}</label>
+                        {{ form.nombre }}
+                        <span class="concepto-errors">
+                            {{ form.nombre.errors }}
+                        </span>
+                    </div>
+
+                </div>
+
+                <div class="row">
+
+                    <div class="col-md-6 form-group">
+                        <label>{{ form.concepto_padre.label }}</label>
+                        {{ form.concepto_padre }}
+                        <span class="concepto-errors">
+                            {{ form.concepto_padre.errors }}
+                        </span>
+                    </div>
+
+                    <div class="col-md-4 form-group">
+                        <label>{{ form.tipo_operacion.label }}</label>
+                        {{ form.tipo_operacion }}
+                        <span class="concepto-errors">
+                            {{ form.tipo_operacion.errors }}
+                        </span>
+                    </div>
+
+                    <div class="col-md-2 form-group">
+                        <label>{{ form.orden.label }}</label>
+                        {{ form.orden }}
+                        <span class="concepto-errors">
+                            {{ form.orden.errors }}
+                        </span>
+                    </div>
+
+                </div>
+
+                <div class="concepto-divider"></div>
+
+                <div class="row">
+
+                    <div class="col-md-6">
+
+                        <label class="concepto-check">
+                            {{ form.es_grupo }}
+                            <span>{{ form.es_grupo.label }}</span>
+                        </label>
+
+                    </div>
+
+                    <div class="col-md-6">
+
+                        <label class="concepto-check">
+                            {{ form.activo }}
+                            <span>{{ form.activo.label }}</span>
+                        </label>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- 2. CLASIFICACIÓN CONTABLE -->
+
+        <div class="concepto-card">
+
+            <div class="concepto-card-header">
+                2. Clasificación contable
+            </div>
+
+            <div class="concepto-card-body">
+
+                <div class="row">
+
+                    <div class="col-md-12 form-group">
+
+                        <label>{{ form.cuenta_contable.label }}</label>
+
+                        {{ form.cuenta_contable }}
+
+                        <span class="concepto-errors">
+                            {{ form.cuenta_contable.errors }}
+                        </span>
+
+                    </div>
+
+                </div>
+
+                <div class="row">
+
+                    <div class="col-md-6 form-group">
+
+                        <label>{{ form.categoria_gerencial.label }}</label>
+
+                        {{ form.categoria_gerencial }}
+
+                        <span class="concepto-errors">
+                            {{ form.categoria_gerencial.errors }}
+                        </span>
+
+                    </div>
+
+                    <div class="col-md-6 form-group">
+
+                        <label>{{ form.centro_costo.label }}</label>
+
+                        {{ form.centro_costo }}
+
+                        <span class="concepto-errors">
+                            {{ form.centro_costo.errors }}
+                        </span>
+
+                    </div>
+
+                </div>
+
+                <div class="concepto-help">
+
+                    <span class="glyphicon glyphicon-info-sign"></span>
+
+                    Selecciona una cuenta que acepte movimientos.
+                    Si el concepto es un grupo, deja la cuenta contable vacía.
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- 3. BÚSQUEDA AUTOMÁTICA -->
+
+        <div class="concepto-card">
+
+            <div class="concepto-card-header">
+                3. Búsqueda automática del concepto
+            </div>
+
+            <div class="concepto-card-body">
+
+                <div class="row">
+
+                    <div class="col-md-6 form-group">
+
+                        <label>{{ form.palabras_clave.label }}</label>
+
+                        {{ form.palabras_clave }}
+
+                        <p class="help-block">
+                            Ejemplo: alquiler, renta, arrendamiento
+                        </p>
+
+                        <span class="concepto-errors">
+                            {{ form.palabras_clave.errors }}
+                        </span>
+
+                    </div>
+
+                    <div class="col-md-6 form-group">
+
+                        <label>{{ form.sinonimos.label }}</label>
+
+                        {{ form.sinonimos }}
+
+                        <p class="help-block">
+                            Ejemplo: alquiler de local, renta mensual
+                        </p>
+
+                        <span class="concepto-errors">
+                            {{ form.sinonimos.errors }}
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- 4. REGLAS DE REGISTRO -->
+
+        <div class="concepto-card">
+
+            <div class="concepto-card-header">
+                4. Reglas de registro
+            </div>
+
+            <div class="concepto-card-body">
+
+                <div class="concepto-checks">
+
+                    <label class="concepto-check">
+                        {{ form.requiere_proveedor }}
+                        <span>{{ form.requiere_proveedor.label }}</span>
+                    </label>
+
+                    <label class="concepto-check">
+                        {{ form.requiere_cliente }}
+                        <span>{{ form.requiere_cliente.label }}</span>
+                    </label>
+
+                    <label class="concepto-check">
+                        {{ form.requiere_comprobante }}
+                        <span>{{ form.requiere_comprobante.label }}</span>
+                    </label>
+
+                    <label class="concepto-check">
+                        {{ form.requiere_centro_costo }}
+                        <span>{{ form.requiere_centro_costo.label }}</span>
+                    </label>
+
+                    <label class="concepto-check">
+                        {{ form.permite_cambiar_cuenta }}
+                        <span>{{ form.permite_cambiar_cuenta.label }}</span>
+                    </label>
+
+                    <label class="concepto-check">
+                        {{ form.es_fijo }}
+                        <span>{{ form.es_fijo.label }}</span>
+                    </label>
+
+                    <label class="concepto-check">
+                        {{ form.es_variable }}
+                        <span>{{ form.es_variable.label }}</span>
+                    </label>
+
+                </div>
+
+                <span class="concepto-errors">
+                    {{ form.es_variable.errors }}
+                    {{ form.requiere_centro_costo.errors }}
+                </span>
+
+            </div>
+
+        </div>
+
+        <!-- 5. DESCRIPCIÓN -->
+
+        <div class="concepto-card">
+
+            <div class="concepto-card-header">
+                5. Información adicional
+            </div>
+
+            <div class="concepto-card-body">
+
+                <div class="form-group">
+
+                    <label>{{ form.descripcion.label }}</label>
+
+                    {{ form.descripcion }}
+
+                    <span class="concepto-errors">
+                        {{ form.descripcion.errors }}
+                    </span>
+
+                </div>
+
+            </div>
+
+            <!-- BOTONES -->
+
+            <div class="concepto-actions">
+
+                <a href="{% url 'contabilidad:lista_conceptos_contables' %}"
+                   class="btn btn-default">
+                    Cancelar
+                </a>
+
+                <button type="submit" class="btn btn-success">
+
+                    <span class="glyphicon glyphicon-floppy-disk"></span>
+
+                    {% if modo == "EDITAR" %}
+                        Guardar cambios
+                    {% else %}
+                        Crear concepto
+                    {% endif %}
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </form>
+
+</div>
+
+{% endblock %}

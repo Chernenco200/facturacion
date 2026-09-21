@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Balance General</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f7fa;
+            margin: 0;
+            color: #243447;
+        }
+
+        .contenedor {
+            max-width: 1100px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .subtitulo {
+            color: #667085;
+            margin-bottom: 25px;
+        }
+
+        .filtros {
+            background: white;
+            padding: 18px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .filtros form {
+            display: flex;
+            align-items: end;
+            gap: 12px;
+        }
+
+        .campo label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .campo input {
+            padding: 9px;
+            border: 1px solid #d0d5dd;
+            border-radius: 6px;
+        }
+
+        .boton {
+            background: #285f7d;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 18px;
+            cursor: pointer;
+        }
+
+        .tarjeta {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .seccion {
+            background: #eaf1f5;
+            padding: 14px 20px;
+            font-weight: bold;
+            font-size: 17px;
+        }
+
+        .fila {
+            display: flex;
+            justify-content: space-between;
+            padding: 11px 20px;
+            border-bottom: 1px solid #eaecf0;
+        }
+
+        .codigo {
+            display: inline-block;
+            min-width: 75px;
+            color: #667085;
+        }
+
+        .importe {
+            min-width: 150px;
+            text-align: right;
+        }
+
+        .total {
+            font-weight: bold;
+            background: #f8fafc;
+            padding: 14px 20px;
+        }
+
+        .resultado {
+            background: #dceaf1;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .cuadrado {
+            background: #dcfae6;
+            color: #16794b;
+        }
+
+        .descuadrado {
+            background: #fee4e2;
+            color: #b42318;
+        }
+        
+        .subseccion {
+            background: #f7f9fb;
+            padding: 11px 20px;
+            font-weight: bold;
+            color: #475467;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .subtotal {
+            background: #fafafa;
+            font-weight: bold;
+            color: #344054;
+        }
+
+
+
+    </style>
+</head>
+
+
+<body>
+
+<div class="contenedor">
+
+    <h1>Balance General</h1>
+
+    <div class="subtitulo">
+        Óptica IC
+    </div>
+
+
+    <!-- ================================================
+         FILTRO
+         ================================================ -->
+
+    <div class="filtros">
+
+        <form method="get">
+
+            <div class="campo">
+
+                <label>
+                    Fecha de corte
+                </label>
+
+                <input
+                    type="date"
+                    name="fecha_corte"
+                    value="{{ fecha_corte }}"
+                >
+
+            </div>
+
+            <button
+                class="boton"
+                type="submit"
+            >
+                Consultar
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <!-- ================================================
+         ACTIVO
+         ================================================ -->
+
+<!-- ================================================
+     ACTIVO
+     ================================================ -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            ACTIVO
+        </div>
+
+        <div class="subseccion">
+            ACTIVO CORRIENTE
+        </div>
+
+        {% for cuenta in activos_corrientes %}
+            <div class="fila">
+
+                <div>
+                    <span class="codigo">
+                        {{ cuenta.codigo }}
+                    </span>
+
+                    {{ cuenta.nombre }}
+                </div>
+
+                <div class="importe">
+                    S/ {{ cuenta.saldo|floatformat:2 }}
+                </div>
+
+            </div>
+        {% empty %}
+            <div class="fila">
+                No existen activos corrientes.
+            </div>
+        {% endfor %}
+
+        <div class="fila subtotal">
+            <div>
+                TOTAL ACTIVO CORRIENTE
+            </div>
+
+            <div class="importe">
+                S/ {{ total_activo_corriente|floatformat:2 }}
+            </div>
+        </div>
+
+
+        <div class="subseccion">
+            ACTIVO NO CORRIENTE
+        </div>
+
+        {% for cuenta in activos_no_corrientes %}
+            <div class="fila">
+
+                <div>
+                    <span class="codigo">
+                        {{ cuenta.codigo }}
+                    </span>
+
+                    {{ cuenta.nombre }}
+                </div>
+
+                <div class="importe">
+                    S/ {{ cuenta.saldo|floatformat:2 }}
+                </div>
+
+            </div>
+        {% empty %}
+            <div class="fila">
+                No existen activos no corrientes.
+            </div>
+        {% endfor %}
+
+        <div class="fila subtotal">
+            <div>
+                TOTAL ACTIVO NO CORRIENTE
+            </div>
+
+            <div class="importe">
+                S/ {{ total_activo_no_corriente|floatformat:2 }}
+            </div>
+        </div>
+
+
+        <div class="fila total resultado">
+            <div>
+                TOTAL ACTIVO
+            </div>
+
+            <div class="importe">
+                S/ {{ total_activo|floatformat:2 }}
+            </div>
+        </div>
+
+    </div>
+
+
+    <!-- ================================================
+        PASIVO
+        ================================================ -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            PASIVO
+        </div>
+
+        <div class="subseccion">
+            PASIVO CORRIENTE
+        </div>
+
+        {% for cuenta in pasivos_corrientes %}
+            <div class="fila">
+
+                <div>
+                    <span class="codigo">
+                        {{ cuenta.codigo }}
+                    </span>
+
+                    {{ cuenta.nombre }}
+                </div>
+
+                <div class="importe">
+                    S/ {{ cuenta.saldo|floatformat:2 }}
+                </div>
+
+            </div>
+        {% empty %}
+            <div class="fila">
+                No existen pasivos corrientes.
+            </div>
+        {% endfor %}
+
+        <div class="fila subtotal">
+            <div>
+                TOTAL PASIVO CORRIENTE
+            </div>
+
+            <div class="importe">
+                S/ {{ total_pasivo_corriente|floatformat:2 }}
+            </div>
+        </div>
+
+
+        <div class="subseccion">
+            PASIVO NO CORRIENTE
+        </div>
+
+        {% for cuenta in pasivos_no_corrientes %}
+            <div class="fila">
+
+                <div>
+                    <span class="codigo">
+                        {{ cuenta.codigo }}
+                    </span>
+
+                    {{ cuenta.nombre }}
+                </div>
+
+                <div class="importe">
+                    S/ {{ cuenta.saldo|floatformat:2 }}
+                </div>
+
+            </div>
+        {% empty %}
+            <div class="fila">
+                No existen pasivos no corrientes.
+            </div>
+        {% endfor %}
+
+        <div class="fila subtotal">
+            <div>
+                TOTAL PASIVO NO CORRIENTE
+            </div>
+
+            <div class="importe">
+                S/ {{ total_pasivo_no_corriente|floatformat:2 }}
+            </div>
+        </div>
+
+
+        <div class="fila total">
+            <div>
+                TOTAL PASIVO
+            </div>
+
+            <div class="importe">
+                S/ {{ total_pasivo|floatformat:2 }}
+            </div>
+        </div>
+
+    </div>
+
+
+    <!-- ================================================
+        PATRIMONIO
+        ================================================ -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            PATRIMONIO
+        </div>
+
+        {% for cuenta in patrimonio %}
+
+            <div class="fila">
+
+                <div>
+                    <span class="codigo">
+                        {{ cuenta.codigo }}
+                    </span>
+
+                    {{ cuenta.nombre }}
+                </div>
+
+                <div class="importe">
+                    S/ {{ cuenta.saldo|floatformat:2 }}
+                </div>
+
+            </div>
+
+        {% endfor %}
+
+
+        <div class="fila">
+
+            <div>
+                Resultado del ejercicio
+            </div>
+
+            <div class="importe">
+                S/ {{ resultado_ejercicio|floatformat:2 }}
+            </div>
+
+        </div>
+
+
+        <div class="fila total">
+
+            <div>
+                TOTAL PATRIMONIO
+            </div>
+
+            <div class="importe">
+                S/ {{ total_patrimonio|floatformat:2 }}
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================
+        PASIVO + PATRIMONIO
+        ================================================ -->
+
+    <div class="tarjeta">
+
+        <div class="fila resultado">
+
+            <div>
+                TOTAL PASIVO + PATRIMONIO
+            </div>
+
+            <div class="importe">
+                S/ {{ total_pasivo_patrimonio|floatformat:2 }}
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================================================
+        COMPROBACIÓN
+        ================================================ -->
+
+    <div
+        class="
+            tarjeta
+            {% if diferencia == 0 %}
+                cuadrado
+            {% else %}
+                descuadrado
+            {% endif %}
+        "
+    >
+
+        <div class="fila total">
+
+            <div>
+                DIFERENCIA
+            </div>
+
+            <div class="importe">
+                S/ {{ diferencia|floatformat:2 }}
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

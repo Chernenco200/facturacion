@@ -1,142 +1,589 @@
 {% load roles %}
 
-
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+
     <div class="container-fluid">
 
-        <a class="navbar-brand" href="/">Óptica IC</a>
-                <span class="navbar-text">
-                    👤 {{ request.user.first_name|default:request.user.username }}
-                </span>
+        <!-- ================================================= -->
+        <!-- MARCA -->
+        <!-- ================================================= -->
 
-                <form method="post" action="{% url 'logout' %}" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline-light btn-sm"> Cerrar sesión
-                    </button>
-                </form>
+        <a class="navbar-brand" href="/">
+            Óptica IC
+        </a>
 
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                data-bs-target="#navbarNav" aria-controls="navbarNav"
-                aria-expanded="false" aria-label="Toggle navigation">
+
+        <!-- ================================================= -->
+        <!-- USUARIO -->
+        <!-- ================================================= -->
+
+        <span class="navbar-text me-3">
+            👤 {{ request.user.first_name|default:request.user.username }}
+        </span>
+
+
+        <!-- ================================================= -->
+        <!-- CERRAR SESIÓN -->
+        <!-- ================================================= -->
+
+        <form
+            method="post"
+            action="{% url 'logout' %}"
+            class="d-inline me-3"
+        >
+            {% csrf_token %}
+
+            <button
+                type="submit"
+                class="btn btn-outline-light btn-sm"
+            >
+                Cerrar sesión
+            </button>
+        </form>
+
+
+        <!-- ================================================= -->
+        <!-- BOTÓN RESPONSIVE -->
+        <!-- ================================================= -->
+
+        <button
+            class="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarNav"
+            aria-controls="navbarNav"
+            aria-expanded="false"
+            aria-label="Toggle navigation"
+        >
             <span class="navbar-toggler-icon"></span>
         </button>
 
-        <div class="collapse navbar-collapse" id="navbarNav">
+
+        <!-- ================================================= -->
+        <!-- MENÚ PRINCIPAL -->
+        <!-- ================================================= -->
+
+        <div
+            class="collapse navbar-collapse"
+            id="navbarNav"
+        >
 
             <ul class="navbar-nav ms-auto">
 
-                <li class="nav-item">
-                    {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
-                    <a class="nav-link" href="{% url 'accounts:usuarios_list' %}">Usuarios</a>
-                    {% endif %}
-                </li>                
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA" %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'registrar_cliente' %}">Registrar Clientes</a>
-                    {% endif %}
-                </li>
+                <!-- ========================================= -->
+                <!-- VENTAS -->
+                <!-- ========================================= -->
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA" %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'registrar_venta' %}">Registrar Venta</a>
-                </li>
-                {% endif %}                
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR,CAJA" %}
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA" %}
-                <li class="nav-item">
-                   <a class="nav-link" href="{% url 'lista_clientes' %}">Lista de Clientes</a>
-                </li>
+                    <li class="nav-item dropdown">
+
+                        <a
+                            class="nav-link dropdown-toggle"
+                            href="#"
+                            id="navbarVentas"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                        >
+                            👥 Ventas
+                        </a>
+
+                        <ul
+                            class="dropdown-menu"
+                            aria-labelledby="navbarVentas"
+                        >
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'registrar_cliente' %}"
+                                >
+                                    Registrar cliente
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'registrar_venta' %}"
+                                >
+                                    Registrar venta
+                                </a>
+                            </li>
+
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'lista_clientes' %}"
+                                >
+                                    Lista de clientes
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'lista_ventas' %}"
+                                >
+                                    Lista de ventas
+                                </a>
+                            </li>
+
+                            {% if request.user|has_role:"ADMIN,SUPERVISOR,CAJA" %}
+
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+
+                                <li>
+                                    <a
+                                        class="dropdown-item"
+                                        href="{% url 'saldos_pendientes' %}"
+                                    >
+                                        Saldos pendientes
+                                    </a>
+                                </li>
+
+                            {% endif %}
+
+                        </ul>
+
+                    </li>
+
                 {% endif %}
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA" %}
-                <li class="nav-item">
-                   <a class="nav-link" href="{% url 'lista_ventas' %}">Lista de Ventas</a>
-                </li>
-                {% endif %}                
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR, CAJA" %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'saldos_pendientes' %}">Saldos</a>
-                </li>
-                {% endif %}               
+                <!-- ========================================= -->
+                <!-- COMPRAS -->
+                <!-- ========================================= -->
 
                 {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'registrar_compra' %}">Registro de Compras</a>
-                </li>
+
+                    <li class="nav-item dropdown">
+
+                        <a
+                            class="nav-link dropdown-toggle"
+                            href="#"
+                            id="navbarCompras"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                        >
+                            📦 Compras
+                        </a>
+
+                        <ul
+                            class="dropdown-menu"
+                            aria-labelledby="navbarCompras"
+                        >
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'registrar_compra' %}"
+                                >
+                                    Registrar compra
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'lista_compras' %}"
+                                >
+                                    Lista de compras
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'lista_detalles_compra' %}"
+                                >
+                                    Detalle de compras
+                                </a>
+                            </li>
+
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'kardex_resumen' %}"
+                                >
+                                    Kardex
+                                </a>
+                            </li>
+
+                        </ul>
+
+                    </li>
+
                 {% endif %}
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'lista_compras' %}">Lista de Compras</a>
-                </li>
+
+                <!-- ========================================= -->
+                <!-- OPERACIONES -->
+                <!-- ========================================= -->
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR,CAJA,TALLER" %}
+
+                    <li class="nav-item dropdown">
+
+                        <a
+                            class="nav-link dropdown-toggle"
+                            href="#"
+                            id="navbarOperaciones"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                        >
+                            ⚙️ Operaciones
+                        </a>
+
+                        <ul
+                            class="dropdown-menu"
+                            aria-labelledby="navbarOperaciones"
+                        >
+
+                            {% if request.user|has_role:"ADMIN,SUPERVISOR,CAJA" %}
+
+                                <li>
+                                    <a
+                                        class="dropdown-item"
+                                        href="{% url 'caja_hoy' %}"
+                                    >
+                                        Caja
+                                    </a>
+                                </li>
+
+                            {% endif %}
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'operador_ordenes' %}"
+                                >
+                                    Operador
+                                </a>
+                            </li>
+
+                            {% if request.user|has_role:"ADMIN,SUPERVISOR,CAJA" %}
+
+                                <li>
+                                    <a
+                                        class="dropdown-item"
+                                        href="{% url 'dashboard' %}"
+                                    >
+                                        Dashboard
+                                    </a>
+                                </li>
+
+                            {% endif %}
+
+                        </ul>
+
+                    </li>
+
                 {% endif %}
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'lista_detalles_compra' %}">Detalle de Compras</a>
-                </li>
-                {% endif %}
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
-                <li class="nav-item">
-                <a class="nav-link" href="{% url 'kardex_resumen' %}">Kardex</a>
-                </li>
-                {% endif %}
+                <!-- ========================================= -->
+                <!-- WHATSAPP -->
+                <!-- ========================================= -->
 
                 {% if request.user|has_role:"ADMIN,SUPERVISOR,CAJA" %}
-                <li class="nav-item">
-                <a class="nav-link" href="{% url 'caja_hoy' %}">Caja</a>
-                </li>
+
+                    <li class="nav-item dropdown">
+
+                        <a
+                            class="nav-link dropdown-toggle"
+                            href="#"
+                            id="navbarWhatsapp"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                        >
+                            💬 WSP
+                        </a>
+
+                        <ul
+                            class="dropdown-menu"
+                            aria-labelledby="navbarWhatsapp"
+                        >
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'bandeja_whatsapp' %}"
+                                >
+                                    Bandeja
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'seguimiento_whatsapp' %}"
+                                >
+                                    Enviar mensajes
+                                </a>
+                            </li>
+
+                        </ul>
+
+                    </li>
+
                 {% endif %}
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR, CAJA, TALLER" %}
-                <li class="nav-item">
-                <a class="nav-link" href="{% url 'operador_ordenes' %}">Operador</a>
-                </li>
+
+                <!-- ========================================= -->
+                <!-- ADMINISTRACIÓN -->
+                <!-- ========================================= -->
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
+
+                    <li class="nav-item dropdown">
+
+                        <a
+                            class="nav-link dropdown-toggle"
+                            href="#"
+                            id="navbarAdministracion"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                        >
+                            ⚙️ Administración
+                        </a>
+
+                        <ul
+                            class="dropdown-menu"
+                            aria-labelledby="navbarAdministracion"
+                        >
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'accounts:usuarios_list' %}"
+                                >
+                                    Usuarios
+                                </a>
+                            </li>
+
+                        </ul>
+
+                    </li>
+
                 {% endif %}
 
-                {% if request.user|has_role:"ADMIN,SUPERVISOR, CAJA" %}
-                <li class="nav-item">
-                <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
-                </li>
+
+                <!-- ========================================= -->
+                <!-- CONTABILIDAD -->
+                <!-- SOLO SUPERUSUARIOS -->
+                <!-- ========================================= -->
+
+                {% if request.user.is_superuser %}
+
+                    <li class="nav-item dropdown">
+
+                        <a
+                            class="nav-link dropdown-toggle fw-semibold"
+                            href="#"
+                            id="navbarContabilidad"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                        >
+                            📚 Contabilidad
+                        </a>
+
+                        <ul
+                            class="dropdown-menu dropdown-menu-end"
+                            aria-labelledby="navbarContabilidad"
+                            style="min-width: 310px;"
+                        >
+
+
+                            <!-- ============================= -->
+                            <!-- OPERACIONES CONTABLES -->
+                            <!-- ============================= -->
+
+                            <li>
+                                <h6 class="dropdown-header">
+                                    Operaciones
+                                </h6>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:registrar_gasto_operacion' %}"
+                                >
+                                    Registrar compra / gasto
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:pendientes_contables' %}"
+                                >
+                                    Pendientes contables
+                                </a>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:lista_notas_credito' %}"
+                                >
+                                    Notas de crédito
+                                </a>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:lista_conceptos_contables' %}"
+                                >
+                                    Crear cuenta
+                                </a>                                
+
+                            </li>
+
+
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+
+
+                            <!-- ============================= -->
+                            <!-- LIBROS -->
+                            <!-- ============================= -->
+
+                            <li>
+                                <h6 class="dropdown-header">
+                                    Libros y comprobación
+                                </h6>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:libro_diario' %}"
+                                >
+                                    Libro Diario
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:libro_mayor' %}"
+                                >
+                                    Libro Mayor
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:balance_comprobacion' %}"
+                                >
+                                    Balance de comprobación
+                                </a>
+                            </li>
+
+
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+
+
+                            <!-- ============================= -->
+                            <!-- ESTADOS FINANCIEROS -->
+                            <!-- ============================= -->
+
+                            <li>
+                                <h6 class="dropdown-header">
+                                    Estados financieros
+                                </h6>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:estado_resultados' %}"
+                                >
+                                    Estado de Resultados
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:balance_general' %}"
+                                >
+                                    Estado de Situación Financiera
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:estado_cambios_patrimonio' %}"
+                                >
+                                    Cambios en el Patrimonio
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:estado_flujo_efectivo' %}"
+                                >
+                                    Flujo de Efectivo
+                                </a>
+                            </li>
+
+
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+
+
+                            <!-- ============================= -->
+                            <!-- CIERRE -->
+                            <!-- ============================= -->
+
+                            <li>
+                                <h6 class="dropdown-header">
+                                    Cierre contable
+                                </h6>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:pendientes_contables' %}"
+                                >
+                                    Revisar pendientes y cerrar mes
+                                </a>
+                            </li>
+
+                        </ul>
+
+                    </li>
+
                 {% endif %}
-                
-                {% if request.user|has_role:"ADMIN,SUPERVISOR,CAJA" %}
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle"
-                    href="#"
-                    id="navbarWhatsapp"
-                    role="button"
-                    data-bs-toggle="dropdown"
-                    aria-expanded="false">
-                        WSP
-                    </a>
 
-                    <ul class="dropdown-menu" aria-labelledby="navbarWhatsapp">
-                        <li>
-                            <a class="dropdown-item" href="{% url 'bandeja_whatsapp' %}">
-                                📥 Bandeja
-                            </a>
-                        </li>
-
-                        <li>
-                            <a class="dropdown-item" href="{% url 'seguimiento_whatsapp' %}">
-                                📤 Enviar mensajes
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                {% endif %}
-
-
-                    </ul>
-                </li>
 
             </ul>
 
         </div>
-    </div>
-</nav>
 
+    </div>
+
+</nav>

@@ -1,0 +1,544 @@
+
+{% extends "core/base.html" %}
+
+{% block content %}
+
+<style>
+    .conceptos-page {
+        padding: 22px 15px;
+        color: #243247;
+    }
+
+    .conceptos-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 22px;
+    }
+
+    .conceptos-header h2 {
+        margin: 0 0 5px;
+        font-weight: 700;
+        color: #20354e;
+    }
+
+    .conceptos-header p {
+        margin: 0;
+        color: #718096;
+    }
+
+    .conceptos-card {
+        background: #fff;
+        border: 1px solid #e1e7ef;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(20, 40, 70, .04);
+    }
+
+    .conceptos-filtros {
+        padding: 18px;
+    }
+
+    .conceptos-filtros form {
+        display: flex;
+        align-items: flex-end;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .conceptos-filtros .campo-busqueda {
+        flex: 1 1 300px;
+    }
+
+    .conceptos-filtros .campo-estado {
+        flex: 0 1 170px;
+    }
+
+    .conceptos-filtros label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #53657a;
+    }
+
+    .conceptos-filtros .form-control {
+        height: 38px;
+        border-radius: 6px;
+        width: 100%;
+    }
+
+    .conceptos-filtros .btn {
+        height: 38px;
+        border-radius: 6px;
+    }
+
+    .conceptos-table-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid #e1e7ef;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .conceptos-table-header h4 {
+        margin: 0;
+        font-weight: 700;
+        color: #20354e;
+    }
+
+    .conceptos-count {
+        background: #e8f0fa;
+        color: #285a87;
+        border-radius: 20px;
+        padding: 4px 11px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .conceptos-table {
+        margin-bottom: 0;
+        font-size: 13px;
+    }
+
+    .conceptos-table thead th {
+        background: #f4f7fb;
+        color: #53657a;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .3px;
+        border-bottom: 1px solid #e1e7ef !important;
+        padding: 13px 12px !important;
+        white-space: nowrap;
+    }
+
+    .conceptos-table tbody td {
+        padding: 11px 12px !important;
+        vertical-align: middle !important;
+        border-top: 1px solid #edf0f5 !important;
+        line-height: 1.45;
+    }
+
+    .conceptos-table tbody tr:hover {
+        background: #f7faff;
+    }
+
+    .concepto-codigo {
+        color: #315f88;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .concepto-nombre {
+        font-weight: 600;
+        color: #243247;
+    }
+
+    .concepto-secundario {
+        color: #718096;
+        font-size: 12px;
+    }
+
+    .concepto-cuenta {
+        color: #475569;
+        font-size: 12px;
+    }
+
+    .concepto-cuenta strong {
+        color: #285a87;
+    }
+
+    .conceptos-acciones {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+
+    .conceptos-acciones form {
+        display: inline;
+        margin: 0;
+    }
+
+    .conceptos-acciones .btn {
+        border-radius: 5px;
+        font-size: 12px;
+        padding: 5px 9px;
+    }
+
+    .estado-activo {
+        display: inline-block;
+        background: #e5f6ed;
+        color: #16834b;
+        padding: 4px 9px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .estado-inactivo {
+        display: inline-block;
+        background: #f0f1f3;
+        color: #707780;
+        padding: 4px 9px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .grupo-badge {
+        display: inline-block;
+        background: #e8efff;
+        color: #365c9b;
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        margin-left: 5px;
+    }
+
+    .conceptos-vacio {
+        text-align: center;
+        padding: 40px 15px !important;
+        color: #718096;
+    }
+
+    @media (max-width: 767px) {
+        .conceptos-header {
+            align-items: stretch;
+        }
+
+        .conceptos-header .btn {
+            width: 100%;
+        }
+
+        .conceptos-filtros form {
+            display: block;
+        }
+
+        .conceptos-filtros .campo-busqueda,
+        .conceptos-filtros .campo-estado {
+            margin-bottom: 12px;
+        }
+
+        .conceptos-filtros .btn {
+            margin-bottom: 5px;
+        }
+    }
+</style>
+
+<div class="container-fluid conceptos-page">
+
+    <!-- ENCABEZADO -->
+
+    <div class="conceptos-header">
+
+        <div>
+            <h2>Conceptos contables</h2>
+            <p>
+                Administra los conceptos y su clasificación contable.
+            </p>
+        </div>
+
+        <a href="{% url 'contabilidad:crear_concepto_contable' %}"
+           class="btn btn-success">
+            <span class="glyphicon glyphicon-plus"></span>
+            Nuevo concepto
+        </a>
+
+    </div>
+
+    <!-- MENSAJES -->
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- FILTROS -->
+
+    <div class="conceptos-card conceptos-filtros">
+
+        <form method="get">
+
+            <div class="campo-busqueda">
+
+                <label>Buscar concepto</label>
+
+                <input
+                    type="text"
+                    name="q"
+                    class="form-control"
+                    placeholder="Código, nombre, palabra clave o cuenta..."
+                    value="{{ busqueda }}"
+                >
+
+            </div>
+
+            <div class="campo-estado">
+
+                <label>Estado</label>
+
+                <select name="estado" class="form-control">
+
+                    <option value="TODOS"
+                        {% if estado == "TODOS" %}selected{% endif %}>
+                        Todos
+                    </option>
+
+                    <option value="ACTIVOS"
+                        {% if estado == "ACTIVOS" %}selected{% endif %}>
+                        Activos
+                    </option>
+
+                    <option value="INACTIVOS"
+                        {% if estado == "INACTIVOS" %}selected{% endif %}>
+                        Inactivos
+                    </option>
+
+                </select>
+
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <span class="glyphicon glyphicon-search"></span>
+                Buscar
+            </button>
+
+            <a href="{% url 'contabilidad:lista_conceptos_contables' %}"
+               class="btn btn-default">
+                Limpiar
+            </a>
+
+        </form>
+
+    </div>
+
+    <!-- TABLA -->
+
+    <div class="conceptos-card">
+
+        <div class="conceptos-table-header">
+
+            <h4>Catálogo de conceptos</h4>
+
+            <span class="conceptos-count">
+                {{ conceptos|length }} registros
+            </span>
+
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table conceptos-table">
+
+                <thead>
+
+                    <tr>
+                        <th>Código</th>
+                        <th>Concepto</th>
+                        <th>Clasificación</th>
+                        <th>Cuenta contable</th>
+                        <th>Centro</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for concepto in conceptos %}
+
+                    <tr>
+
+                        <!-- CÓDIGO -->
+
+                        <td>
+                            <span class="concepto-codigo">
+                                {{ concepto.codigo }}
+                            </span>
+                        </td>
+
+                        <!-- CONCEPTO -->
+
+                        <td style="min-width:220px;">
+
+                            <div class="concepto-nombre">
+                                {{ concepto.nombre }}
+
+                                {% if concepto.es_grupo %}
+                                    <span class="grupo-badge">
+                                        GRUPO
+                                    </span>
+                                {% endif %}
+                            </div>
+
+                            {% if concepto.concepto_padre %}
+                                <div class="concepto-secundario">
+                                    {{ concepto.concepto_padre.nombre }}
+                                </div>
+                            {% endif %}
+
+                        </td>
+
+                        <!-- CLASIFICACIÓN -->
+
+                        <td>
+
+                            <div>
+                                {{ concepto.get_tipo_operacion_display }}
+                            </div>
+
+                            {% if concepto.categoria_gerencial %}
+                                <div class="concepto-secundario">
+                                    {{ concepto.categoria_gerencial.nombre }}
+                                </div>
+                            {% endif %}
+
+                        </td>
+
+                        <!-- CUENTA -->
+
+                        <td style="min-width:180px;">
+
+                            {% if concepto.cuenta_contable %}
+
+                                <div class="concepto-cuenta">
+
+                                    <strong>
+                                        {{ concepto.cuenta_contable.codigo }}
+                                    </strong>
+
+                                    <br>
+
+                                    {{ concepto.cuenta_contable.nombre }}
+
+                                </div>
+
+                            {% else %}
+
+                                <span class="concepto-secundario">
+                                    Sin cuenta
+                                </span>
+
+                            {% endif %}
+
+                        </td>
+
+                        <!-- CENTRO -->
+
+                        <td>
+
+                            {% if concepto.centro_costo %}
+
+                                {{ concepto.centro_costo.nombre }}
+
+                            {% else %}
+
+                                <span class="concepto-secundario">—</span>
+
+                            {% endif %}
+
+                        </td>
+
+                        <!-- ESTADO -->
+
+                        <td>
+
+                            {% if concepto.activo %}
+
+                                <span class="estado-activo">
+                                    ● Activo
+                                </span>
+
+                            {% else %}
+
+                                <span class="estado-inactivo">
+                                    ● Inactivo
+                                </span>
+
+                            {% endif %}
+
+                        </td>
+
+                        <!-- ACCIONES -->
+
+                        <td>
+
+                            <div class="conceptos-acciones">
+
+                                <a
+                                    href="{% url 'contabilidad:editar_concepto_contable' concepto.id %}"
+                                    class="btn btn-default btn-sm"
+                                    title="Editar concepto"
+                                >
+                                    <span class="glyphicon glyphicon-pencil"></span>
+                                    Editar
+                                </a>
+
+                                <form
+                                    method="post"
+                                    action="{% url 'contabilidad:cambiar_estado_concepto_contable' concepto.id %}"
+                                    onsubmit="return confirm('¿Confirmar cambio de estado de este concepto?');"
+                                >
+
+                                    {% csrf_token %}
+
+                                    {% if concepto.activo %}
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-warning btn-sm"
+                                            title="Desactivar concepto"
+                                        >
+                                            Desactivar
+                                        </button>
+
+                                    {% else %}
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-success btn-sm"
+                                            title="Activar concepto"
+                                        >
+                                            Activar
+                                        </button>
+
+                                    {% endif %}
+
+                                </form>
+
+                            </div>
+
+                        </td>
+
+                    </tr>
+
+                    {% empty %}
+
+                    <tr>
+                        <td colspan="7" class="conceptos-vacio">
+                            No se encontraron conceptos contables.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

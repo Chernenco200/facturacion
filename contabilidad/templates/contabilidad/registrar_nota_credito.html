@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Registrar nota de crédito</title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+    <style>
+
+        body {
+            background: #f5f6f8;
+        }
+
+        .contenedor {
+            max-width: 1100px;
+            margin: auto;
+        }
+
+        .card {
+            border: 0;
+            box-shadow: 0 1px 5px rgba(0,0,0,.08);
+        }
+
+        .seccion-titulo {
+            font-weight: 600;
+        }
+
+        .requerido {
+            color: #dc3545;
+        }
+
+        .ayuda {
+            color: #6c757d;
+            font-size: .85rem;
+        }
+
+        .ticket-resumen {
+            background: #f8f9fa;
+            border-left: 4px solid #0d6efd;
+        }
+
+        .importe {
+            text-align: right;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="container-fluid py-4 px-3">
+
+<div class="contenedor">
+
+
+    <!-- ===================================================== -->
+    <!-- ENCABEZADO -->
+    <!-- ===================================================== -->
+
+    <div
+        class="
+            d-flex
+            justify-content-between
+            align-items-center
+            mb-4
+        "
+    >
+
+        <div>
+
+            <h2 class="mb-1">
+                Registrar nota de crédito
+            </h2>
+
+            <div class="text-muted">
+                Registre una corrección, anulación o devolución
+                vinculada a una venta existente.
+            </div>
+
+        </div>
+
+
+        <a
+            href="{% url 'contabilidad:pendientes_contables' %}"
+            class="btn btn-outline-secondary"
+        >
+            Volver
+        </a>
+
+    </div>
+
+
+    <!-- ===================================================== -->
+    <!-- MENSAJES -->
+    <!-- ===================================================== -->
+
+    {% if messages %}
+
+        {% for message in messages %}
+
+            <div
+                class="
+                    alert
+                    {% if message.tags == 'error' %}
+                        alert-danger
+                    {% elif message.tags == 'success' %}
+                        alert-success
+                    {% elif message.tags == 'warning' %}
+                        alert-warning
+                    {% else %}
+                        alert-info
+                    {% endif %}
+                "
+            >
+                {{ message }}
+            </div>
+
+        {% endfor %}
+
+    {% endif %}
+
+
+    <!-- ===================================================== -->
+    <!-- BUSCAR TICKET -->
+    <!-- ===================================================== -->
+
+    <div class="card mb-4">
+
+        <div class="card-header bg-white">
+
+            <span class="seccion-titulo">
+                1. Buscar venta original
+            </span>
+
+        </div>
+
+
+        <div class="card-body">
+
+            <form method="get">
+
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Número de ticket
+                        </label>
+
+                        <input
+                            type="number"
+                            name="ticket"
+                            class="form-control"
+                            min="1"
+                            value="{{ numero_buscado }}"
+                            placeholder="Ej.: 32"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="col-md-3">
+
+                        <button
+                            type="submit"
+                            class="btn btn-primary w-100"
+                        >
+                            Buscar ticket
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+
+    {% if ticket %}
+
+
+        <!-- ================================================= -->
+        <!-- RESUMEN DEL TICKET -->
+        <!-- ================================================= -->
+
+        <div class="card mb-4">
+
+            <div class="card-header bg-white">
+
+                <span class="seccion-titulo">
+                    Venta encontrada
+                </span>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="ticket-resumen p-3 rounded">
+
+                    <div class="row g-3">
+
+                        <div class="col-md-2">
+
+                            <small class="text-muted">
+                                Ticket
+                            </small>
+
+                            <div class="fw-bold">
+                                #{{ ticket.numero|stringformat:"06d" }}
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-4">
+
+                            <small class="text-muted">
+                                Cliente
+                            </small>
+
+                            <div class="fw-bold">
+
+                                {% if ticket.cliente %}
+
+                                    {{ ticket.cliente.nombre }}
+
+                                {% else %}
+
+                                    Sin cliente
+
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-2">
+
+                            <small class="text-muted">
+                                Fecha
+                            </small>
+
+                            <div class="fw-bold">
+                                {{ ticket.fecha_emision|date:"d/m/Y" }}
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-2">
+
+                            <small class="text-muted">
+                                Total
+                            </small>
+
+                            <div class="fw-bold">
+                                S/ {{ ticket.total|floatformat:2 }}
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-2">
+
+                            <small class="text-muted">
+                                Saldo actual
+                            </small>
+
+                            <div class="fw-bold">
+                                S/ {{ ticket.saldo|floatformat:2 }}
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- FORMULARIO NC -->
+        <!-- ================================================= -->
+
+        <form
+            method="post"
+            id="form-nota"
+        >
+
+            {% csrf_token %}
+
+            <input
+                type="hidden"
+                name="ticket_id"
+                value="{{ ticket.id }}"
+            >
+
+
+            <!-- ============================================= -->
+            <!-- DATOS DE LA NOTA -->
+            <!-- ============================================= -->
+
+            <div class="card mb-4">
+
+                <div class="card-header bg-white">
+
+                    <span class="seccion-titulo">
+                        2. Datos de la nota de crédito
+                    </span>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div class="row g-3">
+
+
+                        <div class="col-md-3">
+
+                            <label class="form-label">
+                                Fecha
+                                <span class="requerido">*</span>
+                            </label>
+
+                            <input
+                                type="date"
+                                name="fecha_emision"
+                                class="form-control"
+                                value="{{ datos.fecha_emision }}"
+                                required
+                            >
+
+                        </div>
+
+
+                        <div class="col-md-5">
+
+                            <label class="form-label">
+                                Motivo
+                                <span class="requerido">*</span>
+                            </label>
+
+                            <select
+                                name="motivo"
+                                class="form-select"
+                                required
+                            >
+
+                                <option value="">
+                                    Seleccione
+                                </option>
+
+                                {% for valor, texto in motivos %}
+
+                                    <option
+                                        value="{{ valor }}"
+                                        {% if datos.motivo == valor %}
+                                            selected
+                                        {% endif %}
+                                    >
+                                        {{ texto }}
+                                    </option>
+
+                                {% endfor %}
+
+                            </select>
+
+                        </div>
+
+
+                        <div class="col-md-4">
+
+                            <label class="form-label">
+                                Total de la nota
+                                <span class="requerido">*</span>
+                            </label>
+
+                            <div class="input-group">
+
+                                <span class="input-group-text">
+                                    S/
+                                </span>
+
+                                <input
+                                    type="number"
+                                    name="monto_total"
+                                    id="monto_total"
+                                    class="form-control"
+                                    min="0.01"
+                                    step="0.01"
+                                    value="{{ datos.monto_total }}"
+                                    required
+                                >
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12">
+
+                            <label class="form-label">
+                                Descripción
+                            </label>
+
+                            <input
+                                type="text"
+                                name="descripcion"
+                                class="form-control"
+                                maxlength="300"
+                                value="{{ datos.descripcion }}"
+                                placeholder="Ej.: Corrección del precio de la montura"
+                            >
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ============================================= -->
+            <!-- DETALLES -->
+            <!-- ============================================= -->
+
+            <div class="card mb-4">
+
+                <div class="card-header bg-white">
+
+                    <span class="seccion-titulo">
+                        3. Productos / conceptos afectados
+                    </span>
+
+                </div>
+
+
+                <div class="card-body p-0">
+
+                    <div class="table-responsive">
+
+                        <table class="table table-hover mb-0">
+
+                            <thead class="table-light">
+
+                                <tr>
+
+                                    <th>
+                                        Descripción
+                                    </th>
+
+                                    <th width="100">
+                                        Vendido
+                                    </th>
+
+                                    <th width="130">
+                                        Precio
+                                    </th>
+
+                                    <th width="130">
+                                        Cantidad NC
+                                    </th>
+
+                                    <th width="150">
+                                        Importe NC
+                                    </th>
+
+                                    <th width="140">
+                                        Vuelve stock
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody>
+
+                                {% for detalle in ticket.detalles.all %}
+
+                                    <tr>
+
+                                        <td>
+
+                                            <div class="fw-semibold">
+                                                {{ detalle.descripcion }}
+                                            </div>
+
+                                            {% if detalle.producto %}
+
+                                                <small class="text-muted">
+                                                    {{ detalle.producto.cod }}
+                                                </small>
+
+                                            {% endif %}
+
+                                        </td>
+
+
+                                        <td>
+                                            {{ detalle.cantidad }}
+                                        </td>
+
+
+                                        <td>
+                                            S/ {{ detalle.precio|floatformat:2 }}
+                                        </td>
+
+
+                                        <td>
+
+                                            <input
+                                                type="number"
+                                                name="cantidad_{{ detalle.id }}"
+                                                class="form-control cantidad-nc"
+                                                min="0"
+                                                max="{{ detalle.cantidad }}"
+                                                step="1"
+                                                value=""
+                                            >
+
+                                        </td>
+
+
+                                        <td>
+
+                                            <input
+                                                type="number"
+                                                name="importe_{{ detalle.id }}"
+                                                class="form-control importe-detalle"
+                                                min="0"
+                                                step="0.01"
+                                                value=""
+                                            >
+
+                                        </td>
+
+
+                                        <td class="text-center">
+
+                                            {% if detalle.producto %}
+
+                                                <div class="form-check">
+
+                                                    <input
+                                                        type="checkbox"
+                                                        name="devuelve_stock_{{ detalle.id }}"
+                                                        class="form-check-input"
+                                                        id="stock_{{ detalle.id }}"
+                                                    >
+
+                                                    <label
+                                                        class="form-check-label"
+                                                        for="stock_{{ detalle.id }}"
+                                                    >
+                                                        Sí
+                                                    </label>
+
+                                                </div>
+
+                                            {% else %}
+
+                                                <span class="text-muted">
+                                                    No aplica
+                                                </span>
+
+                                            {% endif %}
+
+                                        </td>
+
+                                    </tr>
+
+                                {% endfor %}
+
+                            </tbody>
+
+
+                            <tfoot>
+
+                                <tr>
+
+                                    <th
+                                        colspan="4"
+                                        class="text-end"
+                                    >
+                                        Total seleccionado
+                                    </th>
+
+                                    <th>
+                                        S/
+                                        <span id="total-detalles">
+                                            0.00
+                                        </span>
+                                    </th>
+
+                                    <th></th>
+
+                                </tr>
+
+                            </tfoot>
+
+                        </table>
+
+                    </div>
+
+
+                    <div class="p-3 ayuda">
+
+                        Marque “Vuelve stock” únicamente cuando
+                        el producto regrese físicamente al inventario
+                        y pueda volver a venderse.
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ============================================= -->
+            <!-- APLICACIÓN DEL IMPORTE -->
+            <!-- ============================================= -->
+
+            <div class="card mb-4">
+
+                <div class="card-header bg-white">
+
+                    <span class="seccion-titulo">
+                        4. Aplicación de la nota de crédito
+                    </span>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div class="row g-3">
+
+
+                        <div class="col-md-4">
+
+                            <label class="form-label">
+                                Reducir saldo pendiente
+                            </label>
+
+                            <div class="input-group">
+
+                                <span class="input-group-text">
+                                    S/
+                                </span>
+
+                                <input
+                                    type="number"
+                                    name="monto_aplicado_saldo"
+                                    id="monto_aplicado_saldo"
+                                    class="form-control"
+                                    min="0"
+                                    step="0.01"
+                                    value="{{ datos.monto_aplicado_saldo|default:'0.00' }}"
+                                >
+
+                            </div>
+
+                            <div class="ayuda mt-1">
+                                Saldo actual del ticket:
+                                S/ {{ ticket.saldo|floatformat:2 }}
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-4">
+
+                            <label class="form-label">
+                                Devolver dinero
+                            </label>
+
+                            <div class="input-group">
+
+                                <span class="input-group-text">
+                                    S/
+                                </span>
+
+                                <input
+                                    type="number"
+                                    name="monto_devuelto"
+                                    id="monto_devuelto"
+                                    class="form-control"
+                                    min="0"
+                                    step="0.01"
+                                    value="{{ datos.monto_devuelto|default:'0.00' }}"
+                                >
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-md-4">
+
+                            <label class="form-label">
+                                Cuenta de devolución
+                            </label>
+
+                            <select
+                                name="cuenta_devolucion"
+                                id="cuenta_devolucion"
+                                class="form-select"
+                            >
+
+                                <option value="">
+                                    Seleccione
+                                </option>
+
+                                {% for cuenta in cuentas_devolucion %}
+
+                                    <option
+                                        value="{{ cuenta.id }}"
+                                        {% if datos.cuenta_devolucion == cuenta.id|stringformat:"s" %}
+                                            selected
+                                        {% endif %}
+                                    >
+                                        {{ cuenta.codigo }}
+                                        -
+                                        {{ cuenta.nombre }}
+                                    </option>
+
+                                {% endfor %}
+
+                            </select>
+
+                            <div class="ayuda mt-1">
+                                Solo se requiere si se devuelve dinero.
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12">
+
+                            <div class="bg-light rounded p-3">
+
+                                <div class="row">
+
+                                    <div class="col-md-4">
+
+                                        <small class="text-muted">
+                                            Nota de crédito
+                                        </small>
+
+                                        <div
+                                            class="fw-bold"
+                                            id="resumen-nota"
+                                        >
+                                            S/ 0.00
+                                        </div>
+
+                                    </div>
+
+
+                                    <div class="col-md-4">
+
+                                        <small class="text-muted">
+                                            Aplicado al saldo
+                                        </small>
+
+                                        <div
+                                            class="fw-bold"
+                                            id="resumen-saldo"
+                                        >
+                                            S/ 0.00
+                                        </div>
+
+                                    </div>
+
+
+                                    <div class="col-md-4">
+
+                                        <small class="text-muted">
+                                            Devuelto al cliente
+                                        </small>
+
+                                        <div
+                                            class="fw-bold"
+                                            id="resumen-devuelto"
+                                        >
+                                            S/ 0.00
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12">
+
+                            <label class="form-label">
+                                Observación
+                            </label>
+
+                            <textarea
+                                name="observacion"
+                                class="form-control"
+                                rows="3"
+                            >{{ datos.observacion }}</textarea>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ============================================= -->
+            <!-- BOTONES -->
+            <!-- ============================================= -->
+
+            <div
+                class="
+                    d-flex
+                    justify-content-between
+                    mb-5
+                "
+            >
+
+                <a
+                    href="{% url 'contabilidad:pendientes_contables' %}"
+                    class="btn btn-outline-secondary"
+                >
+                    Cancelar
+                </a>
+
+
+                <button
+                    type="submit"
+                    class="btn btn-success px-4"
+                    onclick="
+                        return confirm(
+                            '¿Registrar esta nota de crédito?'
+                        );
+                    "
+                >
+                    Registrar nota de crédito
+                </button>
+
+            </div>
+
+        </form>
+
+    {% endif %}
+
+</div>
+
+</div>
+
+
+<script>
+
+    const montoTotal =
+        document.getElementById(
+            "monto_total"
+        );
+
+    const montoSaldo =
+        document.getElementById(
+            "monto_aplicado_saldo"
+        );
+
+    const montoDevuelto =
+        document.getElementById(
+            "monto_devuelto"
+        );
+
+    const cuentaDevolucion =
+        document.getElementById(
+            "cuenta_devolucion"
+        );
+
+
+    function numero(valor) {
+
+        return parseFloat(
+            valor || 0
+        ) || 0;
+
+    }
+
+
+    function actualizarDetalles() {
+
+        let total = 0;
+
+        document
+            .querySelectorAll(
+                ".importe-detalle"
+            )
+            .forEach(
+                input => {
+
+                    total += numero(
+                        input.value
+                    );
+
+                }
+            );
+
+        const destino =
+            document.getElementById(
+                "total-detalles"
+            );
+
+        if (destino) {
+
+            destino.textContent =
+                total.toFixed(2);
+
+        }
+
+    }
+
+
+    function actualizarResumen() {
+
+        if (!montoTotal) {
+            return;
+        }
+
+        const nota =
+            numero(
+                montoTotal.value
+            );
+
+        const aplicado =
+            numero(
+                montoSaldo.value
+            );
+
+        const devuelto =
+            numero(
+                montoDevuelto.value
+            );
+
+
+        document.getElementById(
+            "resumen-nota"
+        ).textContent =
+            "S/ "
+            + nota.toFixed(2);
+
+
+        document.getElementById(
+            "resumen-saldo"
+        ).textContent =
+            "S/ "
+            + aplicado.toFixed(2);
+
+
+        document.getElementById(
+            "resumen-devuelto"
+        ).textContent =
+            "S/ "
+            + devuelto.toFixed(2);
+
+
+        cuentaDevolucion.required =
+            devuelto > 0;
+
+    }
+
+
+    document
+        .querySelectorAll(
+            ".importe-detalle"
+        )
+        .forEach(
+            input => {
+
+                input.addEventListener(
+                    "input",
+                    actualizarDetalles
+                );
+
+            }
+        );
+
+
+    if (montoTotal) {
+
+        montoTotal.addEventListener(
+            "input",
+            actualizarResumen
+        );
+
+        montoSaldo.addEventListener(
+            "input",
+            actualizarResumen
+        );
+
+        montoDevuelto.addEventListener(
+            "input",
+            actualizarResumen
+        );
+
+
+        actualizarDetalles();
+
+        actualizarResumen();
+
+    }
+
+</script>
+
+
+</body>
+
+</html>

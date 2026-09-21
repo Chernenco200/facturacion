@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Notas de crédito</title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+    <style>
+
+        body {
+            background: #f5f6f8;
+        }
+
+        .contenedor {
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        .card {
+            border: 0;
+            box-shadow: 0 1px 5px rgba(0,0,0,.08);
+        }
+
+        .estado {
+            display: inline-block;
+            padding: .3rem .6rem;
+            border-radius: .35rem;
+            font-size: .78rem;
+            font-weight: 600;
+        }
+
+        .estado-borrador {
+            background: #fff3cd;
+            color: #664d03;
+        }
+
+        .estado-contabilizada {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .estado-anulada {
+            background: #f8d7da;
+            color: #842029;
+        }
+
+        .importe {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .acciones-nota {
+            white-space: nowrap;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="container-fluid py-4 px-3">
+
+<div class="contenedor">
+
+
+    <!-- ===================================================== -->
+    <!-- ENCABEZADO -->
+    <!-- ===================================================== -->
+
+    <div
+        class="
+            d-flex
+            justify-content-between
+            align-items-center
+            mb-4
+        "
+    >
+
+        <div>
+
+            <h2 class="mb-1">
+                Notas de crédito
+            </h2>
+
+            <div class="text-muted">
+                Correcciones, anulaciones y devoluciones
+                vinculadas a ventas.
+            </div>
+
+        </div>
+
+
+        <div class="d-flex gap-2">
+
+            <a
+                href="{% url 'contabilidad:pendientes_contables' %}"
+                class="btn btn-outline-secondary"
+            >
+                Volver
+            </a>
+
+            <a
+                href="{% url 'contabilidad:registrar_nota_credito' %}"
+                class="btn btn-primary"
+            >
+                Nueva nota de crédito
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <!-- ===================================================== -->
+    <!-- MENSAJES -->
+    <!-- ===================================================== -->
+
+    {% if messages %}
+
+        {% for message in messages %}
+
+            <div
+                class="
+                    alert
+                    {% if message.tags == 'error' %}
+                        alert-danger
+                    {% elif message.tags == 'success' %}
+                        alert-success
+                    {% elif message.tags == 'warning' %}
+                        alert-warning
+                    {% else %}
+                        alert-info
+                    {% endif %}
+                "
+            >
+                {{ message }}
+            </div>
+
+        {% endfor %}
+
+    {% endif %}
+
+
+    <!-- ===================================================== -->
+    <!-- LISTADO -->
+    <!-- ===================================================== -->
+
+    <div class="card">
+
+        <div class="card-header bg-white">
+
+            <strong>
+                Notas registradas
+            </strong>
+
+        </div>
+
+
+        <div class="card-body p-0">
+
+            {% if notas %}
+
+                <div class="table-responsive">
+
+                    <table
+                        class="
+                            table
+                            table-hover
+                            align-middle
+                            mb-0
+                        "
+                    >
+
+                        <thead class="table-light">
+
+                            <tr>
+
+                                <th>
+                                    NC
+                                </th>
+
+                                <th>
+                                    Fecha
+                                </th>
+
+                                <th>
+                                    Ticket
+                                </th>
+
+                                <th>
+                                    Cliente
+                                </th>
+
+                                <th>
+                                    Motivo
+                                </th>
+
+                                <th class="text-end">
+                                    Total
+                                </th>
+
+                                <th class="text-end">
+                                    Al saldo
+                                </th>
+
+                                <th class="text-end">
+                                    Devuelto
+                                </th>
+
+                                <th>
+                                    Estado
+                                </th>
+
+                                <th>
+                                    Asiento
+                                </th>
+
+                                <th class="text-end">
+                                    Acción
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            {% for nota in notas %}
+
+                                <tr>
+
+                                    <!-- NC -->
+
+                                    <td class="fw-semibold">
+
+                                        #{{ nota.numero|stringformat:"06d" }}
+
+                                    </td>
+
+
+                                    <!-- FECHA -->
+
+                                    <td>
+
+                                        {{ nota.fecha_emision|date:"d/m/Y" }}
+
+                                    </td>
+
+
+                                    <!-- TICKET -->
+
+                                    <td>
+
+                                        #{{ nota.ticket.numero|stringformat:"06d" }}
+
+                                    </td>
+
+
+                                    <!-- CLIENTE -->
+
+                                    <td>
+
+                                        {% if nota.ticket.cliente %}
+
+                                            {{ nota.ticket.cliente.nombre }}
+
+                                        {% else %}
+
+                                            Sin cliente
+
+                                        {% endif %}
+
+                                    </td>
+
+
+                                    <!-- MOTIVO -->
+
+                                    <td>
+
+                                        {{ nota.get_motivo_display }}
+
+                                    </td>
+
+
+                                    <!-- TOTAL -->
+
+                                    <td class="importe fw-semibold">
+
+                                        S/ {{ nota.monto_total|floatformat:2 }}
+
+                                    </td>
+
+
+                                    <!-- APLICADO AL SALDO -->
+
+                                    <td class="importe">
+
+                                        S/ {{ nota.monto_aplicado_saldo|floatformat:2 }}
+
+                                    </td>
+
+
+                                    <!-- DEVUELTO -->
+
+                                    <td class="importe">
+
+                                        S/ {{ nota.monto_devuelto|floatformat:2 }}
+
+                                    </td>
+
+
+                                    <!-- ESTADO -->
+
+                                    <td>
+
+                                        {% if nota.estado == "BORRADOR" %}
+
+                                            <span
+                                                class="
+                                                    estado
+                                                    estado-borrador
+                                                "
+                                            >
+                                                Borrador
+                                            </span>
+
+                                        {% elif nota.estado == "CONTABILIZADA" %}
+
+                                            <span
+                                                class="
+                                                    estado
+                                                    estado-contabilizada
+                                                "
+                                            >
+                                                Contabilizada
+                                            </span>
+
+                                        {% else %}
+
+                                            <span
+                                                class="
+                                                    estado
+                                                    estado-anulada
+                                                "
+                                            >
+                                                {{ nota.get_estado_display }}
+                                            </span>
+
+                                        {% endif %}
+
+                                    </td>
+
+
+                                    <!-- ASIENTO -->
+
+                                    <td>
+
+                                        {% if nota.asiento %}
+
+                                            N.º {{ nota.asiento.numero }}
+
+                                        {% else %}
+
+                                            -
+
+                                        {% endif %}
+
+                                    </td>
+
+
+                                    <!-- ACCIONES -->
+
+                                    <td class="text-end acciones-nota">
+
+                                        {% if nota.estado == "BORRADOR" %}
+
+
+                                            <!-- ========================== -->
+                                            <!-- CONTABILIZAR -->
+                                            <!-- ========================== -->
+
+                                            <form
+                                                method="post"
+                                                action="{% url 'contabilidad:contabilizar_nota_credito' nota.id %}"
+                                                class="d-inline"
+                                            >
+
+                                                {% csrf_token %}
+
+                                                <button
+                                                    type="submit"
+                                                    class="btn btn-sm btn-success"
+                                                    onclick="
+                                                        return confirm(
+                                                            '¿Contabilizar la nota de crédito #{{ nota.numero|stringformat:"06d" }}?'
+                                                        );
+                                                    "
+                                                >
+                                                    Contabilizar
+                                                </button>
+
+                                            </form>
+
+
+                                            <!-- ========================== -->
+                                            <!-- ANULAR -->
+                                            <!-- ========================== -->
+
+                                            <form
+                                                method="post"
+                                                action="{% url 'contabilidad:anular_nota_credito' nota.id %}"
+                                                class="d-inline ms-1"
+                                            >
+
+                                                {% csrf_token %}
+
+                                                <button
+                                                    type="submit"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                    onclick="
+                                                        return confirm(
+                                                            '¿Anular la nota de crédito #{{ nota.numero|stringformat:"06d" }}? Esta acción no generará ningún asiento contable.'
+                                                        );
+                                                    "
+                                                >
+                                                    Anular
+                                                </button>
+
+                                            </form>
+
+
+                                        {% elif nota.estado == "CONTABILIZADA" %}
+
+                                            <span class="text-success">
+                                                ✓ Contabilizada
+                                            </span>
+
+
+                                        {% elif nota.estado == "ANULADA" %}
+
+                                            <span class="text-danger">
+                                                Anulada
+                                            </span>
+
+
+                                        {% else %}
+
+                                            -
+
+                                        {% endif %}
+
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            {% else %}
+
+                <div
+                    class="
+                        text-center
+                        text-muted
+                        py-5
+                    "
+                >
+
+                    No existen notas de crédito registradas.
+
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+</div>
+
+</div>
+
+</body>
+
+</html>

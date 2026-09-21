@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+
+    <title>
+        Cierre de período contable
+    </title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7fa;
+            color: #17324d;
+        }
+
+        .contenedor {
+            max-width: 1100px;
+            margin: 30px auto;
+            padding: 0 20px 40px;
+        }
+
+        .titulo {
+            margin: 0;
+            font-size: 34px;
+            font-weight: 700;
+        }
+
+        .subtitulo {
+            margin-top: 5px;
+            color: #667085;
+            font-size: 16px;
+        }
+
+        .periodo {
+            margin-top: 8px;
+            margin-bottom: 24px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #344054;
+        }
+
+        .mensaje {
+            padding: 13px 16px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+
+        .mensaje.success {
+            background: #ecfdf3;
+            color: #067647;
+            border: 1px solid #abefc6;
+        }
+
+        .mensaje.error {
+            background: #fef3f2;
+            color: #b42318;
+            border: 1px solid #fecdca;
+        }
+
+        .mensaje.warning {
+            background: #fffaeb;
+            color: #b54708;
+            border: 1px solid #fedf89;
+        }
+
+        .tarjeta {
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
+        }
+
+        .seccion {
+            background: #e8f0f5;
+            padding: 15px 20px;
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .contenido {
+            padding: 20px;
+        }
+
+        .estado-periodo {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .estado-etiqueta {
+            font-weight: 700;
+            color: #475467;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 7px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .badge-abierto {
+            background: #ecfdf3;
+            color: #067647;
+        }
+
+        .badge-cerrado {
+            background: #f2f4f7;
+            color: #475467;
+        }
+
+        .checklist {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .checklist th {
+            background: #f8fafc;
+            text-align: left;
+            padding: 12px 14px;
+            border-bottom: 1px solid #e4e7ec;
+            color: #475467;
+            font-size: 14px;
+        }
+
+        .checklist td {
+            padding: 14px;
+            border-bottom: 1px solid #eaecf0;
+            vertical-align: middle;
+        }
+
+        .checklist td.numero {
+            text-align: right;
+            width: 120px;
+            font-weight: 700;
+        }
+
+        .checklist td.estado {
+            text-align: center;
+            width: 110px;
+        }
+
+        .ok {
+            color: #067647;
+            font-weight: 700;
+        }
+
+        .error {
+            color: #b42318;
+            font-weight: 700;
+        }
+
+        .tabla-detalle {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .tabla-detalle th {
+            background: #f8fafc;
+            text-align: left;
+            padding: 11px 12px;
+            border-bottom: 1px solid #e4e7ec;
+            font-size: 14px;
+            color: #475467;
+        }
+
+        .tabla-detalle td {
+            padding: 11px 12px;
+            border-bottom: 1px solid #eaecf0;
+            font-size: 14px;
+        }
+
+        .resumen-cierre {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .puede-cerrar {
+            color: #067647;
+            font-weight: 700;
+        }
+
+        .no-puede-cerrar {
+            color: #b42318;
+            font-weight: 700;
+        }
+
+        .acciones {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .boton {
+            padding: 11px 20px;
+            border-radius: 7px;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .boton-principal {
+            background: #28627f;
+            color: white;
+        }
+
+        .boton-principal:hover {
+            background: #204f67;
+        }
+
+        .boton-deshabilitado {
+            background: #d0d5dd;
+            color: #667085;
+            cursor: not-allowed;
+        }
+
+        .advertencia {
+            background: #fffaeb;
+            border: 1px solid #fedf89;
+            color: #7a2e0e;
+            padding: 15px 17px;
+            border-radius: 8px;
+            line-height: 1.5;
+            margin-top: 18px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="contenedor">
+
+    <h1 class="titulo">
+        Cierre de período contable
+    </h1>
+
+    <div class="subtitulo">
+        Óptica IC
+    </div>
+
+    <div class="periodo">
+        Período {{ periodo }}
+    </div>
+
+
+    {% for message in messages %}
+
+        <div
+            class="
+                mensaje
+                {% if message.tags == 'success' %}
+                    success
+                {% elif message.tags == 'warning' %}
+                    warning
+                {% else %}
+                    error
+                {% endif %}
+            "
+        >
+            {{ message }}
+        </div>
+
+    {% endfor %}
+
+
+    <!-- =====================================================
+         ESTADO DEL PERÍODO
+         ===================================================== -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            ESTADO DEL PERÍODO
+        </div>
+
+        <div class="contenido">
+
+            <div class="estado-periodo">
+
+                <div>
+                    <span class="estado-etiqueta">
+                        Estado actual:
+                    </span>
+                </div>
+
+                <div>
+
+                    {% if periodo.estado == "ABIERTO" %}
+
+                        <span class="badge badge-abierto">
+                            ABIERTO
+                        </span>
+
+                    {% else %}
+
+                        <span class="badge badge-cerrado">
+                            CERRADO
+                        </span>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         CHECKLIST DE CIERRE
+         ===================================================== -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            VALIDACIONES PREVIAS AL CIERRE
+        </div>
+
+        <table class="checklist">
+
+            <thead>
+
+                <tr>
+                    <th>Control</th>
+                    <th style="text-align:right;">Cantidad</th>
+                    <th style="text-align:center;">Estado</th>
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+                <!-- 1. ASIENTOS EN BORRADOR -->
+
+                <tr>
+                    <td>Asientos en borrador</td>
+
+                    <td class="numero">
+                        {{ asientos_borrador.count }}
+                    </td>
+
+                    <td class="estado">
+                        {% if asientos_borrador.count == 0 %}
+                            <span class="ok">✓ OK</span>
+                        {% else %}
+                            <span class="error">✗ Revisar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+
+
+                <!-- 2. ASIENTOS DESCUADRADOS -->
+
+                <tr>
+                    <td>Asientos descuadrados</td>
+
+                    <td class="numero">
+                        {{ asientos_descuadrados|length }}
+                    </td>
+
+                    <td class="estado">
+                        {% if asientos_descuadrados|length == 0 %}
+                            <span class="ok">✓ OK</span>
+                        {% else %}
+                            <span class="error">✗ Revisar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+
+
+                <!-- 3. PROPUESTAS DE COSTO -->
+
+                <tr>
+                    <td>
+                        Propuestas de costo pendientes de contabilizar
+                    </td>
+
+                    <td class="numero">
+                        {{ propuestas_pendientes.count }}
+                    </td>
+
+                    <td class="estado">
+                        {% if propuestas_pendientes.count == 0 %}
+                            <span class="ok">✓ OK</span>
+                        {% else %}
+                            <span class="error">✗ Revisar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+
+
+                <!-- 4. COMPRAS DIRECTAS -->
+
+                <tr>
+                    <td>
+                        Compras directas pendientes de contabilizar
+                    </td>
+
+                    <td class="numero">
+                        {{ compras_directas_pendientes.count }}
+                    </td>
+
+                    <td class="estado">
+                        {% if compras_directas_pendientes.count == 0 %}
+                            <span class="ok">✓ OK</span>
+                        {% else %}
+                            <span class="error">✗ Revisar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+
+
+                <!-- 5. PAGOS A PROVEEDORES -->
+
+                <tr>
+                    <td>
+                        Pagos a proveedores pendientes de contabilizar
+                    </td>
+
+                    <td class="numero">
+                        {{ pagos_proveedor_pendientes.count }}
+                    </td>
+
+                    <td class="estado">
+                        {% if pagos_proveedor_pendientes.count == 0 %}
+                            <span class="ok">✓ OK</span>
+                        {% else %}
+                            <span class="error">✗ Revisar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+
+
+                <!-- 6. PAGOS DE OPERACIONES -->
+
+                <tr>
+                    <td>
+                        Pagos de operaciones pendientes de contabilizar
+                    </td>
+
+                    <td class="numero">
+                        {{ pagos_operacion_pendientes.count }}
+                    </td>
+
+                    <td class="estado">
+                        {% if pagos_operacion_pendientes.count == 0 %}
+                            <span class="ok">✓ OK</span>
+                        {% else %}
+                            <span class="error">✗ Revisar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+
+
+                <!-- 7. OPERACIONES CONTABLES -->
+
+                <tr>
+                    <td>
+                        Operaciones contables pendientes de contabilizar
+                    </td>
+
+                    <td class="numero">
+                        {{ operaciones_borrador.count }}
+                    </td>
+
+                    <td class="estado">
+                        {% if operaciones_borrador.count == 0 %}
+                            <span class="ok">✓ OK</span>
+                        {% else %}
+                            <span class="error">✗ Revisar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <!-- 8. NOTAS DE CRÉDITO -->
+
+                <tr>
+                    <td>
+                        Notas de crédito pendientes de contabilizar
+                    </td>
+
+                    <td class="numero">
+                        {{ notas_credito_borrador.count }}
+                    </td>
+
+                    <td class="estado">
+                        {% if notas_credito_borrador.count == 0 %}
+                            <span class="ok">✓ OK</span>
+                        {% else %}
+                            <span class="error">✗ Revisar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+
+
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    <!-- =====================================================
+         ASIENTOS EN BORRADOR
+         ===================================================== -->
+
+    {% if asientos_borrador %}
+
+        <div class="tarjeta">
+
+            <div class="seccion">
+                ASIENTOS EN BORRADOR
+            </div>
+
+            <table class="tabla-detalle">
+
+                <thead>
+                    <tr>
+                        <th>N.º</th>
+                        <th>Fecha</th>
+                        <th>Glosa</th>
+                        <th>Origen</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for asiento in asientos_borrador %}
+
+                        <tr>
+                            <td>{{ asiento.numero }}</td>
+                            <td>{{ asiento.fecha|date:"d/m/Y" }}</td>
+                            <td>{{ asiento.glosa }}</td>
+                            <td>{{ asiento.origen }}</td>
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    {% endif %}
+
+
+    <!-- =====================================================
+         ASIENTOS DESCUADRADOS
+         ===================================================== -->
+
+    {% if asientos_descuadrados %}
+
+        <div class="tarjeta">
+
+            <div class="seccion">
+                ASIENTOS DESCUADRADOS
+            </div>
+
+            <table class="tabla-detalle">
+
+                <thead>
+                    <tr>
+                        <th>N.º</th>
+                        <th>Fecha</th>
+                        <th>Glosa</th>
+                        <th>Debe</th>
+                        <th>Haber</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for asiento in asientos_descuadrados %}
+
+                        <tr>
+                            <td>{{ asiento.numero }}</td>
+                            <td>{{ asiento.fecha|date:"d/m/Y" }}</td>
+                            <td>{{ asiento.glosa }}</td>
+                            <td>S/ {{ asiento.total_debe|floatformat:2 }}</td>
+                            <td>S/ {{ asiento.total_haber|floatformat:2 }}</td>
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    {% endif %}
+
+
+    <!-- =====================================================
+         PROPUESTAS DE COSTO PENDIENTES
+         ===================================================== -->
+
+    {% if propuestas_pendientes %}
+
+        <div class="tarjeta">
+
+            <div class="seccion">
+                PROPUESTAS DE COSTO PENDIENTES
+            </div>
+
+            <table class="tabla-detalle">
+
+                <thead>
+                    <tr>
+                        <th>Propuesta</th>
+                        <th>Ticket</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th>Costo</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for propuesta in propuestas_pendientes %}
+
+                        <tr>
+                            <td>{{ propuesta.id }}</td>
+                            <td>{{ propuesta.ticket.numero|stringformat:"06d" }}</td>
+                            <td>{{ propuesta.ticket.fecha_emision|date:"d/m/Y" }}</td>
+                            <td>{{ propuesta.get_estado_display }}</td>
+                            <td>S/ {{ propuesta.costo_total|floatformat:2 }}</td>
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    {% endif %}
+
+
+    <!-- =====================================================
+         PAGOS DE OPERACIONES PENDIENTES
+         ===================================================== -->
+
+    {% if pagos_operacion_pendientes %}
+
+        <div class="tarjeta">
+
+            <div class="seccion">
+                PAGOS DE OPERACIONES PENDIENTES DE CONTABILIZAR
+            </div>
+
+            <table class="tabla-detalle">
+
+                <thead>
+                    <tr>
+                        <th>Fecha de pago</th>
+                        <th>Concepto</th>
+                        <th>Proveedor</th>
+                        <th>Importe</th>
+                        <th>Cuenta de pago</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for pago in pagos_operacion_pendientes %}
+
+                        <tr>
+
+                            <td>
+                                {{ pago.fecha_pago|date:"d/m/Y" }}
+                            </td>
+
+                            <td>
+                                {{ pago.operacion.concepto.nombre }}
+                            </td>
+
+                            <td>
+                                {{ pago.operacion.proveedor_nombre|default:"-" }}
+                            </td>
+
+                            <td>
+                                S/ {{ pago.monto|floatformat:2 }}
+                            </td>
+
+                            <td>
+                                {{ pago.cuenta_pago.codigo }}
+                                -
+                                {{ pago.cuenta_pago.nombre }}
+                            </td>
+
+                            <td>
+                                {{ pago.get_estado_display }}
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    {% endif %}
+
+
+    <!-- =====================================================
+         OPERACIONES CONTABLES PENDIENTES
+         ===================================================== -->
+
+    {% if operaciones_borrador %}
+
+        <div class="tarjeta">
+
+            <div class="seccion">
+                OPERACIONES CONTABLES PENDIENTES
+            </div>
+
+            <table class="tabla-detalle">
+
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Concepto</th>
+                        <th>Descripción</th>
+                        <th>Proveedor</th>
+                        <th>Forma de pago</th>
+                        <th>Importe</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for operacion in operaciones_borrador %}
+
+                        <tr>
+
+                            <td>
+                                {{ operacion.fecha|date:"d/m/Y" }}
+                            </td>
+
+                            <td>
+                                {{ operacion.concepto.nombre }}
+                            </td>
+
+                            <td>
+                                {{ operacion.descripcion|default:"-" }}
+                            </td>
+
+                            <td>
+                                {{ operacion.proveedor_nombre|default:"-" }}
+                            </td>
+
+                            <td>
+                                {{ operacion.get_forma_pago_display }}
+                            </td>
+
+                            <td>
+                                S/ {{ operacion.importe_total|floatformat:2 }}
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    {% endif %}
+
+
+    <!-- =====================================================
+         RESULTADO DEL CIERRE
+         ===================================================== -->
+
+    <div class="tarjeta">
+
+        <div class="seccion">
+            RESULTADO DE LA VALIDACIÓN
+        </div>
+
+        <div class="contenido">
+
+            <div class="resumen-cierre">
+
+                <div>
+
+                    {% if periodo.estado == "CERRADO" %}
+
+                        <span class="no-puede-cerrar">
+                            El período ya se encuentra cerrado.
+                        </span>
+
+                    {% elif puede_cerrar %}
+
+                        <span class="puede-cerrar">
+                            ✓ El período cumple las condiciones para cerrarse.
+                        </span>
+
+                    {% else %}
+
+                        <span class="no-puede-cerrar">
+                            ✗ El período todavía tiene operaciones pendientes.
+                        </span>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+
+            {% if periodo.estado == "ABIERTO" %}
+
+                <div class="advertencia">
+
+                    <strong>Importante:</strong>
+
+                    una vez cerrado el período, las funciones automáticas
+                    de Contabilidad no permitirán registrar nuevos asientos
+                    con fecha dentro de este período hasta que sea reabierto.
+
+                </div>
+
+            {% endif %}
+
+
+            <div class="acciones">
+
+                {% if periodo.estado == "CERRADO" %}
+
+                    <form
+                        method="post"
+                        action="{% url 'contabilidad:reabrir_periodo_contable' periodo.id %}"
+                        style="width: 100%;"
+                    >
+
+                        {% csrf_token %}
+
+                        <div style="margin-bottom: 15px;">
+
+                            <label
+                                for="motivo_reapertura"
+                                style="
+                                    display: block;
+                                    font-weight: 700;
+                                    margin-bottom: 7px;
+                                    color: #344054;
+                                "
+                            >
+                                Motivo de la reapertura
+                            </label>
+
+                            <textarea
+                                id="motivo_reapertura"
+                                name="motivo_reapertura"
+                                rows="3"
+                                required
+                                placeholder="Ejemplo: Registrar una factura de compra omitida correspondiente al período."
+                                style="
+                                    width: 100%;
+                                    padding: 12px;
+                                    border: 1px solid #d0d5dd;
+                                    border-radius: 7px;
+                                    resize: vertical;
+                                    font-family: Arial, Helvetica, sans-serif;
+                                    font-size: 14px;
+                                "
+                            ></textarea>
+
+                        </div>
+
+                        <div style="text-align: right;">
+
+                            <button
+                                type="submit"
+                                class="boton boton-principal"
+                                onclick="return confirm(
+                                    '¿Deseas reabrir el período {{ periodo }}?'
+                                );"
+                            >
+                                Reabrir período {{ periodo }}
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                {% elif puede_cerrar %}
+
+                    <form
+                        method="post"
+                        onsubmit="return confirm(
+                            '¿Deseas cerrar definitivamente el período {{ periodo }}?'
+                        );"
+                    >
+
+                        {% csrf_token %}
+
+                        <button
+                            type="submit"
+                            class="boton boton-principal"
+                        >
+                            Cerrar período {{ periodo }}
+                        </button>
+
+                    </form>
+
+                {% else %}
+
+                    <button
+                        type="button"
+                        class="boton boton-deshabilitado"
+                        disabled
+                    >
+                        Cierre no disponible
+                    </button>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>
