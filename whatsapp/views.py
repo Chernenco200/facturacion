@@ -217,10 +217,7 @@ def responder_mensaje(numero, texto):
             numero,
             "Nuestro horario de atención es de lunes a sábado de 9:00 a.m. a 7:45 p.m. "
             "Domingos de 10:30 a.m. a 6:00 p.m."
-            "- Horaios especiales por fiestas patrial:"
-                    "27 y 29 de julio atenderemos de 10:00 am. a 7:00 p.m."
-                    "28 de julio no atenderemos"
-                    "30 de julio atenderemos en horario regular"
+
             
         )
         return
@@ -370,11 +367,7 @@ def responder_mensaje(numero, texto):
             numero,
             "Nuestro horario de atención es:\n\n"
             "Lunes a sábado: 9:00 a.m. a 7:45 p.m.\n"
-            "Domingos: 10:30 a.m. a 6:30 p.m."
-            "Horaios especiales por fiestas patrial:"
-                    "27 y 29 de julio atenderemos de 10:00 am. a 7:00 p.m."
-                    "28 de julio no atenderemos"
-                    "30 de julio atenderemos en horario regular"            
+            "Domingos: 10:30 a.m. a 6:30 p.m."       
         )
         return
 

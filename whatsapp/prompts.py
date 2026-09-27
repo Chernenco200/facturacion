@@ -24,12 +24,7 @@ Entre Av. Emancipación y Jr. Huancavelica.
 Horario de atención:
 - Lunes a sábado: 9:00 a.m. a 7:45 p.m.
 - Domingos: 10:30 a.m. a 6:00 p.m.
-- Horaios especiales por fiestas patrial:
-    27 y 29 de julio atenderemos de 10:00 am. a 7:00 p.m.
-    28 de julio no atenderemos
-    30 de julio atenderemos en horario regular
-
- 
+ s
 
 Realizamos envíos a provincia.
 

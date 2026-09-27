@@ -17,3 +17,6 @@ staticfiles/
 Thumbs.db
 
 importaciones/
+
+balance_general.txt
+respaldo_contabilidad_pruebas_2026.json
