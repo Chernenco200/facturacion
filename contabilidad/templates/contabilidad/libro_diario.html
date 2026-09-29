@@ -1,448 +1,447 @@
-<!DOCTYPE html>
-<html lang="es">
+{% extends 'core/base.html' %}
 
-<head>
-    <meta charset="UTF-8">
+{% block title %}Libro Diario - Óptica IC{% endblock %}
 
-    <title>
-        Libro Diario - Óptica IC
-    </title>
+{% block content %}
 
-    <style>
+<style>
+    .libro-diario-page {
+        color: #243447;
+    }
 
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f7fa;
-            margin: 0;
-            color: #243447;
-        }
+    .libro-diario-page .contenedor {
+        max-width: 1400px;
+        margin: 30px auto;
+        padding: 0 20px;
+    }
 
-        .contenedor {
-            max-width: 1400px;
-            margin: 30px auto;
-            padding: 0 20px;
-        }
+    .libro-diario-page .encabezado {
+        margin-bottom: 24px;
+    }
 
-        .encabezado {
-            margin-bottom: 24px;
-        }
+    .libro-diario-page .encabezado h1 {
+        margin-bottom: 5px;
+    }
 
-        .encabezado h1 {
-            margin-bottom: 5px;
-        }
+    .libro-diario-page .encabezado p {
+        color: #667085;
+        margin-top: 0;
+    }
 
-        .encabezado p {
-            color: #667085;
-            margin-top: 0;
-        }
+    .libro-diario-page .filtros {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
 
-        .filtros {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
+    .libro-diario-page .filtros form {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: end;
+    }
 
-            box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.05);
-        }
+    .libro-diario-page .campo {
+        display: flex;
+        flex-direction: column;
+    }
 
-        .filtros form {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            align-items: end;
-        }
+    .libro-diario-page .campo label {
+        margin-bottom: 6px;
+        font-weight: bold;
+        font-size: 14px;
+    }
 
-        .campo {
-            display: flex;
-            flex-direction: column;
-        }
+    .libro-diario-page select,
+    .libro-diario-page input {
+        padding: 9px 10px;
+        border: 1px solid #d0d5dd;
+        border-radius: 6px;
+    }
 
-        .campo label {
-            margin-bottom: 6px;
-            font-weight: bold;
-            font-size: 14px;
-        }
+    .libro-diario-page .btn-filtrar {
+        padding: 10px 18px;
+        border: none;
+        border-radius: 6px;
+        background: #285f7d;
+        color: white;
+        cursor: pointer;
+    }
 
-        select,
-        input {
-            padding: 9px 10px;
-            border: 1px solid #d0d5dd;
-            border-radius: 6px;
-        }
+    .libro-diario-page .asiento {
+        background: white;
+        margin-bottom: 20px;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
 
-        button {
-            padding: 10px 18px;
-            border: none;
-            border-radius: 6px;
-            background: #285f7d;
-            color: white;
-            cursor: pointer;
-        }
+    .libro-diario-page .asiento-cabecera {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        background: #eaf1f5;
+        padding: 14px 18px;
+        border-bottom: 1px solid #dce4ea;
+    }
 
-        .asiento {
-            background: white;
-            margin-bottom: 20px;
-            border-radius: 10px;
-            overflow: hidden;
+    .libro-diario-page .numero {
+        font-weight: bold;
+    }
 
-            box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.05);
-        }
+    .libro-diario-page .glosa {
+        color: #475467;
+    }
 
-        .asiento-cabecera {
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
+    .libro-diario-page table {
+        width: 100%;
+        border-collapse: collapse;
+    }
 
-            background: #eaf1f5;
-            padding: 14px 18px;
+    .libro-diario-page th {
+        background: #f8fafc;
+        text-align: left;
+        font-size: 13px;
+        color: #475467;
+        padding: 11px 12px;
+        border-bottom: 1px solid #eaecf0;
+    }
 
-            border-bottom:
-                1px solid #dce4ea;
-        }
+    .libro-diario-page td {
+        padding: 11px 12px;
+        border-bottom: 1px solid #f0f2f5;
+    }
 
-        .numero {
-            font-weight: bold;
-        }
+    .libro-diario-page .numero-derecha {
+        text-align: right;
+    }
 
-        .glosa {
-            color: #475467;
-        }
+    .libro-diario-page .totales-asiento {
+        font-weight: bold;
+        background: #fafafa;
+    }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
+    .libro-diario-page .resumen {
+        background: white;
+        padding: 18px;
+        border-radius: 10px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 40px;
+        font-size: 17px;
+        font-weight: bold;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
 
-        th {
-            background: #f8fafc;
-            text-align: left;
-            font-size: 13px;
-            color: #475467;
-
-            padding: 11px 12px;
-
-            border-bottom:
-                1px solid #eaecf0;
-        }
-
-        td {
-            padding: 11px 12px;
-
-            border-bottom:
-                1px solid #f0f2f5;
-        }
-
-        .numero-derecha {
-            text-align: right;
-        }
-
-        .totales-asiento {
-            font-weight: bold;
-            background: #fafafa;
-        }
-
-        .resumen {
-            background: white;
-            padding: 18px;
-
-            border-radius: 10px;
-
-            display: flex;
-            justify-content: flex-end;
-            gap: 40px;
-
-            font-size: 17px;
-            font-weight: bold;
-
-            box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .vacio {
-            background: white;
-            padding: 40px;
-            text-align: center;
-            border-radius: 10px;
-            color: #667085;
-        }
-
-    </style>
-</head>
+    .libro-diario-page .vacio {
+        background: white;
+        padding: 40px;
+        text-align: center;
+        border-radius: 10px;
+        color: #667085;
+    }
+</style>
 
 
-<body>
+<div class="libro-diario-page">
 
-<div class="contenedor">
+    <div class="contenedor">
 
-    <div class="encabezado">
+        <div class="encabezado">
 
-        <h1>
-            Libro Diario
-        </h1>
+            <h1>Libro Diario</h1>
 
-        <p>
-            Óptica IC - Asientos contabilizados
-        </p>
+            <p>
+                Óptica IC - Asientos contabilizados
+            </p>
 
-    </div>
+        </div>
 
 
-    <div class="filtros">
+        <!-- ========================================== -->
+        <!-- FILTROS -->
+        <!-- ========================================== -->
 
-        <form method="get">
+        <div class="filtros">
 
-            <div class="campo">
+            <form method="get">
 
-                <label>
-                    Periodo
-                </label>
+                <div class="campo">
 
-                <select name="periodo">
+                    <label>
+                        Periodo
+                    </label>
 
-                    <option value="">
-                        Todos
-                    </option>
+                    <select name="periodo">
 
-                    {% for periodo in periodos %}
-
-                        <option
-                            value="{{ periodo.id }}"
-                            {% if periodo_id == periodo.id|stringformat:"s" %}
-                                selected
-                            {% endif %}
-                        >
-
-                            {{ periodo }}
-
+                        <option value="">
+                            Todos
                         </option>
 
-                    {% endfor %}
+                        {% for periodo in periodos %}
 
-                </select>
+                            <option
+                                value="{{ periodo.id }}"
+                                {% if periodo_id == periodo.id|stringformat:"s" %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ periodo }}
+                            </option>
 
-            </div>
+                        {% endfor %}
 
-
-            <div class="campo">
-
-                <label>
-                    Desde
-                </label>
-
-                <input
-                    type="date"
-                    name="fecha_desde"
-                    value="{{ fecha_desde|default:'' }}"
-                >
-
-            </div>
-
-
-            <div class="campo">
-
-                <label>
-                    Hasta
-                </label>
-
-                <input
-                    type="date"
-                    name="fecha_hasta"
-                    value="{{ fecha_hasta|default:'' }}"
-                >
-
-            </div>
-
-
-            <button type="submit">
-                Filtrar
-            </button>
-
-        </form>
-
-    </div>
-
-
-    {% for asiento in asientos %}
-
-        <div class="asiento">
-
-            <div class="asiento-cabecera">
-
-                <div>
-
-                    <span class="numero">
-                        Asiento {{ asiento.numero }}
-                    </span>
-
-                    ·
-
-                    {{ asiento.fecha|date:"d/m/Y" }}
-
-                    ·
-
-                    {{ asiento.periodo }}
+                    </select>
 
                 </div>
 
-                <div class="glosa">
-                    {{ asiento.glosa }}
+
+                <div class="campo">
+
+                    <label>
+                        Desde
+                    </label>
+
+                    <input
+                        type="date"
+                        name="fecha_desde"
+                        value="{{ fecha_desde|default:'' }}"
+                    >
+
                 </div>
 
-            </div>
+
+                <div class="campo">
+
+                    <label>
+                        Hasta
+                    </label>
+
+                    <input
+                        type="date"
+                        name="fecha_hasta"
+                        value="{{ fecha_hasta|default:'' }}"
+                    >
+
+                </div>
 
 
-            <table>
+                <button
+                    type="submit"
+                    class="btn-filtrar"
+                >
+                    Filtrar
+                </button>
 
-                <thead>
+            </form>
 
-                    <tr>
-
-                        <th>
-                            Sec.
-                        </th>
-
-                        <th>
-                            Cuenta
-                        </th>
-
-                        <th>
-                            Descripción
-                        </th>
-
-                        <th>
-                            Categoría
-                        </th>
-
-                        <th>
-                            Centro
-                        </th>
-
-                        <th class="numero-derecha">
-                            Debe
-                        </th>
-
-                        <th class="numero-derecha">
-                            Haber
-                        </th>
-
-                    </tr>
-
-                </thead>
+        </div>
 
 
-                <tbody>
+        <!-- ========================================== -->
+        <!-- ASIENTOS CONTABLES -->
+        <!-- ========================================== -->
 
-                    {% for detalle in asiento.detalles.all %}
+        {% for asiento in asientos %}
+
+            <div class="asiento">
+
+                <div class="asiento-cabecera">
+
+                    <div>
+
+                        <span class="numero">
+                            Asiento {{ asiento.numero }}
+                        </span>
+
+                        ·
+
+                        {{ asiento.fecha|date:"d/m/Y" }}
+
+                        ·
+
+                        {{ asiento.periodo }}
+
+                    </div>
+
+
+                    <div class="glosa">
+                        {{ asiento.glosa }}
+                    </div>
+
+                </div>
+
+
+                <table>
+
+                    <thead>
 
                         <tr>
 
-                            <td>
-                                {{ detalle.secuencia }}
-                            </td>
+                            <th>
+                                Sec.
+                            </th>
 
-                            <td>
+                            <th>
+                                Cuenta
+                            </th>
 
-                                {{ detalle.cuenta.codigo }}
+                            <th>
+                                Descripción
+                            </th>
 
-                                -
+                            <th>
+                                Categoría
+                            </th>
 
-                                {{ detalle.cuenta.nombre }}
+                            <th>
+                                Centro
+                            </th>
 
-                            </td>
+                            <th class="numero-derecha">
+                                Debe
+                            </th>
 
-                            <td>
-                                {{ detalle.descripcion|default:"-" }}
-                            </td>
+                            <th class="numero-derecha">
+                                Haber
+                            </th>
 
-                            <td>
+                        </tr>
 
-                                {% if detalle.categoria_gerencial %}
-                                    {{ detalle.categoria_gerencial.nombre }}
-                                {% else %}
+                    </thead>
+
+
+                    <tbody>
+
+                        {% for detalle in asiento.detalles.all %}
+
+                            <tr>
+
+                                <td>
+                                    {{ detalle.secuencia }}
+                                </td>
+
+
+                                <td>
+
+                                    {{ detalle.cuenta.codigo }}
+
                                     -
-                                {% endif %}
 
-                            </td>
+                                    {{ detalle.cuenta.nombre }}
 
-                            <td>
+                                </td>
 
-                                {% if detalle.centro_costo %}
-                                    {{ detalle.centro_costo.nombre }}
-                                {% else %}
-                                    -
-                                {% endif %}
 
+                                <td>
+                                    {{ detalle.descripcion|default:"-" }}
+                                </td>
+
+
+                                <td>
+
+                                    {% if detalle.categoria_gerencial %}
+
+                                        {{ detalle.categoria_gerencial.nombre }}
+
+                                    {% else %}
+
+                                        -
+
+                                    {% endif %}
+
+                                </td>
+
+
+                                <td>
+
+                                    {% if detalle.centro_costo %}
+
+                                        {{ detalle.centro_costo.nombre }}
+
+                                    {% else %}
+
+                                        -
+
+                                    {% endif %}
+
+                                </td>
+
+
+                                <td class="numero-derecha">
+                                    S/ {{ detalle.debe|floatformat:2 }}
+                                </td>
+
+
+                                <td class="numero-derecha">
+                                    S/ {{ detalle.haber|floatformat:2 }}
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+
+                        <tr class="totales-asiento">
+
+                            <td colspan="5">
+                                Total asiento
                             </td>
 
                             <td class="numero-derecha">
-                                S/ {{ detalle.debe|floatformat:2 }}
+                                S/ {{ asiento.total_debe|floatformat:2 }}
                             </td>
 
                             <td class="numero-derecha">
-                                S/ {{ detalle.haber|floatformat:2 }}
+                                S/ {{ asiento.total_haber|floatformat:2 }}
                             </td>
 
                         </tr>
 
-                    {% endfor %}
+                    </tbody>
 
+                </table>
 
-                    <tr class="totales-asiento">
-
-                        <td colspan="5">
-                            Total asiento
-                        </td>
-
-                        <td class="numero-derecha">
-                            S/ {{ asiento.total_debe|floatformat:2 }}
-                        </td>
-
-                        <td class="numero-derecha">
-                            S/ {{ asiento.total_haber|floatformat:2 }}
-                        </td>
-
-                    </tr>
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-    {% empty %}
-
-        <div class="vacio">
-
-            No existen asientos contabilizados
-            para los filtros seleccionados.
-
-        </div>
-
-    {% endfor %}
-
-
-    {% if asientos %}
-
-        <div class="resumen">
-
-            <div>
-                Total Debe:
-                S/ {{ total_debe|floatformat:2 }}
             </div>
 
-            <div>
-                Total Haber:
-                S/ {{ total_haber|floatformat:2 }}
+        {% empty %}
+
+            <div class="vacio">
+
+                No existen asientos contabilizados
+                para los filtros seleccionados.
+
             </div>
 
-        </div>
+        {% endfor %}
 
-    {% endif %}
+
+        <!-- ========================================== -->
+        <!-- RESUMEN -->
+        <!-- ========================================== -->
+
+        {% if asientos %}
+
+            <div class="resumen">
+
+                <div>
+                    Total Debe:
+                    S/ {{ total_debe|floatformat:2 }}
+                </div>
+
+                <div>
+                    Total Haber:
+                    S/ {{ total_haber|floatformat:2 }}
+                </div>
+
+            </div>
+
+        {% endif %}
+
+    </div>
 
 </div>
 
-</body>
-
-</html>
+{% endblock %}

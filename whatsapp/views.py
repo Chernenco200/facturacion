@@ -424,24 +424,27 @@ def responder_mensaje(numero, texto):
 
     # ==========================================================
     # OPENAI NO PUEDE RESPONDER CON SEGURIDAD
+    # PASAR DIRECTAMENTE A ASESOR HUMANO
     # ==========================================================
-    if (
-        "[ASESOR]" in respuesta_mayuscula
-        or "comunicarte con un asesor" in respuesta_minuscula
-        or "conectarte con un asesor" in respuesta_minuscula
-        or "pasarte con un asesor" in respuesta_minuscula
-        or "contactar con un asesor" in respuesta_minuscula
-    ):
-        conversacion.modo = "BOT"
-        conversacion.estado = "ESPERANDO_CONFIRMACION_ASESOR"
+    if "[ASESOR]" in respuesta_mayuscula:
+
+        # Avisar inmediatamente al asesor
+        avisar_asesor(
+            f"🚨 CLIENTE REQUIERE ATENCIÓN HUMANA\n\n"
+            f"Cliente WhatsApp: {numero}\n"
+            f"Mensaje recibido: {texto_original}\n\n"
+            f"OpenAI no pudo responder con seguridad.\n"
+            f"Responder lo antes posible."
+        )
+
+        # Pasar la conversación directamente a modo humano
+        conversacion.modo = "HUMANO"
+        conversacion.estado = "ASESOR"
         conversacion.save()
 
-        enviar_whatsapp_texto_y_guardar(
-            numero,
-            "No cuento con la información suficiente para ayudarte.\n\n"
-            "Si deseas que un asesor de Óptica IC continúe la conversación, "
-            "responde *Sí*."
-        )
+        # IMPORTANTE:
+        # No enviar ningún mensaje automático al cliente.
+        # Tampoco enviar [ASESOR].
         return
 
     # ==========================================================
