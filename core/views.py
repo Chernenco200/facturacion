@@ -3522,9 +3522,16 @@ def seguimiento_whatsapp(request):
         ts_entregado__date__lte=control_hasta,
         ticket__cliente__Edad__lt=18,
         ticket__cliente__telefono__isnull=False,
+
+        # No mostrar controles enviados o eliminados manualmente
+        control_menor_enviado=False,
+
     ).filter(
         Q(fecha_ultimo_control_menor__isnull=True) |
-        Q(fecha_ultimo_control_menor__lte=hoy - relativedelta(months=6))
+        Q(
+            fecha_ultimo_control_menor__lte=
+            hoy - relativedelta(months=6)
+        )
     ).exclude(
         ticket__cliente__telefono=""
     ).order_by("-ts_entregado")
@@ -3637,10 +3644,15 @@ def eliminar_encuesta_manual(request, orden_id):
 def eliminar_control_menor_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
-    orden.control_menor_enviado = True
-    orden.save()
+    if request.method == "POST":
+        orden.control_menor_enviado = True
+        orden.save(update_fields=["control_menor_enviado"])
 
-    messages.success(request, "Encuesta eliminada de la lista.")
+        messages.success(
+            request,
+            "Control eliminado de la lista."
+        )
+
     return redirect("seguimiento_whatsapp")
 
 @login_required
