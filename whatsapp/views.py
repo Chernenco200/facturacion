@@ -461,8 +461,16 @@ def responder_mensaje(numero, texto):
     
 
 @csrf_exempt
+
+
 def whatsapp_webhook(request):
+
+    # ==========================================================
+    # 1. VERIFICACIÓN DEL WEBHOOK DE META
+    # ==========================================================
+
     if request.method == "GET":
+
         mode = request.GET.get("hub.mode")
         token = request.GET.get("hub.verify_token")
         challenge = request.GET.get("hub.challenge")
@@ -470,242 +478,477 @@ def whatsapp_webhook(request):
         if mode == "subscribe" and token == VERIFY_TOKEN:
             return HttpResponse(challenge)
 
-        return HttpResponse("Token inválido", status=403)
+        return HttpResponse(
+            "Token inválido",
+            status=403
+        )
+
+    # ==========================================================
+    # 2. RECEPCIÓN DE EVENTOS DE WHATSAPP
+    # ==========================================================
 
     if request.method == "POST":
+
         try:
-            data = json.loads(request.body.decode("utf-8"))
+
+            data = json.loads(
+                request.body.decode("utf-8")
+            )
 
             print("===================================")
             print("WHATSAPP RECIBIDO")
             print(data)
             print("===================================")
 
-            value = data["entry"][0]["changes"][0]["value"]
+            # ==================================================
+            # RECORRER TODAS LAS ENTRADAS Y CAMBIOS
+            # ==================================================
 
-            # =====================================================
-            # 1. ESTADOS DE MENSAJES SALIENTES
-            # sent / delivered / read / failed
-            # =====================================================
+            for entry in data.get("entry", []):
 
-            statuses = value.get("statuses", [])
+                for change in entry.get("changes", []):
 
-            for status_data in statuses:
+                    value = change.get("value", {})
 
-                wa_message_id = status_data.get("id")
-                status_meta = status_data.get("status")
+                    # ==========================================
+                    # 3. ACTUALIZAR ESTADOS DE MENSAJES SALIENTES
+                    # ==========================================
 
-                print("-----------------------------------")
-                print("ESTADO WHATSAPP RECIBIDO")
-                print("WA_MESSAGE_ID:", wa_message_id)
-                print("STATUS META:", status_meta)
-                print("-----------------------------------")
+                    statuses = value.get("statuses", [])
 
-                mapa_estados = {
-                    "sent": "ENVIADO",
-                    "delivered": "ENTREGADO",
-                    "read": "LEIDO",
-                    "failed": "FALLIDO",
-                }
+                    mapa_estados = {
+                        "sent": "ENVIADO",
+                        "delivered": "ENTREGADO",
+                        "read": "LEIDO",
+                        "failed": "FALLIDO",
+                    }
 
-                nuevo_estado = mapa_estados.get(status_meta)
+                    # Jerarquía de estados exitosos.
+                    # Evita que una notificación retrasada
+                    # haga retroceder el estado del mensaje.
 
-                if wa_message_id and nuevo_estado:
+                    prioridad_estados = {
+                        "PENDIENTE": 0,
+                        "ENVIADO": 1,
+                        "ENTREGADO": 2,
+                        "LEIDO": 3,
+                    }
 
-                    mensaje_saliente = (
-                        MensajeWhatsApp.objects
-                        .filter(
-                            wa_message_id=wa_message_id,
-                            tipo="SALIENTE",
-                        )
-                        .first()
-                    )
+                    for status_data in statuses:
 
-                    if mensaje_saliente:
+                        wa_message_id = status_data.get("id")
+                        status_meta = status_data.get("status")
 
-                        mensaje_saliente.estado = nuevo_estado
-
-                        if nuevo_estado == "LEIDO":
-                            mensaje_saliente.leido = True
-
-                        mensaje_saliente.save(
-                            update_fields=[
-                                "estado",
-                                "leido",
-                            ]
+                        nuevo_estado = mapa_estados.get(
+                            status_meta
                         )
 
-                        print(
-                            "ESTADO ACTUALIZADO:",
-                            wa_message_id,
-                            "->",
-                            nuevo_estado,
+                        print("-----------------------------------")
+                        print("ESTADO WHATSAPP RECIBIDO")
+                        print("WA_MESSAGE_ID:", wa_message_id)
+                        print("STATUS META:", status_meta)
+                        print("-----------------------------------")
+
+                        if not wa_message_id or not nuevo_estado:
+                            continue
+
+                        # --------------------------------------
+                        # TRATAMIENTO DE ESTADO FALLIDO
+                        # --------------------------------------
+
+                        if nuevo_estado == "FALLIDO":
+
+                            # No sustituimos un estado de entrega
+                            # o lectura ya confirmado por FALLIDO.
+
+                            actualizados = (
+                                MensajeWhatsApp.objects
+                                .filter(
+                                    wa_message_id=wa_message_id,
+                                    tipo="SALIENTE",
+                                    estado__in=[
+                                        "PENDIENTE",
+                                        "ENVIADO",
+                                    ],
+                                )
+                                .update(
+                                    estado="FALLIDO",
+                                )
+                            )
+
+                            if actualizados:
+
+                                print(
+                                    "ESTADO ACTUALIZADO:",
+                                    wa_message_id,
+                                    "-> FALLIDO"
+                                )
+
+                            else:
+
+                                print(
+                                    "ESTADO FALLIDO NO APLICADO:",
+                                    wa_message_id
+                                )
+
+                            errores = status_data.get(
+                                "errors",
+                                []
+                            )
+
+                            if errores:
+                                print(
+                                    "DETALLE ERROR META:",
+                                    errores
+                                )
+
+                            continue
+
+                        # --------------------------------------
+                        # ACTUALIZAR SOLO SI EL ESTADO AVANZA
+                        # --------------------------------------
+
+                        prioridad_nueva = (
+                            prioridad_estados[nuevo_estado]
                         )
 
-                    else:
-                        print(
-                            "NO SE ENCONTRÓ MENSAJE SALIENTE:",
-                            wa_message_id,
+                        estados_anteriores = [
+                            estado
+                            for estado, prioridad
+                            in prioridad_estados.items()
+                            if prioridad < prioridad_nueva
+                        ]
+
+                        actualizados = (
+                            MensajeWhatsApp.objects
+                            .filter(
+                                wa_message_id=wa_message_id,
+                                tipo="SALIENTE",
+                                estado__in=estados_anteriores,
+                            )
+                            .update(
+                                estado=nuevo_estado,
+                                leido=(
+                                    nuevo_estado == "LEIDO"
+                                ),
+                            )
                         )
 
-            # =====================================================
-            # 2. MENSAJES ENTRANTES
-            # =====================================================
+                        if actualizados:
 
-            messages = value.get("messages", [])
-            contacts = value.get("contacts", [])
+                            print(
+                                "ESTADO ACTUALIZADO:",
+                                wa_message_id,
+                                "->",
+                                nuevo_estado,
+                            )
 
-            nombre_contacto = ""
-
-            if contacts:
-                nombre_contacto = (
-                    contacts[0]
-                    .get("profile", {})
-                    .get("name", "")
-                )
-
-            if messages:
-                message = messages[0]
-
-                numero = normalizar_numero(
-                    message["from"]
-                )
-
-                tipo = message.get("type")
-                message_id = message.get("id")
-
-                conversacion, created = (
-                    ConversacionWhatsApp.objects
-                    .get_or_create(
-                        numero=numero,
-                        defaults={
-                            "modo": "BOT",
-                            "estado": "INICIO",
-                        }
-                    )
-                )
-
-                # =============================================
-                # TEXTO
-                # =============================================
-
-                if tipo == "text":
-                    texto = message["text"]["body"]
-
-                    MensajeWhatsApp.objects.create(
-                        numero=numero,
-                        nombre=nombre_contacto,
-                        tipo="ENTRANTE",
-                        mensaje=texto,
-                        wa_message_id=message_id,
-                    )
-
-                    if conversacion.modo == "BOT":
-                        responder_mensaje(
-                            numero,
-                            texto
-                        )
-                    else:
-                        print(
-                            "Conversación en modo HUMANO. "
-                            "El bot no responde."
-                        )
-
-                # =============================================
-                # IMAGEN
-                # =============================================
-
-                elif tipo == "image":
-                    datos_imagen = message.get(
-                        "image",
-                        {}
-                    )
-
-                    media_id = datos_imagen.get("id")
-                    caption = datos_imagen.get(
-                        "caption",
-                        ""
-                    )
-
-                    mime_type = datos_imagen.get(
-                        "mime_type",
-                        "image/jpeg"
-                    )
-
-                    media_descargado = (
-                        descargar_media_whatsapp(
-                            media_id
-                        )
-                    )
-
-                    if media_descargado:
-
-                        if mime_type == "image/png":
-                            extension = ".png"
                         else:
-                            extension = ".jpg"
 
-                        nombre_archivo = (
-                            f"imagen_{message_id}"
-                            f"{extension}"
+                            mensaje_actual = (
+                                MensajeWhatsApp.objects
+                                .filter(
+                                    wa_message_id=wa_message_id,
+                                    tipo="SALIENTE",
+                                )
+                                .first()
+                            )
+
+                            if mensaje_actual:
+
+                                print(
+                                    "ESTADO CONSERVADO:",
+                                    wa_message_id,
+                                    "ACTUAL:",
+                                    mensaje_actual.estado,
+                                    "RECIBIDO:",
+                                    nuevo_estado,
+                                )
+
+                            else:
+
+                                print(
+                                    "NO SE ENCONTRÓ MENSAJE "
+                                    "SALIENTE:",
+                                    wa_message_id,
+                                )
+
+                    # ==========================================
+                    # 4. PROCESAR MENSAJES ENTRANTES
+                    # ==========================================
+
+                    messages = value.get("messages", [])
+                    contacts = value.get("contacts", [])
+
+                    nombres_contactos = {}
+
+                    for contacto in contacts:
+
+                        numero_contacto = contacto.get(
+                            "wa_id"
                         )
 
-                        mensaje_imagen = MensajeWhatsApp(
-                            numero=numero,
-                            nombre=nombre_contacto,
-                            tipo="ENTRANTE",
-                            mensaje=(
-                                caption
-                                if caption
-                                else "Imagen recibida"
-                            ),
-                            wa_message_id=message_id,
+                        nombre_contacto = (
+                            contacto
+                            .get("profile", {})
+                            .get("name", "")
                         )
 
-                        mensaje_imagen.archivo.save(
-                            nombre_archivo,
-                            ContentFile(
-                                media_descargado[
-                                    "contenido"
-                                ]
-                            ),
-                            save=False,
+                        if numero_contacto:
+
+                            nombres_contactos[
+                                numero_contacto
+                            ] = nombre_contacto
+
+                    # ==========================================
+                    # RECORRER TODOS LOS MENSAJES
+                    # ==========================================
+
+                    for message in messages:
+
+                        numero_original = message.get(
+                            "from",
+                            ""
                         )
 
-                        mensaje_imagen.save()
+                        if not numero_original:
 
-                        print(
-                            "IMAGEN RECIBIDA Y GUARDADA:",
-                            nombre_archivo,
+                            print(
+                                "MENSAJE SIN NÚMERO. "
+                                "SE IGNORA."
+                            )
+
+                            continue
+
+                        numero = normalizar_numero(
+                            numero_original
                         )
 
-                    else:
+                        if not numero:
 
-                        MensajeWhatsApp.objects.create(
-                            numero=numero,
-                            nombre=nombre_contacto,
-                            tipo="ENTRANTE",
-                            mensaje=(
-                                "Se recibió una imagen, "
-                                "pero no se pudo descargar."
-                            ),
-                            wa_message_id=message_id,
+                            print(
+                                "NÚMERO INVÁLIDO:",
+                                numero_original
+                            )
+
+                            continue
+
+                        tipo = message.get("type")
+
+                        message_id = message.get("id")
+
+                        nombre_contacto = (
+                            nombres_contactos.get(
+                                numero_original,
+                                ""
+                            )
                         )
 
-                        print(
-                            "NO SE PUDO DESCARGAR "
-                            "LA IMAGEN"
+                        # --------------------------------------
+                        # EVITAR MENSAJES DUPLICADOS
+                        # --------------------------------------
+
+                        if message_id:
+
+                            ya_registrado = (
+                                MensajeWhatsApp.objects
+                                .filter(
+                                    wa_message_id=message_id,
+                                    tipo="ENTRANTE",
+                                )
+                                .exists()
+                            )
+
+                            if ya_registrado:
+
+                                print(
+                                    "MENSAJE DUPLICADO IGNORADO:",
+                                    message_id
+                                )
+
+                                continue
+
+                        # --------------------------------------
+                        # OBTENER CONVERSACIÓN
+                        # --------------------------------------
+
+                        conversacion, created = (
+                            ConversacionWhatsApp.objects
+                            .get_or_create(
+                                numero=numero,
+                                defaults={
+                                    "modo": "BOT",
+                                    "estado": "INICIO",
+                                },
+                            )
                         )
+
+                        # ======================================
+                        # 5. MENSAJE DE TEXTO
+                        # ======================================
+
+                        if tipo == "text":
+
+                            texto = (
+                                message
+                                .get("text", {})
+                                .get("body", "")
+                            )
+
+                            MensajeWhatsApp.objects.create(
+                                numero=numero,
+                                nombre=nombre_contacto,
+                                tipo="ENTRANTE",
+                                mensaje=texto,
+                                wa_message_id=message_id,
+                            )
+
+                            print(
+                                "MENSAJE ENTRANTE GUARDADO:",
+                                message_id
+                            )
+
+                            # Mantener separación BOT/HUMANO
+
+                            if conversacion.modo == "BOT":
+
+                                responder_mensaje(
+                                    numero,
+                                    texto
+                                )
+
+                            else:
+
+                                print(
+                                    "Conversación en modo HUMANO. "
+                                    "El bot no responde."
+                                )
+
+                        # ======================================
+                        # 6. MENSAJE DE IMAGEN
+                        # ======================================
+
+                        elif tipo == "image":
+
+                            datos_imagen = message.get(
+                                "image",
+                                {}
+                            )
+
+                            media_id = datos_imagen.get(
+                                "id"
+                            )
+
+                            caption = datos_imagen.get(
+                                "caption",
+                                ""
+                            )
+
+                            mime_type = datos_imagen.get(
+                                "mime_type",
+                                "image/jpeg"
+                            )
+
+                            media_descargado = None
+
+                            if media_id:
+
+                                media_descargado = (
+                                    descargar_media_whatsapp(
+                                        media_id
+                                    )
+                                )
+
+                            # ----------------------------------
+                            # IMAGEN DESCARGADA CORRECTAMENTE
+                            # ----------------------------------
+
+                            if media_descargado:
+
+                                if mime_type == "image/png":
+                                    extension = ".png"
+
+                                elif mime_type == "image/webp":
+                                    extension = ".webp"
+
+                                else:
+                                    extension = ".jpg"
+
+                                nombre_archivo = (
+                                    f"imagen_{message_id}"
+                                    f"{extension}"
+                                )
+
+                                mensaje_imagen = (
+                                    MensajeWhatsApp(
+                                        numero=numero,
+                                        nombre=nombre_contacto,
+                                        tipo="ENTRANTE",
+                                        mensaje=(
+                                            caption
+                                            if caption
+                                            else "Imagen recibida"
+                                        ),
+                                        wa_message_id=message_id,
+                                    )
+                                )
+
+                                mensaje_imagen.archivo.save(
+                                    nombre_archivo,
+                                    ContentFile(
+                                        media_descargado[
+                                            "contenido"
+                                        ]
+                                    ),
+                                    save=False,
+                                )
+
+                                mensaje_imagen.save()
+
+                                print(
+                                    "IMAGEN RECIBIDA Y GUARDADA:",
+                                    nombre_archivo
+                                )
+
+                            # ----------------------------------
+                            # ERROR DESCARGANDO IMAGEN
+                            # ----------------------------------
+
+                            else:
+
+                                MensajeWhatsApp.objects.create(
+                                    numero=numero,
+                                    nombre=nombre_contacto,
+                                    tipo="ENTRANTE",
+                                    mensaje=(
+                                        "Se recibió una imagen, "
+                                        "pero no se pudo descargar."
+                                    ),
+                                    wa_message_id=message_id,
+                                )
+
+                                print(
+                                    "NO SE PUDO DESCARGAR "
+                                    "LA IMAGEN:",
+                                    message_id
+                                )
 
         except Exception as e:
-            print("ERROR WEBHOOK:", e)
 
-        return JsonResponse({"status": "ok"})
+            print(
+                "ERROR WEBHOOK:",
+                repr(e)
+            )
+
+        return JsonResponse({
+            "status": "ok"
+        })
 
     return HttpResponse(
         "Método no permitido",
         status=405
     )
+
 
 
 @csrf_exempt
