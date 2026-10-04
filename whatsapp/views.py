@@ -483,26 +483,111 @@ def whatsapp_webhook(request):
 
             value = data["entry"][0]["changes"][0]["value"]
 
+            # =====================================================
+            # 1. ESTADOS DE MENSAJES SALIENTES
+            # sent / delivered / read / failed
+            # =====================================================
+
+            statuses = value.get("statuses", [])
+
+            for status_data in statuses:
+
+                wa_message_id = status_data.get("id")
+                status_meta = status_data.get("status")
+
+                print("-----------------------------------")
+                print("ESTADO WHATSAPP RECIBIDO")
+                print("WA_MESSAGE_ID:", wa_message_id)
+                print("STATUS META:", status_meta)
+                print("-----------------------------------")
+
+                mapa_estados = {
+                    "sent": "ENVIADO",
+                    "delivered": "ENTREGADO",
+                    "read": "LEIDO",
+                    "failed": "FALLIDO",
+                }
+
+                nuevo_estado = mapa_estados.get(status_meta)
+
+                if wa_message_id and nuevo_estado:
+
+                    mensaje_saliente = (
+                        MensajeWhatsApp.objects
+                        .filter(
+                            wa_message_id=wa_message_id,
+                            tipo="SALIENTE",
+                        )
+                        .first()
+                    )
+
+                    if mensaje_saliente:
+
+                        mensaje_saliente.estado = nuevo_estado
+
+                        if nuevo_estado == "LEIDO":
+                            mensaje_saliente.leido = True
+
+                        mensaje_saliente.save(
+                            update_fields=[
+                                "estado",
+                                "leido",
+                            ]
+                        )
+
+                        print(
+                            "ESTADO ACTUALIZADO:",
+                            wa_message_id,
+                            "->",
+                            nuevo_estado,
+                        )
+
+                    else:
+                        print(
+                            "NO SE ENCONTRÓ MENSAJE SALIENTE:",
+                            wa_message_id,
+                        )
+
+            # =====================================================
+            # 2. MENSAJES ENTRANTES
+            # =====================================================
+
             messages = value.get("messages", [])
             contacts = value.get("contacts", [])
 
             nombre_contacto = ""
+
             if contacts:
-                nombre_contacto = contacts[0].get("profile", {}).get("name", "")
+                nombre_contacto = (
+                    contacts[0]
+                    .get("profile", {})
+                    .get("name", "")
+                )
 
             if messages:
                 message = messages[0]
-                numero = normalizar_numero(message["from"])
+
+                numero = normalizar_numero(
+                    message["from"]
+                )
+
                 tipo = message.get("type")
                 message_id = message.get("id")
 
-                conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-                    numero=numero,
-                    defaults={
-                        "modo": "BOT",
-                        "estado": "INICIO",
-                    }
+                conversacion, created = (
+                    ConversacionWhatsApp.objects
+                    .get_or_create(
+                        numero=numero,
+                        defaults={
+                            "modo": "BOT",
+                            "estado": "INICIO",
+                        }
+                    )
                 )
+
+                # =============================================
+                # TEXTO
+                # =============================================
 
                 if tipo == "text":
                     texto = message["text"]["body"]
@@ -516,63 +601,111 @@ def whatsapp_webhook(request):
                     )
 
                     if conversacion.modo == "BOT":
-                        responder_mensaje(numero, texto)
+                        responder_mensaje(
+                            numero,
+                            texto
+                        )
                     else:
-                        print("Conversación en modo HUMANO. El bot no responde.")
+                        print(
+                            "Conversación en modo HUMANO. "
+                            "El bot no responde."
+                        )
+
+                # =============================================
+                # IMAGEN
+                # =============================================
 
                 elif tipo == "image":
-                    datos_imagen = message.get("image", {})
+                    datos_imagen = message.get(
+                        "image",
+                        {}
+                    )
 
                     media_id = datos_imagen.get("id")
-                    caption = datos_imagen.get("caption", "")
-                    mime_type = datos_imagen.get("mime_type", "image/jpeg")
+                    caption = datos_imagen.get(
+                        "caption",
+                        ""
+                    )
 
-                    media_descargado = descargar_media_whatsapp(media_id)
+                    mime_type = datos_imagen.get(
+                        "mime_type",
+                        "image/jpeg"
+                    )
+
+                    media_descargado = (
+                        descargar_media_whatsapp(
+                            media_id
+                        )
+                    )
 
                     if media_descargado:
+
                         if mime_type == "image/png":
                             extension = ".png"
                         else:
                             extension = ".jpg"
 
-                        nombre_archivo = f"imagen_{message_id}{extension}"
+                        nombre_archivo = (
+                            f"imagen_{message_id}"
+                            f"{extension}"
+                        )
 
                         mensaje_imagen = MensajeWhatsApp(
                             numero=numero,
                             nombre=nombre_contacto,
                             tipo="ENTRANTE",
-                            mensaje=caption if caption else "Imagen recibida",
+                            mensaje=(
+                                caption
+                                if caption
+                                else "Imagen recibida"
+                            ),
                             wa_message_id=message_id,
                         )
 
                         mensaje_imagen.archivo.save(
                             nombre_archivo,
-                            ContentFile(media_descargado["contenido"]),
+                            ContentFile(
+                                media_descargado[
+                                    "contenido"
+                                ]
+                            ),
                             save=False,
                         )
 
                         mensaje_imagen.save()
 
-                        print("IMAGEN RECIBIDA Y GUARDADA:", nombre_archivo)
+                        print(
+                            "IMAGEN RECIBIDA Y GUARDADA:",
+                            nombre_archivo,
+                        )
 
                     else:
+
                         MensajeWhatsApp.objects.create(
                             numero=numero,
                             nombre=nombre_contacto,
                             tipo="ENTRANTE",
-                            mensaje="Se recibió una imagen, pero no se pudo descargar.",
+                            mensaje=(
+                                "Se recibió una imagen, "
+                                "pero no se pudo descargar."
+                            ),
                             wa_message_id=message_id,
                         )
 
-                        print("NO SE PUDO DESCARGAR LA IMAGEN")
-
+                        print(
+                            "NO SE PUDO DESCARGAR "
+                            "LA IMAGEN"
+                        )
 
         except Exception as e:
             print("ERROR WEBHOOK:", e)
 
         return JsonResponse({"status": "ok"})
 
-    return HttpResponse("Método no permitido", status=405)
+    return HttpResponse(
+        "Método no permitido",
+        status=405
+    )
 
 
 @csrf_exempt

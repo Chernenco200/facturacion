@@ -39,18 +39,17 @@ def normalizar_numero(numero):
 
     return numero
 
-def enviar_whatsapp_texto(numero, mensaje):
+def enviar_whatsapp_texto(numero, mensaje, devolver_id=False):
     access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
 
-    # Guardamos el número tal como llega a la función
     numero_original = numero
 
     try:
         numero = normalizar_numero(numero)
     except ValueError as e:
         print("ERROR NÚMERO:", e)
-        return False
+        return None if devolver_id else False
 
     print("===================================")
     print("ENVIANDO MENSAJE WHATSAPP")
@@ -61,12 +60,11 @@ def enviar_whatsapp_texto(numero, mensaje):
 
     if not numero:
         print("ERROR: número vacío")
-        return False
+        return None if devolver_id else False
 
-    # Validación adicional
     if not (numero.startswith("51") and len(numero) == 11):
         print(f"ERROR: número inválido -> {numero}")
-        return False
+        return None if devolver_id else False
 
     url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
 
@@ -84,18 +82,46 @@ def enviar_whatsapp_texto(numero, mensaje):
         }
     }
 
-    # Esto muestra exactamente el JSON que se envía a Meta
     print("JSON ENVIADO A META:", data)
 
-    response = requests.post(url, headers=headers, json=data)
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json=data,
+            timeout=30,
+        )
 
-    print("WHATSAPP STATUS:", response.status_code)
-    print("WHATSAPP RESPUESTA:", response.text)
+        print("WHATSAPP STATUS:", response.status_code)
+        print("WHATSAPP RESPUESTA:", response.text)
 
-    return response.status_code in [200, 201]
+        if response.status_code not in [200, 201]:
+            return None if devolver_id else False
+
+        respuesta = response.json()
+
+        wa_message_id = (
+            respuesta.get("messages", [{}])[0].get("id")
+        )
+
+        print("WA_MESSAGE_ID:", wa_message_id)
+
+        if devolver_id:
+            return wa_message_id
+
+        return True
+
+    except Exception as e:
+        print("ERROR ENVIANDO WHATSAPP:", e)
+        return None if devolver_id else False
 
 
-def enviar_whatsapp_template(numero, template_name, parametros):
+def enviar_whatsapp_template(
+    numero,
+    template_name,
+    parametros,
+    devolver_id=False
+):
     access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
     phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
 
@@ -103,7 +129,7 @@ def enviar_whatsapp_template(numero, template_name, parametros):
         numero = normalizar_numero(numero)
     except ValueError as e:
         print("ERROR NÚMERO TEMPLATE:", e)
-        return False
+        return None if devolver_id else False
 
     url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
 
@@ -125,7 +151,10 @@ def enviar_whatsapp_template(numero, template_name, parametros):
                 {
                     "type": "body",
                     "parameters": [
-                        {"type": "text", "text": str(p)}
+                        {
+                            "type": "text",
+                            "text": str(p)
+                        }
                         for p in parametros
                     ]
                 }
@@ -133,14 +162,38 @@ def enviar_whatsapp_template(numero, template_name, parametros):
         }
     }
 
-    response = requests.post(url, headers=headers, json=data)
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json=data,
+            timeout=30,
+        )
 
-    print("TEMPLATE:", template_name)
-    print("NUMERO TEMPLATE:", numero)
-    print("STATUS TEMPLATE:", response.status_code)
-    print("RESPUESTA TEMPLATE:", response.text)
+        print("TEMPLATE:", template_name)
+        print("NUMERO TEMPLATE:", numero)
+        print("STATUS TEMPLATE:", response.status_code)
+        print("RESPUESTA TEMPLATE:", response.text)
 
-    return response.status_code in [200, 201]
+        if response.status_code not in [200, 201]:
+            return None if devolver_id else False
+
+        respuesta = response.json()
+
+        wa_message_id = (
+            respuesta.get("messages", [{}])[0].get("id")
+        )
+
+        print("WA_MESSAGE_ID TEMPLATE:", wa_message_id)
+
+        if devolver_id:
+            return wa_message_id
+
+        return True
+
+    except Exception as e:
+        print("ERROR ENVIANDO TEMPLATE:", e)
+        return None if devolver_id else False
 
 def avisar_asesor(mensaje):
     numero_asesor = os.environ.get("NUMERO_ASESOR_WHATSAPP")
@@ -290,49 +343,80 @@ def enviar_encuesta_7_dias(orden):
         print("Cliente sin teléfono. No se envía WhatsApp.")
         return False
 
-    mensaje = (
+    # ==========================================================
+    # TEXTO DEL TEMPLATE PARA MOSTRAR EN LA BANDEJA
+    # Debe coincidir con el template aprobado en Meta
+    # ==========================================================
+    mensaje_template = (
         f"Hola {cliente.nombre} 😊\n\n"
         f"Esperamos que estés disfrutando tus nuevos lentes de Óptica IC.\n\n"
         f"Podrías confirmarnos con un like si todo va bien\n\n"
     )
 
-    if cliente_esta_en_ventana_servicio(cliente.telefono):
-        enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
-    else:
-        enviado = enviar_whatsapp_template(
-            numero=cliente.telefono,
-            template_name="encuesta_7_dias",
-            parametros=[cliente.nombre],
-        )
+    # ==========================================================
+    # SIEMPRE ENVIAR TEMPLATE
+    # ==========================================================
+    wa_message_id = enviar_whatsapp_template(
+        numero=cliente.telefono,
+        template_name="encuesta_7_dias",
+        parametros=[
+            cliente.nombre,
+        ],
+        devolver_id=True,
+    )
 
-    if enviado:
+    # ==========================================================
+    # META ACEPTÓ EL MENSAJE
+    # ==========================================================
+    if wa_message_id:
+
         MensajeWhatsApp.objects.create(
             numero=cliente.telefono,
-            tipo="BOT",
-            mensaje=mensaje,
+            nombre=cliente.nombre,
+            tipo="SALIENTE",
+            mensaje=mensaje_template,
+            wa_message_id=wa_message_id,
+            estado="ENVIADO",
         )
 
+        # Crear conversación si todavía no existe.
+        # NO cambiamos HUMANO a BOT si ya existe.
         conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-            numero=cliente.telefono,
+            numero=normalizar_numero(cliente.telefono),
             defaults={
                 "modo": "BOT",
                 "estado": "ESPERANDO_ENCUESTA",
             }
         )
 
-        conversacion.modo = "BOT"
-        conversacion.estado = "ESPERANDO_ENCUESTA"
-        conversacion.save()
+        if not created:
+            conversacion.estado = "ESPERANDO_ENCUESTA"
+            conversacion.save(update_fields=["estado"])
 
-    return enviado
+        print(
+            "ENCUESTA GUARDADA:",
+            wa_message_id
+        )
+
+        return True
+
+    print("NO SE PUDO ENVIAR ENCUESTA")
+    return False
 
 def enviar_control_menor_6_meses(orden):
     ticket = orden.ticket
     cliente = ticket.cliente
 
+    # ==========================================================
+    # VALIDAR CLIENTE Y TELÉFONO
+    # ==========================================================
     if not cliente or not cliente.telefono:
+        print("Cliente sin teléfono. No se envía control de 6 meses.")
         return False
 
+    # ==========================================================
+    # TEXTO QUE MOSTRAREMOS EN NUESTRA BANDEJA
+    # ==========================================================
     mensaje = (
         f"Hola {cliente.nombre} 😊\n\n"
         f"Te recordamos que hoy se cumplen 6 meses desde que adquiriste lentes con nosotros.\n\n"
@@ -342,23 +426,51 @@ def enviar_control_menor_6_meses(orden):
         f"Innovación y Calidad"
     )
 
-    if cliente_esta_en_ventana_servicio(cliente.telefono):
-        enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
-    else:
-        enviado = enviar_whatsapp_template(
-            numero=cliente.telefono,
-            template_name="control_6_meses",
-            parametros=[cliente.nombre],
-        )
+    # ==========================================================
+    # SIEMPRE ENVIAR TEMPLATE
+    # ==========================================================
+    wa_message_id = enviar_whatsapp_template(
+        numero=cliente.telefono,
+        template_name="control_6_meses",
+        parametros=[
+            cliente.nombre,
+        ],
+        devolver_id=True,
+    )
 
-    if enviado:
+    # ==========================================================
+    # META ACEPTÓ EL MENSAJE
+    # ==========================================================
+    if wa_message_id:
+
         MensajeWhatsApp.objects.create(
             numero=cliente.telefono,
-            tipo="BOT",
+            nombre=cliente.nombre,
+            tipo="SALIENTE",
             mensaje=mensaje,
+            wa_message_id=wa_message_id,
+            estado="ENVIADO",
         )
 
-    return enviado
+        print("===================================")
+        print("CONTROL 6 MESES ENVIADO")
+        print("CLIENTE:", cliente.nombre)
+        print("TELEFONO:", cliente.telefono)
+        print("WA_MESSAGE_ID:", wa_message_id)
+        print("===================================")
+
+        return True
+
+    # ==========================================================
+    # ERROR
+    # ==========================================================
+    print("===================================")
+    print("NO SE PUDO ENVIAR CONTROL 6 MESES")
+    print("CLIENTE:", cliente.nombre)
+    print("TELEFONO:", cliente.telefono)
+    print("===================================")
+
+    return False
 
 def enviar_renovacion_anual(orden):
     ticket = orden.ticket
@@ -668,14 +780,18 @@ def nombre_corto_cliente(nombre_completo):
 
 
 def enviar_reactivacion(cliente):
+
+    print("===================================")
     print("=== ENVIAR REACTIVACIÓN ===")
     print("CLIENTE ID:", cliente.id if cliente else None)
     print("CLIENTE:", cliente.nombre if cliente else None)
     print("TELÉFONO:", cliente.telefono if cliente else None)
+    print("===================================")
 
     # ==========================================================
     # 1. VALIDACIONES
     # ==========================================================
+
     if not cliente or not cliente.telefono:
         print("Cliente sin teléfono. No se envía WhatsApp.")
         return False
@@ -684,29 +800,43 @@ def enviar_reactivacion(cliente):
         print("Cliente excluido de reactivaciones.")
         return False
 
+    # Normalizar teléfono para que coincida con la bandeja
+    try:
+        numero = normalizar_numero(cliente.telefono)
+
+    except ValueError as e:
+        print("ERROR NORMALIZANDO TELÉFONO:", e)
+        return False
+
     # ==========================================================
-    # 2. NOMBRE CORTO
+    # 2. NOMBRE CORTO DEL CLIENTE
     # ==========================================================
+
     nombre = nombre_corto_cliente(cliente.nombre)
 
     # ==========================================================
-    # 3. CALCULAR LA MÁXIMA COMPRA DIARIA
+    # 3. CALCULAR MÁXIMA COMPRA EN UN MISMO DÍA
     # ==========================================================
+
     compras_por_dia = (
         TicketVenta.objects
         .filter(cliente=cliente)
         .values("fecha_emision")
-        .annotate(total_dia=Sum("total"))
+        .annotate(
+            total_dia=Sum("total")
+        )
         .order_by("-total_dia")
     )
 
     primera_compra = compras_por_dia.first()
 
     if primera_compra:
+
         maxima_compra_dia = (
             primera_compra.get("total_dia")
             or Decimal("0.00")
         )
+
     else:
         maxima_compra_dia = Decimal("0.00")
 
@@ -715,34 +845,39 @@ def enviar_reactivacion(cliente):
     # ==========================================================
     # 4. DETERMINAR CATEGORÍA
     # ==========================================================
+
     if maxima_compra_dia >= Decimal("800"):
         categoria = "BLUE"
+
     elif maxima_compra_dia >= Decimal("300"):
         categoria = "BLACK"
+
     elif maxima_compra_dia >= Decimal("150"):
         categoria = "RED"
+
     elif maxima_compra_dia >= Decimal("100"):
         categoria = "WHITE"
+
     else:
         categoria = "BROWN"
 
+    es_premium = categoria in ["BLUE", "BLACK"]
+
     print("CATEGORÍA:", categoria)
-
-    # Premium: BLUE y BLACK
-    es_premium = categoria in {
-        "BLUE",
-        "BLACK",
-    }
-
     print("ES PREMIUM:", es_premium)
 
     # ==========================================================
-    # 5. ELEGIR PLANTILLA Y MENSAJE
+    # 5. SELECCIONAR TEMPLATE
     # ==========================================================
+
     if es_premium:
+
         template_name = "reactivar_cliente_premium"
 
-        mensaje = (
+        # IMPORTANTE:
+        # Este texto debe coincidir con el template aprobado en Meta.
+
+        mensaje_template = (
             f"Hola {nombre} 😊\n\n"
             f"Eres uno de nuestros clientes premium de Óptica IC y "
             f"queremos seguir acompañándote en el cuidado de tu salud "
@@ -756,9 +891,13 @@ def enviar_reactivacion(cliente):
         )
 
     else:
+
         template_name = "reactivacion_clientes"
 
-        mensaje = (
+        # IMPORTANTE:
+        # Este texto debe coincidir con el template aprobado en Meta.
+
+        mensaje_template = (
             f"Hola {nombre} 😊\n\n"
             f"En Óptica IC queremos seguir acompañándote en el cuidado "
             f"de tu salud visual.\n\n"
@@ -770,51 +909,66 @@ def enviar_reactivacion(cliente):
             f"Innovación y Calidad"
         )
 
-    print("PLANTILLA:", template_name)
+    print("PLANTILLA SELECCIONADA:", template_name)
 
     # ==========================================================
-    # 6. ENVIAR TEXTO O PLANTILLA
+    # 6. SIEMPRE ENVIAR TEMPLATE
     # ==========================================================
-    if cliente_esta_en_ventana_servicio(cliente.telefono):
-        print("Cliente dentro de la ventana de servicio.")
 
-        enviado = enviar_whatsapp_texto(
-            cliente.telefono,
-            mensaje,
-        )
-    else:
-        print("Cliente fuera de la ventana de servicio.")
-
-        enviado = enviar_whatsapp_template(
-            numero=cliente.telefono,
-            template_name=template_name,
-            parametros=[nombre],
-        )
+    wa_message_id = enviar_whatsapp_template(
+        numero=numero,
+        template_name=template_name,
+        parametros=[
+            nombre,
+        ],
+        devolver_id=True,
+    )
 
     # ==========================================================
-    # 7. VERIFICAR ENVÍO
+    # 7. VERIFICAR RESPUESTA DE META
     # ==========================================================
-    if not enviado:
-        print("Meta no confirmó el envío de la reactivación.")
+
+    if not wa_message_id:
+
+        print("===================================")
+        print("ERROR ENVIANDO REACTIVACIÓN")
+        print("CLIENTE:", cliente.nombre)
+        print("TELÉFONO:", numero)
+        print("PLANTILLA:", template_name)
+        print("===================================")
+
         return False
 
-    print("Meta confirmó el envío.")
+    print("===================================")
+    print("META ACEPTÓ LA REACTIVACIÓN")
+    print("WA_MESSAGE_ID:", wa_message_id)
+    print("===================================")
 
     # ==========================================================
     # 8. REGISTRAR MENSAJE EN LA BANDEJA
     # ==========================================================
+
     MensajeWhatsApp.objects.create(
-        numero=cliente.telefono,
-        tipo="BOT",
-        mensaje=mensaje,
+        numero=numero,
+        nombre=cliente.nombre,
+        tipo="SALIENTE",
+        mensaje=mensaje_template,
+        wa_message_id=wa_message_id,
+        estado="ENVIADO",
+    )
+
+    print(
+        "MENSAJE GUARDADO EN BANDEJA:",
+        wa_message_id
     )
 
     # ==========================================================
-    # 9. CREAR O ACTUALIZAR CONVERSACIÓN
+    # 9. CREAR CONVERSACIÓN SIN ALTERAR BOT/HUMANO
     # ==========================================================
+
     conversacion, created = (
         ConversacionWhatsApp.objects.get_or_create(
-            numero=cliente.telefono,
+            numero=numero,
             defaults={
                 "modo": "BOT",
                 "estado": "INICIO",
@@ -822,38 +976,51 @@ def enviar_reactivacion(cliente):
         )
     )
 
-    conversacion.modo = "BOT"
-    conversacion.estado = "INICIO"
-    conversacion.save()
+    # IMPORTANTE:
+    # Si la conversación ya existe y está en HUMANO,
+    # permanece en HUMANO.
+    #
+    # No ejecutamos:
+    # conversacion.modo = "BOT"
+
+    print(
+        "MODO ACTUAL DE CONVERSACIÓN:",
+        conversacion.modo
+    )
 
     # ==========================================================
-    # 10. REGISTRAR TRACKING DE REACTIVACIÓN
+    # 10. REGISTRAR HISTORIAL DE REACTIVACIÓN
     # ==========================================================
+
     ReactivacionWhatsApp.objects.create(
         cliente=cliente,
         categoria=categoria,
         monto_maximo=maxima_compra_dia,
-        
     )
 
     # ==========================================================
-    # 11. ACTUALIZAR CLIENTE
+    # 11. ACTUALIZAR FECHA DE ÚLTIMA REACTIVACIÓN
     # ==========================================================
-    cliente.fecha_ultima_reactivacion = timezone.now()
+
+    cliente.fecha_ultima_reactivacion = timezone.localdate()
 
     cliente.save(
         update_fields=[
             "fecha_ultima_reactivacion",
-
         ]
     )
 
-    print(
-        "Reactivación enviada correctamente.",
-        "Categoría:",
-        categoria,
-        "Plantilla:",
-        template_name,
-    )
+    # ==========================================================
+    # 12. RESULTADO FINAL
+    # ==========================================================
+
+    print("===================================")
+    print("REACTIVACIÓN REGISTRADA CORRECTAMENTE")
+    print("CLIENTE:", cliente.nombre)
+    print("CATEGORÍA:", categoria)
+    print("PLANTILLA:", template_name)
+    print("WA_MESSAGE_ID:", wa_message_id)
+    print("MODO:", conversacion.modo)
+    print("===================================")
 
     return True

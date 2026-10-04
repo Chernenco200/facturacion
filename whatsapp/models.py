@@ -36,20 +36,51 @@ class CitaWhatsApp(models.Model):
 
 
 class MensajeWhatsApp(models.Model):
+
     TIPO_CHOICES = [
         ("ENTRANTE", "Entrante"),
         ("SALIENTE", "Saliente"),
     ]
 
+    ESTADO_CHOICES = [
+        ("PENDIENTE", "Pendiente"),
+        ("ENVIADO", "Enviado"),
+        ("ENTREGADO", "Entregado"),
+        ("LEIDO", "Leído"),
+        ("FALLIDO", "Fallido"),
+    ]
+
     numero = models.CharField(max_length=20)
     nombre = models.CharField(max_length=150, blank=True, null=True)
-    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+
+    tipo = models.CharField(
+        max_length=20,
+        choices=TIPO_CHOICES
+    )
 
     mensaje = models.TextField(blank=True, null=True)
-    archivo = models.FileField(upload_to="whatsapp_archivos/", blank=True, null=True)
 
-    wa_message_id = models.CharField(max_length=150, blank=True, null=True)
+    archivo = models.FileField(
+        upload_to="whatsapp_archivos/",
+        blank=True,
+        null=True
+    )
+
+    wa_message_id = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_CHOICES,
+        default="PENDIENTE",
+    )
+
     leido = models.BooleanField(default=False)
+
     creado = models.DateTimeField(auto_now_add=True)
 
     class Meta:
