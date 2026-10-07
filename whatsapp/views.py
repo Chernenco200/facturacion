@@ -1128,63 +1128,255 @@ def bandeja_whatsapp(request):
         raise
 
 @login_required
-def chat_whatsapp(request, numero):
-    numero = normalizar_numero(numero)
-    numero_sin_51 = numero[2:] if numero.startswith("51") else numero
+def enviar_whatsapp_pdf(
+    numero,
+    media_id,
+    filename="documento.pdf",
+    caption=""
+):
+    access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+    phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
 
-    posibles_numeros = [numero, numero_sin_51]
-
-    conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-        numero=numero,
-        defaults={
-            "modo": "BOT",
-            "estado": "INICIO",
-        }
+    url = (
+        f"https://graph.facebook.com/v20.0/"
+        f"{phone_number_id}/messages"
     )
 
-    if request.method == "POST":
-        texto = request.POST.get("mensaje", "").strip()
-        archivo = request.FILES.get("archivo")
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
 
-        if texto:
-            enviado = enviar_whatsapp_texto_y_guardar(numero, texto)
+    data = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "document",
+        "document": {
+            "id": media_id,
+            "filename": filename,
+        }
+    }
+
+    if caption:
+        data["document"]["caption"] = caption
+
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+
+        print("ENVIAR PDF STATUS:", response.status_code)
+        print("ENVIAR PDF RESPUESTA:", response.text)
+
+        if response.status_code not in [200, 201]:
+            print("ERROR AL ENVIAR PDF")
+            return None
+
+        respuesta = response.json()
+
+        mensajes = respuesta.get("messages", [])
+
+        if not mensajes:
+            print("META NO DEVOLVIÓ messages[] PARA EL PDF")
+            return None
+
+        wa_message_id = mensajes[0].get("id")
+
+        if not wa_message_id:
+            print("META NO DEVOLVIÓ WA_MESSAGE_ID PARA EL PDF")
+            return None
+
+        print("PDF WA_MESSAGE_ID:", wa_message_id)
+
+        return wa_message_id
+
+    except requests.RequestException as e:
+        print("ERROR DE CONEXIÓN AL ENVIAR PDF:", e)
+        return None
+
+    except Exception as e:
+        print("ERROR INESPERADO AL ENVIAR PDF:", e)
+        return None
+
+# ============================================================
+# CHAT WHATSAPP
+# ============================================================
+
+def chat_whatsapp(request, numero):
+
+    # ========================================================
+    # 1. NORMALIZAR NÚMERO
+    # ========================================================
+
+    numero = normalizar_numero(numero)
+
+    if not numero:
+        print("Número inválido en chat WhatsApp.")
+        return redirect("whatsapp_bandeja")
+
+    numero_sin_51 = (
+        numero[2:]
+        if numero.startswith("51")
+        else numero
+    )
+
+    posibles_numeros = [
+        numero,
+        numero_sin_51,
+    ]
+
+    # ========================================================
+    # 2. OBTENER O CREAR CONVERSACIÓN
+    # ========================================================
+
+    conversacion, created = (
+        ConversacionWhatsApp.objects.get_or_create(
+            numero=numero,
+            defaults={
+                "modo": "BOT",
+                "estado": "INICIO",
+            }
+        )
+    )
+
+    # IMPORTANTE:
+    # Si ya existe y está en HUMANO,
+    # NO modificamos conversacion.modo.
+
+    # ========================================================
+    # 3. ENVÍO MANUAL
+    # ========================================================
+
+    if request.method == "POST":
+
+        texto = request.POST.get(
+            "mensaje",
+            ""
+        ).strip()
+
+        archivo = request.FILES.get(
+            "archivo"
+        )
+
+        print("===================================")
+        print("=== ENVÍO MANUAL DESDE CHAT ===")
+        print("NÚMERO:", numero)
+        print("MODO:", conversacion.modo)
+        print("TEXTO:", texto)
 
         if archivo:
-            media_id = subir_media_whatsapp(archivo)
+            print("ARCHIVO:", archivo.name)
+            print("TIPO:", archivo.content_type)
+        else:
+            print("ARCHIVO: Ninguno")
 
-            if media_id:
-                tipo_archivo = archivo.content_type or ""
+        print("===================================")
 
+        # ====================================================
+        # 4. SI HAY ARCHIVO
+        # ====================================================
+        #
+        # Si existe archivo + texto:
+        #
+        # el texto será el caption del archivo.
+        #
+        # NO enviamos además un mensaje de texto separado.
+        # Así evitamos mensajes duplicados.
+        # ====================================================
+
+        if archivo:
+
+            media_id = subir_media_whatsapp(
+                archivo
+            )
+
+            if not media_id:
+
+                print(
+                    "ERROR: No se pudo subir "
+                    "el archivo a WhatsApp."
+                )
+
+            else:
+
+                tipo_archivo = (
+                    archivo.content_type or ""
+                )
+
+                wa_message_id = None
+                mensaje_registro = ""
+
+                # ============================================
                 # PDF
+                # ============================================
+
                 if tipo_archivo == "application/pdf":
-                    enviado = enviar_whatsapp_pdf(
-                        numero=numero,
-                        media_id=media_id,
-                        filename=archivo.name,
-                        caption=texto if texto else ""
+
+                    print("ENVIANDO PDF...")
+
+                    wa_message_id = (
+                        enviar_whatsapp_pdf(
+                            numero=numero,
+                            media_id=media_id,
+                            filename=archivo.name,
+                            caption=texto if texto else "",
+                        )
                     )
 
                     mensaje_registro = (
-                        texto if texto else f"PDF enviado: {archivo.name}"
+                        texto
+                        if texto
+                        else f"PDF enviado: {archivo.name}"
                     )
 
-                # JPG, JPEG o PNG
-                elif tipo_archivo in ["image/jpeg", "image/png"]:
-                    enviado = enviar_whatsapp_imagen(
-                        numero=numero,
-                        media_id=media_id,
-                        caption=texto if texto else ""
+                # ============================================
+                # IMAGEN
+                # ============================================
+
+                elif tipo_archivo in [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                ]:
+
+                    print("ENVIANDO IMAGEN...")
+
+                    wa_message_id = (
+                        enviar_whatsapp_imagen(
+                            numero=numero,
+                            media_id=media_id,
+                            caption=texto if texto else "",
+                        )
                     )
 
                     mensaje_registro = (
-                        texto if texto else f"Imagen enviada: {archivo.name}"
+                        texto
+                        if texto
+                        else f"Imagen enviada: {archivo.name}"
                     )
+
+                # ============================================
+                # TIPO NO PERMITIDO
+                # ============================================
 
                 else:
-                    enviado = False
-                    mensaje_registro = ""
 
-                if enviado:
+                    print(
+                        "TIPO DE ARCHIVO NO PERMITIDO:",
+                        tipo_archivo
+                    )
+
+                # ============================================
+                # GUARDAR ARCHIVO EN LA BANDEJA
+                # ============================================
+
+                if wa_message_id:
+
+                    # subir_media_whatsapp() pudo haber
+                    # avanzado el puntero del archivo.
                     archivo.seek(0)
 
                     MensajeWhatsApp.objects.create(
@@ -1192,25 +1384,126 @@ def chat_whatsapp(request, numero):
                         tipo="SALIENTE",
                         mensaje=mensaje_registro,
                         archivo=archivo,
+                        wa_message_id=wa_message_id,
+                        estado="ENVIADO",
                     )
 
-        return redirect("chat_whatsapp", numero=numero)
+                    print(
+                        "ARCHIVO GUARDADO EN BANDEJA"
+                    )
+
+                    print(
+                        "WA_MESSAGE_ID:",
+                        wa_message_id
+                    )
+
+                else:
+
+                    print(
+                        "NO SE GUARDÓ EL ARCHIVO "
+                        "COMO ENVIADO PORQUE META "
+                        "NO DEVOLVIÓ WA_MESSAGE_ID."
+                    )
+
+        # ====================================================
+        # 5. SI NO HAY ARCHIVO, PERO HAY TEXTO
+        # ====================================================
+
+        elif texto:
+
+            print(
+                "ENVIANDO MENSAJE DE TEXTO MANUAL..."
+            )
+
+            wa_message_id = enviar_whatsapp_texto(
+                numero,
+                texto,
+                devolver_id=True,
+            )
+
+            if wa_message_id:
+
+                MensajeWhatsApp.objects.create(
+                    numero=numero,
+                    tipo="SALIENTE",
+                    mensaje=texto,
+                    wa_message_id=wa_message_id,
+                    estado="ENVIADO",
+                )
+
+                print(
+                    "MENSAJE MANUAL GUARDADO"
+                )
+
+                print(
+                    "WA_MESSAGE_ID:",
+                    wa_message_id
+                )
+
+            else:
+
+                print(
+                    "NO SE PUDO ENVIAR "
+                    "EL MENSAJE DE TEXTO."
+                )
+
+        # ====================================================
+        # 6. POST VACÍO
+        # ====================================================
+
+        else:
+
+            print(
+                "No hay texto ni archivo para enviar."
+            )
+
+        # ====================================================
+        # 7. REDIRECCIONAR AL CHAT
+        # ====================================================
+
+        return redirect(
+            "chat_whatsapp",
+            numero=numero
+        )
+
+    # ========================================================
+    # 8. MARCAR MENSAJES ENTRANTES COMO LEÍDOS EN DJANGO
+    # ========================================================
 
     MensajeWhatsApp.objects.filter(
         numero__in=posibles_numeros,
         tipo="ENTRANTE",
         leido=False
-    ).update(leido=True)
+    ).update(
+        leido=True
+    )
 
-    mensajes = MensajeWhatsApp.objects.filter(
-        numero__in=posibles_numeros
-    ).order_by("creado")
+    # ========================================================
+    # 9. CARGAR HISTORIAL
+    # ========================================================
 
-    return render(request, "whatsapp/chat.html", {
-        "numero": numero,
-        "mensajes": mensajes,
-        "conversacion": conversacion,
-    })
+    mensajes = (
+        MensajeWhatsApp.objects
+        .filter(
+            numero__in=posibles_numeros
+        )
+        .order_by("creado")
+    )
+
+    # ========================================================
+    # 10. MOSTRAR CHAT
+    # ========================================================
+
+    return render(
+        request,
+        "whatsapp/chat.html",
+        {
+            "numero": numero,
+            "mensajes": mensajes,
+            "conversacion": conversacion,
+        }
+    )
+
 @login_required
 def cambiar_modo_whatsapp(request, numero):
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(

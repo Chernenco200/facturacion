@@ -286,7 +286,20 @@ def cliente_esta_en_ventana_servicio(numero):
     ).exists()
 
 def enviar_agradecimiento_ticket(ticket):
+
+    print("===================================")
+    print("=== ENVIAR AGRADECIMIENTO ===")
+    print("TICKET:", ticket.numero if ticket else None)
+
     cliente = ticket.cliente
+
+    print("CLIENTE:", cliente.nombre if cliente else None)
+    print("TELÉFONO:", cliente.telefono if cliente else None)
+    print("===================================")
+
+    # ==========================================================
+    # 1. VALIDACIONES
+    # ==========================================================
 
     if not cliente or not cliente.telefono:
         print("Cliente sin teléfono. No se envía WhatsApp.")
@@ -294,40 +307,142 @@ def enviar_agradecimiento_ticket(ticket):
 
     numero = normalizar_numero(cliente.telefono)
 
+    if not numero:
+        print("Número de teléfono inválido.")
+        return False
+
+    # ==========================================================
+    # 2. MENSAJE QUE SE MOSTRARÁ EN LA BANDEJA
+    # ==========================================================
+
+    numero_ticket = str(ticket.numero).zfill(6)
+
     mensaje = (
         f"Hola {cliente.nombre} 😊\n\n"
         f"Gracias por tu compra en Óptica IC.\n\n"
-        f"Tu N° de ticket para que puedas hacer seguimiento es: {ticket.numero}\n\n"
+        f"Tu N° de ticket para que puedas hacer seguimiento es: "
+        f"{numero_ticket}\n\n"
         f"Tu pedido pasará por estas etapas:\n"
         f"1️⃣ En laboratorio\n"
         f"2️⃣ En taller de Biselado\n"
         f"3️⃣ Control de calidad\n"
         f"4️⃣ Listo para recoger ✅\n\n"
-        f"Puedes consultar el estado de tu ticket escribiendo Menú a este número y seleccionando la opción 2.\n\n"
+        f"Puedes consultar el estado de tu ticket escribiendo Menú "
+        f"a este número y seleccionando la opción 2.\n\n"
         f"Óptica IC\n"
         f"Innovación y Calidad"
     )
 
-    if cliente_esta_en_ventana_servicio(numero):
-        enviado = enviar_whatsapp_texto(numero, mensaje)
+    # ==========================================================
+    # 3. DETERMINAR SI ESTÁ DENTRO DE LA VENTANA DE 24 HORAS
+    # ==========================================================
+
+    dentro_ventana = cliente_esta_en_ventana_servicio(numero)
+
+    print("DENTRO DE VENTANA 24H:", dentro_ventana)
+
+    # ==========================================================
+    # 4. ENVIAR MENSAJE
+    # ==========================================================
+
+    if dentro_ventana:
+
+        print("ENVIANDO COMO TEXTO")
+
+        wa_message_id = enviar_whatsapp_texto(
+            numero,
+            mensaje,
+            devolver_id=True,
+        )
+
     else:
-        enviado = enviar_whatsapp_template(
+
+        print("ENVIANDO PLANTILLA: agradecimiento")
+
+        wa_message_id = enviar_whatsapp_template(
             numero=numero,
             template_name="agradecimiento",
             parametros=[
                 cliente.nombre,
-                str(ticket.numero).zfill(6),
+                numero_ticket,
             ],
+            devolver_id=True,
         )
 
-    if enviado:
-        MensajeWhatsApp.objects.create(
+    # ==========================================================
+    # 5. VERIFICAR RESPUESTA DE META
+    # ==========================================================
+
+    if not wa_message_id:
+
+        print("===================================")
+        print("NO SE PUDO ENVIAR EL AGRADECIMIENTO")
+        print("TICKET:", numero_ticket)
+        print("CLIENTE:", cliente.nombre)
+        print("TELÉFONO:", numero)
+        print("===================================")
+
+        return False
+
+    print("===================================")
+    print("META ACEPTÓ EL AGRADECIMIENTO")
+    print("WA_MESSAGE_ID:", wa_message_id)
+    print("===================================")
+
+    # ==========================================================
+    # 6. GUARDAR EN LA BANDEJA
+    # ==========================================================
+
+    MensajeWhatsApp.objects.create(
+        numero=numero,
+        nombre=cliente.nombre,
+        tipo="SALIENTE",
+        mensaje=mensaje,
+        wa_message_id=wa_message_id,
+        estado="ENVIADO",
+    )
+
+    print(
+        "AGRADECIMIENTO GUARDADO EN BANDEJA:",
+        wa_message_id
+    )
+
+    # ==========================================================
+    # 7. CREAR CONVERSACIÓN SI TODAVÍA NO EXISTE
+    # ==========================================================
+
+    conversacion, created = (
+        ConversacionWhatsApp.objects.get_or_create(
             numero=numero,
-            tipo="BOT",
-            mensaje=mensaje,
+            defaults={
+                "modo": "BOT",
+                "estado": "INICIO",
+            },
         )
+    )
 
-    return enviado
+    # MUY IMPORTANTE:
+    # Si la conversación ya existe y está en HUMANO,
+    # NO la cambiamos automáticamente a BOT.
+
+    print(
+        "MODO ACTUAL DE CONVERSACIÓN:",
+        conversacion.modo
+    )
+
+    # ==========================================================
+    # 8. RESULTADO
+    # ==========================================================
+
+    print("===================================")
+    print("AGRADECIMIENTO ENVIADO CORRECTAMENTE")
+    print("TICKET:", numero_ticket)
+    print("CLIENTE:", cliente.nombre)
+    print("WA_MESSAGE_ID:", wa_message_id)
+    print("MODO:", conversacion.modo)
+    print("===================================")
+
+    return True
 
 def enviar_encuesta_7_dias(orden):
     ticket = orden.ticket
