@@ -458,21 +458,18 @@ def enviar_encuesta_7_dias(orden):
         print("Cliente sin teléfono. No se envía WhatsApp.")
         return False
 
-    # ==========================================================
-    # TEXTO DEL TEMPLATE PARA MOSTRAR EN LA BANDEJA
-    # Debe coincidir con el template aprobado en Meta
-    # ==========================================================
+    numero = normalizar_numero(cliente.telefono)
+
+    # Texto equivalente a la plantilla aprobada en Meta
     mensaje_template = (
         f"Hola {cliente.nombre} 😊\n\n"
         f"Esperamos que estés disfrutando tus nuevos lentes de Óptica IC.\n\n"
-        f"Podrías confirmarnos con un like si todo va bien\n\n"
+        f"¿Podrías confirmarnos con un like si todo va bien?"
     )
 
-    # ==========================================================
-    # SIEMPRE ENVIAR TEMPLATE
-    # ==========================================================
+    # Mantener el envío mediante plantilla
     wa_message_id = enviar_whatsapp_template(
-        numero=cliente.telefono,
+        numero=numero,
         template_name="encuesta_7_dias",
         parametros=[
             cliente.nombre,
@@ -480,43 +477,43 @@ def enviar_encuesta_7_dias(orden):
         devolver_id=True,
     )
 
-    # ==========================================================
-    # META ACEPTÓ EL MENSAJE
-    # ==========================================================
-    if wa_message_id:
+    if not wa_message_id:
+        print("NO SE PUDO ENVIAR ENCUESTA")
+        return False
 
-        MensajeWhatsApp.objects.create(
-            numero=cliente.telefono,
-            nombre=cliente.nombre,
-            tipo="SALIENTE",
-            mensaje=mensaje_template,
-            wa_message_id=wa_message_id,
-            estado="ENVIADO",
-        )
+    # Registrar mensaje saliente en bandeja
+    MensajeWhatsApp.objects.create(
+        numero=numero,
+        nombre=cliente.nombre,
+        tipo="SALIENTE",
+        mensaje=mensaje_template,
+        wa_message_id=wa_message_id,
+        estado="ENVIADO",
+    )
 
-        # Crear conversación si todavía no existe.
-        # NO cambiamos HUMANO a BOT si ya existe.
-        conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-            numero=normalizar_numero(cliente.telefono),
-            defaults={
-                "modo": "BOT",
-                "estado": "ESPERANDO_ENCUESTA",
-            }
-        )
+    # Crear o recuperar conversación
+    conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+        numero=numero,
+        defaults={
+            "modo": "BOT",
+            "estado": "ESPERANDO_CONFIRMACION_SEGUIMIENTO",
+        }
+    )
 
-        if not created:
-            conversacion.estado = "ESPERANDO_ENCUESTA"
-            conversacion.save(update_fields=["estado"])
+    # No interrumpir una conversación en modo HUMANO
+    if conversacion.modo == "BOT":
+        conversacion.estado = "ESPERANDO_CONFIRMACION_SEGUIMIENTO"
+        conversacion.save(update_fields=["estado"])
 
+        print("ESPERANDO CONFIRMACION DE SEGUIMIENTO")
+    else:
         print(
-            "ENCUESTA GUARDADA:",
-            wa_message_id
+            "Encuesta enviada. Se conserva modo HUMANO "
+            "sin modificar el estado."
         )
 
-        return True
-
-    print("NO SE PUDO ENVIAR ENCUESTA")
-    return False
+    print("ENCUESTA GUARDADA:", wa_message_id)
+    return True
 
 def enviar_control_menor_6_meses(orden):
     ticket = orden.ticket

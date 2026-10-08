@@ -73,9 +73,9 @@ def responder_mensaje(numero, texto):
             conversacion.estado = "INICIO"
             conversacion.save()
 
-            enviar_whatsapp_texto_y_guardar(
-                numero,
-                "Bienvenido de nuevo. ¿En qué podemos ayudarte?"
+            print(
+                f"Estado pendiente vencido para {numero}. "
+                "Se procesará el mensaje actual normalmente."
             )
 
     # Si la conversación terminó correctamente antes, se reinicia en silencio
@@ -128,6 +128,90 @@ def responder_mensaje(numero, texto):
             "Entendido 😊 Si más adelante necesitas ayuda, aquí estaremos."
         )
         return
+    # ==========================================================
+    # CONFIRMACIÓN DE SEGUIMIENTO DE LENTES
+    # ==========================================================
+    if conversacion.estado == "ESPERANDO_CONFIRMACION_SEGUIMIENTO":
+
+        texto_confirmacion = texto.replace("\ufe0f", "").strip()
+
+        RESPUESTAS_POSITIVAS = [
+            "👍",
+            "👍🏻",
+            "👍🏼",
+            "👍🏽",
+            "👍🏾",
+            "👍🏿",
+            "👌",
+            "✅",
+            "si",
+            "sí",
+            "sip",
+            "todo bien",
+            "todo esta bien",
+            "todo está bien",
+            "muy bien",
+            "excelente",
+            "perfecto",
+            "bien",
+            "ok",
+            "gracias",
+        ]
+
+        if (
+            texto in RESPUESTAS_POSITIVAS
+            or texto_confirmacion in RESPUESTAS_POSITIVAS
+        ):
+            conversacion.estado = "FINALIZADO"
+            conversacion.save(update_fields=["estado"])
+
+            enviar_whatsapp_texto_y_guardar(
+                numero,
+                "¡Muchas gracias por confirmarnos! 😊\n\n"
+                "Nos alegra saber que todo va bien con tus lentes.\n\n"
+                "¡Gracias por confiar en Óptica IC!"
+            )
+            return
+
+        # Si comunica algún inconveniente
+        PALABRAS_PROBLEMA = [
+            "problema",
+            "molestia",
+            "incomodo",
+            "incómodo",
+            "mareo",
+            "borroso",
+            "no veo",
+            "mal",
+            "reclamo",
+            "no estoy bien",
+        ]
+
+        if any(palabra in texto for palabra in PALABRAS_PROBLEMA):
+
+            conversacion.modo = "HUMANO"
+            conversacion.estado = "ASESOR"
+            conversacion.save()
+
+            avisar_asesor(
+                f"🚨 CLIENTE REPORTA PROBLEMA CON SUS LENTES\n\n"
+                f"Cliente WhatsApp: {numero}\n"
+                f"Mensaje: {texto_original}\n\n"
+                f"Revisar y atender lo antes posible."
+            )
+
+            enviar_whatsapp_texto_y_guardar(
+                numero,
+                "Gracias por contarnos lo ocurrido. 😊\n\n"
+                "Hemos recibido tu mensaje y un asesor "
+                "de Óptica IC continuará la atención."
+            )
+            return
+
+        # Si responde algo diferente, dejar que OpenAI
+        # interprete el mensaje utilizando el historial.
+        conversacion.estado = "INICIO"
+        conversacion.save(update_fields=["estado"])
 
     # Respuesta de encuesta 1 al 5
     if conversacion.estado == "ESPERANDO_ENCUESTA":
@@ -462,8 +546,6 @@ def responder_mensaje(numero, texto):
     
 
 @csrf_exempt
-
-
 def whatsapp_webhook(request):
 
     # ==========================================================
@@ -1525,7 +1607,50 @@ def cambiar_modo_whatsapp(request, numero):
     return redirect("chat_whatsapp", numero=numero)
     
 
+def transferir_a_asesor(numero, texto_original):
 
+    numero = normalizar_numero(numero)
+
+    conversacion, created = ConversacionWhatsApp.objects.get_or_create(
+        numero=numero,
+        defaults={
+            "modo": "BOT",
+            "estado": "INICIO",
+        }
+    )
+
+    # Evitar avisos duplicados si ya está con un asesor
+    if conversacion.modo == "HUMANO":
+        print("El cliente ya está en modo HUMANO:", numero)
+        return
+
+    # Activar atención humana
+    conversacion.modo = "HUMANO"
+    conversacion.estado = "ASESOR"
+    conversacion.save()
+
+    # Avisar al asesor
+    try:
+        resultado_aviso = avisar_asesor(
+            f"🚨 CLIENTE REQUIERE ATENCIÓN HUMANA\n\n"
+            f"Cliente WhatsApp: {numero}\n"
+            f"Mensaje recibido: {texto_original}\n\n"
+            f"Responder lo antes posible."
+        )
+
+        print("RESULTADO AVISO ASESOR:", resultado_aviso)
+
+    except Exception as e:
+        print("ERROR AVISANDO AL ASESOR:", str(e))
+
+    # Informar al cliente
+    enviar_whatsapp_texto_y_guardar(
+        numero,
+        "Gracias por escribirnos 😊\n\n"
+        "Tu solicitud ha sido derivada a nuestro equipo.\n"
+        "Un asesor de Óptica IC continuará la atención en breve.\n\n"
+        "Para volver al menú principal escribe 0️⃣"
+    )
 
 
     
