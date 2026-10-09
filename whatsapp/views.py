@@ -42,9 +42,20 @@ def enviar_menu_principal(numero):
     )
     enviar_whatsapp_texto_y_guardar(numero, mensaje)
 
+
 def responder_mensaje(numero, texto):
-    texto_original = texto.strip()
-    texto = texto.lower().strip()
+
+    numero = normalizar_numero(numero)
+    texto_original = (texto or "").strip()
+    texto = texto_original.lower()
+
+    if not texto_original:
+        print("Mensaje vacío. No se procesa.")
+        return
+
+    # ==========================================================
+    # 1. OBTENER O CREAR CONVERSACIÓN
+    # ==========================================================
 
     conversacion, created = ConversacionWhatsApp.objects.get_or_create(
         numero=numero,
@@ -54,6 +65,67 @@ def responder_mensaje(numero, texto):
         }
     )
 
+    # ==========================================================
+    # 2. FUNCIÓN INTERNA PARA AVISAR AL ASESOR
+    # ==========================================================
+
+    def notificar_asesor(asunto, detalle=None):
+
+        mensaje_aviso = (
+            f"🔔 {asunto}\n\n"
+            f"Cliente WhatsApp: {numero}\n"
+            f"Mensaje recibido: {texto_original}\n"
+        )
+
+        if detalle:
+            mensaje_aviso += f"\n{detalle}\n"
+
+        mensaje_aviso += "\nRevisar la bandeja de Óptica IC."
+
+        try:
+            resultado = avisar_asesor(mensaje_aviso)
+
+            print("=== AVISO AL ASESOR ===")
+            print("CLIENTE:", numero)
+            print("MOTIVO:", asunto)
+            print("RESULTADO:", resultado)
+
+            if not resultado:
+                print(
+                    "ADVERTENCIA: No se confirmó el envío "
+                    "de la notificación al asesor."
+                )
+
+            return bool(resultado)
+
+        except Exception as error:
+            print("ERROR AVISANDO AL ASESOR:", str(error))
+            return False
+
+    # ==========================================================
+    # 3. FUNCIÓN INTERNA PARA TRANSFERIR A HUMANO
+    # ==========================================================
+
+    def pasar_a_humano(asunto, detalle=None, mensaje_cliente=None):
+
+        notificar_asesor(asunto, detalle)
+
+        conversacion.modo = "HUMANO"
+        conversacion.estado = "ASESOR"
+        conversacion.save()
+
+        if mensaje_cliente:
+            enviar_whatsapp_texto_y_guardar(
+                numero,
+                mensaje_cliente
+            )
+
+        return
+
+    # ==========================================================
+    # 4. CONTROL DE INACTIVIDAD
+    # ==========================================================
+
     ESTADOS_ESPERANDO = [
         "ESPERANDO_TICKET",
         "ESPERANDO_DATOS_CITA",
@@ -61,31 +133,47 @@ def responder_mensaje(numero, texto):
         "ESPERANDO_CONFIRMACION_ASESOR",
     ]
 
-    # Cierre por inactividad SOLO si estaba esperando una respuesta
     if not created:
+
         tiempo_inactivo = timezone.now() - conversacion.actualizado
 
         if (
-            tiempo_inactivo > timedelta(minutes=30)
+            conversacion.modo == "BOT"
+            and tiempo_inactivo > timedelta(minutes=30)
             and conversacion.estado in ESTADOS_ESPERANDO
         ):
-            conversacion.modo = "BOT"
+
             conversacion.estado = "INICIO"
-            conversacion.save()
+            conversacion.save(update_fields=["estado"])
 
             print(
                 f"Estado pendiente vencido para {numero}. "
                 "Se procesará el mensaje actual normalmente."
             )
 
-    # Si la conversación terminó correctamente antes, se reinicia en silencio
+    # ==========================================================
+    # 5. REINICIAR CONVERSACIÓN FINALIZADA
+    # ==========================================================
+
     if conversacion.estado == "FINALIZADO":
+
         conversacion.modo = "BOT"
         conversacion.estado = "INICIO"
         conversacion.save()
 
-    # Volver al bot / menú principal
-    if texto in ["0", "0️⃣", "menu", "menú", "menu principal", "menú principal"]:
+    # ==========================================================
+    # 6. VOLVER AL BOT / MENÚ PRINCIPAL
+    # ==========================================================
+
+    if texto in [
+        "0",
+        "0️⃣",
+        "menu",
+        "menú",
+        "menu principal",
+        "menú principal",
+    ]:
+
         conversacion.modo = "BOT"
         conversacion.estado = "INICIO"
         conversacion.save()
@@ -93,44 +181,62 @@ def responder_mensaje(numero, texto):
         enviar_menu_principal(numero)
         return
 
-    # Si está en modo humano, el bot no responde
+    # ==========================================================
+    # 7. CONVERSACIÓN EN MODO HUMANO
+    # ==========================================================
+
     if conversacion.modo == "HUMANO":
-        print(f"Cliente {numero} está en modo HUMANO. Bot no responde.")
+
+        print(
+            f"Cliente {numero} está en modo HUMANO. "
+            "Se notificará al asesor."
+        )
+
+        notificar_asesor(
+            "NUEVO MENSAJE EN ATENCIÓN HUMANA",
+            "El cliente está siendo atendido por un asesor."
+        )
+
+        # No responder automáticamente.
         return
 
-    # Confirmación para pasar con asesor sugerida por OpenAI
+    # ==========================================================
+    # 8. CONFIRMACIÓN DE ASESOR PENDIENTE
+    # ==========================================================
+
     if conversacion.estado == "ESPERANDO_CONFIRMACION_ASESOR":
-        if texto in ["1", "1️⃣", "si", "sí","sip", "ok", "dale", "quiero", "asesor"]:
 
-            avisar_asesor(
-                f"🚨 CLIENTE SOLICITA ASESOR\n\n"
-                f"Cliente WhatsApp: {numero}\n"
-                f"Mensaje recibido: {texto_original}\n\n"
-                f"Responder lo antes posible."
-            )
+        if texto in [
+            "1", "1️⃣", "si", "sí", "sip",
+            "ok", "dale", "quiero", "asesor",
+        ]:
 
-            conversacion.modo = "HUMANO"
-            conversacion.estado = "ASESOR"
-            conversacion.save()
-
-            enviar_whatsapp_texto_y_guardar(
-                numero,
-                "Perfecto 😊 Un asesor de Óptica IC continuará la conversación en breve.\n\n"
-                "Para volver al menú principal escribe 0️⃣"
+            pasar_a_humano(
+                "CLIENTE CONFIRMA ATENCIÓN HUMANA",
+                mensaje_cliente=(
+                    "Perfecto 😊\n\n"
+                    "Tu solicitud ha sido derivada a nuestro equipo. "
+                    "Un asesor de Óptica IC continuará la atención "
+                    "en breve.\n\n"
+                    "Para volver al menú principal escribe 0️⃣"
+                )
             )
             return
 
         conversacion.estado = "FINALIZADO"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
-            "Entendido 😊 Si más adelante necesitas ayuda, aquí estaremos."
+            "Entendido 😊 Si más adelante necesitas ayuda, "
+            "aquí estaremos."
         )
         return
+
     # ==========================================================
-    # CONFIRMACIÓN DE SEGUIMIENTO DE LENTES
+    # 9. CONFIRMACIÓN DE SEGUIMIENTO DE LENTES
     # ==========================================================
+
     if conversacion.estado == "ESPERANDO_CONFIRMACION_SEGUIMIENTO":
 
         texto_confirmacion = texto.replace("\ufe0f", "").strip()
@@ -162,6 +268,7 @@ def responder_mensaje(numero, texto):
             texto in RESPUESTAS_POSITIVAS
             or texto_confirmacion in RESPUESTAS_POSITIVAS
         ):
+
             conversacion.estado = "FINALIZADO"
             conversacion.save(update_fields=["estado"])
 
@@ -173,7 +280,6 @@ def responder_mensaje(numero, texto):
             )
             return
 
-        # Si comunica algún inconveniente
         PALABRAS_PROBLEMA = [
             "problema",
             "molestia",
@@ -189,43 +295,49 @@ def responder_mensaje(numero, texto):
 
         if any(palabra in texto for palabra in PALABRAS_PROBLEMA):
 
-            conversacion.modo = "HUMANO"
-            conversacion.estado = "ASESOR"
-            conversacion.save()
-
-            avisar_asesor(
-                f"🚨 CLIENTE REPORTA PROBLEMA CON SUS LENTES\n\n"
-                f"Cliente WhatsApp: {numero}\n"
-                f"Mensaje: {texto_original}\n\n"
-                f"Revisar y atender lo antes posible."
-            )
-
-            enviar_whatsapp_texto_y_guardar(
-                numero,
-                "Gracias por contarnos lo ocurrido. 😊\n\n"
-                "Hemos recibido tu mensaje y un asesor "
-                "de Óptica IC continuará la atención."
+            pasar_a_humano(
+                "CLIENTE REPORTA PROBLEMA CON SUS LENTES",
+                mensaje_cliente=(
+                    "Gracias por contarnos lo ocurrido. 😊\n\n"
+                    "Hemos recibido tu mensaje y un asesor "
+                    "de Óptica IC continuará la atención.\n\n"
+                    "Para volver al menú principal escribe 0️⃣"
+                )
             )
             return
 
-        # Si responde algo diferente, dejar que OpenAI
-        # interprete el mensaje utilizando el historial.
+        # Respuesta distinta: continuar con el procesamiento
+        # normal y permitir que OpenAI analice el historial.
         conversacion.estado = "INICIO"
         conversacion.save(update_fields=["estado"])
 
-    # Respuesta de encuesta 1 al 5
+    # ==========================================================
+    # 10. ENCUESTA DE CALIFICACIÓN DEL 1 AL 5
+    # ==========================================================
+
     if conversacion.estado == "ESPERANDO_ENCUESTA":
-        if texto in ["1", "1️⃣", "2", "2️⃣", "3", "3️⃣", "4", "4️⃣", "5", "5️⃣"]:
-            calificacion = texto.replace("️⃣", "")
+
+        if texto in [
+            "1", "1️⃣",
+            "2", "2️⃣",
+            "3", "3️⃣",
+            "4", "4️⃣",
+            "5", "5️⃣",
+        ]:
+
+            calificacion = (
+                texto.replace("\ufe0f", "").replace("\u20e3", "")
+            )
 
             conversacion.estado = "FINALIZADO"
-            conversacion.save()
+            conversacion.save(update_fields=["estado"])
 
             enviar_whatsapp_texto_y_guardar(
                 numero,
-                f"¡Gracias por calificar tu experiencia con Óptica IC! 🙌\n\n"
+                "¡Gracias por calificar tu experiencia "
+                "con Óptica IC! 🙌\n\n"
                 f"Tu respuesta fue: {calificacion}/5\n\n"
-                f"Tu opinión nos ayuda a mejorar."
+                "Tu opinión nos ayuda a mejorar."
             )
             return
 
@@ -235,56 +347,78 @@ def responder_mensaje(numero, texto):
         )
         return
 
-    # Si el cliente estaba enviando datos de cita
+    # ==========================================================
+    # 11. RECEPCIÓN DE DATOS PARA CITA
+    # ==========================================================
+
     if conversacion.estado == "ESPERANDO_DATOS_CITA":
+
         CitaWhatsApp.objects.create(
             numero=numero,
             datos_cliente=texto_original
         )
 
-        avisar_asesor(
-            f"📅 NUEVA SOLICITUD DE CITA\n\n"
-            f"Cliente WhatsApp: {numero}\n"
-            f"Datos enviados:\n{texto_original}\n\n"
-            f"Atender lo antes posible."
-        )
-
-        conversacion.modo = "HUMANO"
-        conversacion.estado = "ASESOR"
-        conversacion.save()
-
-        enviar_whatsapp_texto_y_guardar(
-            numero,
-            "Gracias 😊 Hemos recibido tus datos para la cita.\n\n"
-            "Un asesor de Óptica IC te confirmará la disponibilidad en breve.\n\n"
-            "Para volver al menú principal escribe 0️⃣"
+        pasar_a_humano(
+            "NUEVA SOLICITUD DE CITA",
+            mensaje_cliente=(
+                "Gracias 😊 Hemos recibido tus datos para la cita.\n\n"
+                "Un asesor de Óptica IC te confirmará "
+                "la disponibilidad en breve.\n\n"
+                "Para volver al menú principal escribe 0️⃣"
+            )
         )
         return
 
-    # Si el cliente estaba consultando ticket
+    # ==========================================================
+    # 12. CLIENTE ESTABA CONSULTANDO SU TICKET
+    # ==========================================================
+
     if conversacion.estado == "ESPERANDO_TICKET":
-        encontrado = consultar_estado_ticket(numero, texto_original)
 
-        if encontrado:
-            conversacion.estado = "FINALIZADO"
-        else:
-            conversacion.estado = "ESPERANDO_TICKET"
+        encontrado = consultar_estado_ticket(
+            numero,
+            texto_original
+        )
 
-        conversacion.save()
+        conversacion.estado = (
+            "FINALIZADO" if encontrado else "ESPERANDO_TICKET"
+        )
+        conversacion.save(update_fields=["estado"])
         return
 
-    # Saludo / menú
-    if texto in ["hola", "hi", "buenos dias", "buenos días", "buenas tardes", "buenas noches"]:
+    # ==========================================================
+    # 13. SALUDO / MENÚ
+    # ==========================================================
+
+    if texto in [
+        "hola",
+        "hi",
+        "buenos dias",
+        "buenos días",
+        "buenas tardes",
+        "buenas noches",
+    ]:
+
         conversacion.estado = "INICIO"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_menu_principal(numero)
         return
 
-    # Agradecimiento / cierre simple
-    if texto in ["gracias", "muchas gracias", "ok gracias", "listo gracias", "perfecto gracias"]:
+    # ==========================================================
+    # 14. AGRADECIMIENTO
+    # ==========================================================
+
+    if texto in [
+        "gracias",
+        "muchas gracias",
+        "ok gracias",
+        "listo gracias",
+        "perfecto gracias",
+    ]:
+
         conversacion.estado = "FINALIZADO"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
@@ -292,39 +426,48 @@ def responder_mensaje(numero, texto):
         )
         return
 
-    # Horario
+    # ==========================================================
+    # 15. HORARIO
+    # ==========================================================
+
     if texto in ["1", "1️⃣"] or "horario" in texto:
+
         conversacion.estado = "FINALIZADO"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
-            "Nuestro horario de atención es de lunes a sábado de 9:00 a.m. a 7:45 p.m. "
-            "Domingos de 10:30 a.m. a 6:00 p.m. "
-            "Jueves 08 de octubre: 10:30 a.m. a 7:00 p.m." 
-
-            
+            "Nuestro horario de atención es:\n\n"
+            "Lunes a sábado: 9:00 a.m. a 7:45 p.m.\n"
+            "Domingos: 10:30 a.m. a 6:00 p.m.\n\n"
+            "Los horarios especiales por feriados "
+            "se confirman por separado."
         )
         return
 
-    # Consulta directa tipo: ticket 000123
+    # ==========================================================
+    # 16. CONSULTA DIRECTA DE TICKET
+    # ==========================================================
+
     if texto.startswith("ticket"):
-        encontrado = consultar_estado_ticket(numero, texto_original)
 
-        conversacion.estado = "FINALIZADO" if encontrado else "ESPERANDO_TICKET"
-        conversacion.save()
-        return
+        partes = texto_original.split(maxsplit=1)
 
-    # Estado de ticket
-    if (
-        texto in ["2", "2️⃣"]
-        or "estado" in texto
-        or texto == "ticket"
-        or "ticket" in texto
+        if len(partes) > 1 and partes[1].strip():
 
-    ):
+            encontrado = consultar_estado_ticket(
+                numero,
+                partes[1].strip()
+            )
+
+            conversacion.estado = (
+                "FINALIZADO" if encontrado else "ESPERANDO_TICKET"
+            )
+            conversacion.save(update_fields=["estado"])
+            return
+
         conversacion.estado = "ESPERANDO_TICKET"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
@@ -333,7 +476,30 @@ def responder_mensaje(numero, texto):
         )
         return
 
-    # Ubicación
+    # ==========================================================
+    # 17. ESTADO DE TICKET
+    # ==========================================================
+
+    if (
+        texto in ["2", "2️⃣"]
+        or "estado" in texto
+        or "ticket" in texto
+    ):
+
+        conversacion.estado = "ESPERANDO_TICKET"
+        conversacion.save(update_fields=["estado"])
+
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Por favor escribe el número de tu ticket.\n\n"
+            "Ejemplo: 000123"
+        )
+        return
+
+    # ==========================================================
+    # 18. UBICACIÓN
+    # ==========================================================
+
     if (
         texto in ["3", "3️⃣"]
         or "ubicacion" in texto
@@ -341,24 +507,32 @@ def responder_mensaje(numero, texto):
         or "direccion" in texto
         or "dirección" in texto
     ):
+
         conversacion.estado = "FINALIZADO"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
-            "Estamos ubicados en: Jr Camaná 560 - Cercado de Lima.\n\n"
-            "Ref: Entre Av. Emancipación y Jr. Huancavelica"
+            "Estamos ubicados en:\n"
+            "Jr. Camaná 560 - Cercado de Lima.\n\n"
+            "Referencia: Entre Av. Emancipación "
+            "y Jr. Huancavelica."
         )
         return
 
-    # Sacar cita
+    # ==========================================================
+    # 19. SACAR CITA
+    # ==========================================================
+
     if texto in ["4", "4️⃣"] or "cita" in texto:
+
         conversacion.estado = "ESPERANDO_DATOS_CITA"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
-            "Claro 😊 Para separar una cita, envíanos en un solo mensaje:\n\n"
+            "Claro 😊 Para separar una cita, "
+            "envíanos en un solo mensaje:\n\n"
             "1. Nombre completo\n"
             "2. Día deseado\n"
             "3. Hora aproximada\n"
@@ -368,69 +542,103 @@ def responder_mensaje(numero, texto):
         )
         return
 
-    # Hablar con asesor directo desde menú
-    if texto in ["5", "5️⃣"] or "asesor" in texto or "persona" in texto:
-        avisar_asesor(
-            f"🚨 CLIENTE SOLICITA ASESOR\n\n"
-            f"Cliente WhatsApp: {numero}\n"
-            f"Mensaje recibido: {texto_original}\n\n"
-            f"Responder lo antes posible."
-        )
+    # ==========================================================
+    # 20. ASESOR DIRECTO DESDE EL MENÚ
+    # ==========================================================
 
-        conversacion.modo = "HUMANO"
-        conversacion.estado = "ASESOR"
-        conversacion.save()
+    if (
+        texto in ["5", "5️⃣"]
+        or "asesor" in texto
+        or "persona" in texto
+    ):
 
-        enviar_whatsapp_texto_y_guardar(
-            numero,
-            "Un asesor de Óptica IC te atenderá en breve.\n\n"
-            "Para volver al menú principal escribe 0️⃣"
+        pasar_a_humano(
+            "CLIENTE SOLICITA ASESOR",
+            mensaje_cliente=(
+                "Un asesor de Óptica IC te atenderá en breve.\n\n"
+                "Para volver al menú principal escribe 0️⃣"
+            )
         )
         return
 
-    # Si no coincide con ninguna opción, responde con OpenAI
-    print("USANDO OPENAI PARA:", texto_original)
+    # ==========================================================
+    # 21. SOLICITUD DE RENOVACIÓN DE LENTES
+    # ==========================================================
 
-    respuesta_ia = responder_con_openai(numero, texto_original)
+    PALABRAS_RENOVACION = [
+        "renovar mis lentes",
+        "renovación de mis lentes",
+        "renovacion de mis lentes",
+        "renovar lentes",
+        "renovar los lentes",
+        "mis mismas medidas",
+        "mismas medidas",
+        "medidas anteriores",
+        "mis medidas anteriores",
+        "hacerme otros lentes",
+        "comprar otros lentes",
+    ]
 
-    print("RESPUESTA OPENAI:", respuesta_ia)
+    if any(frase in texto for frase in PALABRAS_RENOVACION):
 
-    
-    respuesta_limpia = respuesta_ia.strip().lower()
+        pasar_a_humano(
+            "CLIENTE SOLICITA RENOVACIÓN DE LENTES",
+            mensaje_cliente=(
+                "¡Claro! 😊 Podemos ayudarte con la "
+                "renovación de tus lentes.\n\n"
+                "Un asesor de Óptica IC revisará tu solicitud "
+                "y continuará la atención.\n\n"
+                "Para volver al menú principal escribe 0️⃣"
+            )
+        )
+        return
 
+    # ==========================================================
+    # 22. CONSULTAR OPENAI UNA SOLA VEZ
+    # ==========================================================
 
-    # Si ninguna regla directa de Django coincide,
-    # OpenAI analiza el mensaje y puede activar un flujo de Django.
     print("USANDO OPENAI PARA:", texto_original)
 
     try:
-        respuesta_ia = responder_con_openai(numero, texto_original)
-    except Exception as error:
-        print("ERROR OPENAI:", error)
 
-        conversacion.estado = "ESPERANDO_CONFIRMACION_ASESOR"
-        conversacion.save()
-
-        enviar_whatsapp_texto_y_guardar(
+        respuesta_ia = responder_con_openai(
             numero,
-            "No pude procesar correctamente tu consulta en este momento.\n\n"
-            "Si deseas que un asesor de Óptica IC continúe la conversación, responde *Sí*."
+            texto_original
+        )
+
+        respuesta_ia = (respuesta_ia or "").strip()
+
+        if not respuesta_ia:
+            raise ValueError("OpenAI devolvió una respuesta vacía.")
+
+    except Exception as error:
+
+        print("ERROR OPENAI:", str(error))
+
+        pasar_a_humano(
+            "ERROR AL PROCESAR CONSULTA CON OPENAI",
+            detalle=f"Error técnico: {str(error)}",
+            mensaje_cliente=(
+                "En este momento no puedo procesar "
+                "correctamente tu consulta.\n\n"
+                "He derivado tu solicitud a nuestro equipo "
+                "para que un asesor pueda ayudarte."
+            )
         )
         return
 
     print("RESPUESTA OPENAI:", respuesta_ia)
 
-    respuesta_limpia = respuesta_ia.strip()
-    respuesta_mayuscula = respuesta_limpia.upper()
-    respuesta_minuscula = respuesta_limpia.lower()
+    respuesta_mayuscula = respuesta_ia.upper()
 
     # ==========================================================
-    # INTENCIÓN: ESTADO DE TICKET, PEDIDO O LENTES
+    # 23. INTENCIÓN: ESTADO DE TICKET
     # ==========================================================
+
     if "[INTENCION:ESTADO_TICKET]" in respuesta_mayuscula:
-        conversacion.modo = "BOT"
+
         conversacion.estado = "ESPERANDO_TICKET"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
@@ -441,108 +649,99 @@ def responder_mensaje(numero, texto):
         return
 
     # ==========================================================
-    # INTENCIÓN: HORARIO
+    # 24. INTENCIÓN: HORARIO
     # ==========================================================
+
     if "[INTENCION:HORARIO]" in respuesta_mayuscula:
-        conversacion.modo = "BOT"
+
         conversacion.estado = "FINALIZADO"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
             "Nuestro horario de atención es:\n\n"
             "Lunes a sábado: 9:00 a.m. a 7:45 p.m.\n"
-            "Domingos: 10:30 a.m. a 6:30 p.m."       
+            "Domingos: 10:30 a.m. a 6:00 p.m.\n\n"
+            "Los horarios especiales por feriados "
+            "se confirman por separado."
         )
         return
 
     # ==========================================================
-    # INTENCIÓN: UBICACIÓN
+    # 25. INTENCIÓN: UBICACIÓN
     # ==========================================================
+
     if "[INTENCION:UBICACION]" in respuesta_mayuscula:
-        conversacion.modo = "BOT"
+
         conversacion.estado = "FINALIZADO"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
-            "Estamos ubicados en Jr. Camaná 560, Cercado de Lima.\n\n"
-            "Referencia: entre Av. Emancipación y Jr. Huancavelica."
+            "Estamos ubicados en Jr. Camaná 560, "
+            "Cercado de Lima.\n\n"
+            "Referencia: Entre Av. Emancipación "
+            "y Jr. Huancavelica."
         )
         return
 
     # ==========================================================
-    # INTENCIÓN: CITA
+    # 26. INTENCIÓN: CITA
     # ==========================================================
+
     if "[INTENCION:CITA]" in respuesta_mayuscula:
-        conversacion.modo = "BOT"
+
         conversacion.estado = "ESPERANDO_DATOS_CITA"
-        conversacion.save()
+        conversacion.save(update_fields=["estado"])
 
         enviar_whatsapp_texto_y_guardar(
             numero,
-            "Claro 😊 Para separar una cita, envíanos en un solo mensaje:\n\n"
+            "Claro 😊 Para separar una cita, envíanos:\n\n"
             "1. Nombre completo\n"
             "2. Día deseado\n"
             "3. Hora aproximada\n"
             "4. Motivo de consulta\n\n"
-            "Ejemplo:\n"
-            "Juan Pérez, martes 5:00 p.m., medida de vista"
+            "Ejemplo: Juan Pérez, martes 5:00 p.m., "
+            "medida de vista."
         )
         return
 
     # ==========================================================
-    # INTENCIÓN: ASESOR SOLICITADO POR EL CLIENTE
-    # Todavía no activa modo HUMANO. Primero pide confirmación.
+    # 27. OPENAI SOLICITA ATENCIÓN HUMANA
     # ==========================================================
-    if "[INTENCION:ASESOR]" in respuesta_mayuscula:
-        conversacion.modo = "BOT"
-        conversacion.estado = "ESPERANDO_CONFIRMACION_ASESOR"
-        conversacion.save()
 
-        enviar_whatsapp_texto_y_guardar(
-            numero,
-            "Si deseas que un asesor de Óptica IC continúe la conversación, "
-            "responde *Sí*."
+    if (
+        "[INTENCION:ASESOR]" in respuesta_mayuscula
+        or "[ASESOR]" in respuesta_mayuscula
+    ):
+
+        pasar_a_humano(
+            "OPENAI DERIVA CONSULTA A ASESOR",
+            detalle="OpenAI no resolvió la consulta o identificó atención humana.",
+            mensaje_cliente=(
+                "Gracias por escribirnos 😊\n\n"
+                "Tu solicitud ha sido derivada a nuestro equipo. "
+                "Un asesor de Óptica IC continuará la atención "
+                "en breve.\n\n"
+                "Para volver al menú principal escribe 0️⃣"
+            )
         )
         return
 
     # ==========================================================
-    # OPENAI NO PUEDE RESPONDER CON SEGURIDAD
-    # PASAR DIRECTAMENTE A ASESOR HUMANO
+    # 28. RESPUESTA NORMAL DE OPENAI
     # ==========================================================
-    if "[ASESOR]" in respuesta_mayuscula:
 
-        # Avisar inmediatamente al asesor
-        avisar_asesor(
-            f"🚨 CLIENTE REQUIERE ATENCIÓN HUMANA\n\n"
-            f"Cliente WhatsApp: {numero}\n"
-            f"Mensaje recibido: {texto_original}\n\n"
-            f"OpenAI no pudo responder con seguridad.\n"
-            f"Responder lo antes posible."
-        )
-
-        # Pasar la conversación directamente a modo humano
-        conversacion.modo = "HUMANO"
-        conversacion.estado = "ASESOR"
-        conversacion.save()
-
-        # IMPORTANTE:
-        # No enviar ningún mensaje automático al cliente.
-        # Tampoco enviar [ASESOR].
-        return
-
-    # ==========================================================
-    # RESPUESTA CONVERSACIONAL NORMAL DE OPENAI
-    # ==========================================================
     conversacion.estado = "FINALIZADO"
-    conversacion.save()
+    conversacion.save(update_fields=["estado"])
 
     enviar_whatsapp_texto_y_guardar(
         numero,
-        respuesta_limpia
+        respuesta_ia
     )
+
     return
+
     
 
 @csrf_exempt

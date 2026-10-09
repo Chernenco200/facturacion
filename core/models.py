@@ -198,6 +198,7 @@ class Cliente(models.Model):
     OPTOMETRA_CHOICES = [
         ('Hellen', 'Hellen'),
         ('Xiomara', 'Xiomara'),
+        ('Karen', 'Karen'),
         ('Javier', 'Javier'),
         ('Lucita', 'Lucita'),
         ('Óptica_IC', 'Óptica IC'),        
