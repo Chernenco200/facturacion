@@ -5,7 +5,7 @@ from .prompts import PROMPT_OPTICA_IC
 
 def responder_con_openai(numero, texto_actual):
 
-    numero = normalizar_numero(numero)
+    numero = str(numero).strip()
     texto_actual = (texto_actual or "").strip()
 
     # =====================================================

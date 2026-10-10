@@ -615,16 +615,21 @@ def responder_mensaje(numero, texto):
 
         print("ERROR OPENAI:", str(error))
 
-        pasar_a_humano(
+        # Avisar al asesor sin responder al cliente
+        notificar_asesor(
             "ERROR AL PROCESAR CONSULTA CON OPENAI",
-            detalle=f"Error técnico: {str(error)}",
-            mensaje_cliente=(
-                "En este momento no puedo procesar "
-                "correctamente tu consulta.\n\n"
-                "He derivado tu solicitud a nuestro equipo "
-                "para que un asesor pueda ayudarte."
+            detalle=(
+                f"Error técnico: {str(error)}\n"
+                "El cliente requiere atención humana."
             )
         )
+
+        # Activar atención humana
+        conversacion.modo = "HUMANO"
+        conversacion.estado = "ASESOR"
+        conversacion.save()
+
+        # NO enviar mensaje automático al cliente
         return
 
     print("RESPUESTA OPENAI:", respuesta_ia)
@@ -707,7 +712,7 @@ def responder_mensaje(numero, texto):
         return
 
     # ==========================================================
-    # 27. OPENAI SOLICITA ATENCIÓN HUMANA
+    # 27. OPENAI NO PUEDE RESPONDER / REQUIERE ASESOR
     # ==========================================================
 
     if (
@@ -715,17 +720,23 @@ def responder_mensaje(numero, texto):
         or "[ASESOR]" in respuesta_mayuscula
     ):
 
-        pasar_a_humano(
-            "OPENAI DERIVA CONSULTA A ASESOR",
-            detalle="OpenAI no resolvió la consulta o identificó atención humana.",
-            mensaje_cliente=(
-                "Gracias por escribirnos 😊\n\n"
-                "Tu solicitud ha sido derivada a nuestro equipo. "
-                "Un asesor de Óptica IC continuará la atención "
-                "en breve.\n\n"
-                "Para volver al menú principal escribe 0️⃣"
+        print("OPENAI SOLICITA INTERVENCIÓN HUMANA:", numero)
+
+        # Notificar al celular del asesor
+        notificar_asesor(
+            "CLIENTE REQUIERE ATENCIÓN HUMANA",
+            detalle=(
+                "OpenAI no pudo resolver la consulta "
+                "o identificó que necesita intervención humana."
             )
         )
+
+        # Cambiar a modo HUMANO
+        conversacion.modo = "HUMANO"
+        conversacion.estado = "ASESOR"
+        conversacion.save()
+
+        # No responder nada al cliente
         return
 
     # ==========================================================
