@@ -1267,211 +1267,610 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 
 
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+
     const btnEmitir = document.getElementById("emitir-factura");
     if (!btnEmitir) return;
 
+    let procesandoVenta = false;
+    let ventaRegistrada = false;
+
+    // ======================================================
+    // OBTENER TOKEN CSRF
+    // ======================================================
+
     function getCookie(name) {
         let cookieValue = null;
+
         if (document.cookie && document.cookie !== "") {
             const cookies = document.cookie.split(";");
+
             for (let i = 0; i < cookies.length; i++) {
                 const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + "=")) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+
+                if (
+                    cookie.substring(0, name.length + 1) ===
+                    (name + "=")
+                ) {
+                    cookieValue = decodeURIComponent(
+                        cookie.substring(name.length + 1)
+                    );
                     break;
                 }
             }
         }
+
         return cookieValue;
     }
 
-    btnEmitir.addEventListener("click", function (e) {
+    // ======================================================
+    // FECHA ACTUAL DD/MM/YYYY
+    // ======================================================
+
+    function obtenerFechaActual() {
+        const ahora = new Date();
+
+        const dd = String(ahora.getDate()).padStart(2, "0");
+        const mm = String(ahora.getMonth() + 1).padStart(2, "0");
+        const yyyy = ahora.getFullYear();
+
+        return `${dd}/${mm}/${yyyy}`;
+    }
+
+    // ======================================================
+    // HORA SUGERIDA + 1 HORA
+    // ======================================================
+
+    function obtenerHoraSugerida() {
+        const fecha = new Date();
+
+        fecha.setHours(fecha.getHours() + 1);
+
+        const horas = fecha.getHours() % 12 || 12;
+        const minutos = String(
+            fecha.getMinutes()
+        ).padStart(2, "0");
+
+        const ampm = fecha.getHours() >= 12
+            ? "p. m."
+            : "a. m.";
+
+        return `${horas}:${minutos} ${ampm}`;
+    }
+
+    // ======================================================
+    // BOTÓN EMITIR FACTURA
+    // ======================================================
+
+    btnEmitir.addEventListener("click", async function (e) {
+
         e.preventDefault();
 
-        const nombre   = document.getElementById("id_nombre")?.value || "";
-        const telefono = document.getElementById("id_telefono")?.value || "";
-        const vendedor = document.getElementById("id_vendedor")?.value || "";
-
-        const clienteId = document.getElementById("cliente_id")?.value || "";
-        const medidaId  = document.getElementById("medida_id")?.value  || "";
-
-        // Validación mínima
-        if (!clienteId || !medidaId) {
-            if (!confirm("No se detectó cliente/receta seleccionados. ¿Emitir de todos modos?")) {
-                return;
-            }
+        // Evitar doble clic o nueva emisión
+        if (procesandoVenta || ventaRegistrada) {
+            return;
         }
 
-        // Detalle de productos
-        const filas = document.querySelectorAll("#tabla-preventa tbody tr");
+        // ==================================================
+        // 1. DATOS DEL CLIENTE
+        // ==================================================
+
+        const nombre = (
+            document.getElementById("id_nombre")?.value || ""
+        ).trim();
+
+        const telefono = (
+            document.getElementById("id_telefono")?.value || ""
+        ).trim();
+
+        const vendedor = (
+            document.getElementById("id_vendedor")?.value || ""
+        ).trim();
+
+        const clienteId =
+            document.getElementById("cliente_id")?.value || "";
+
+        const medidaId =
+            document.getElementById("medida_id")?.value || "";
+
+        if (!clienteId || !medidaId) {
+            const continuar = confirm(
+                "No se detectó cliente/receta seleccionados.\n\n" +
+                "¿Deseas continuar con la emisión?"
+            );
+
+            if (!continuar) return;
+        }
+
+        // ==================================================
+        // 2. DETALLE DE PRODUCTOS
+        // ==================================================
+
+        const filas = document.querySelectorAll(
+            "#tabla-preventa tbody tr"
+        );
+
         if (filas.length === 0) {
-            alert("Agrega al menos un producto antes de emitir la factura.");
+            alert(
+                "Agrega al menos un producto antes de emitir la factura."
+            );
             return;
         }
 
         let totalGeneral = 0;
         const detalles = [];
+        let detalleInvalido = false;
 
         filas.forEach(fila => {
-            const cod = fila.dataset.cod || "";  // <- NUEVO
-            const descripcion = fila.children[1].textContent.trim();
-            const cantidad = parseFloat(fila.children[2].textContent.trim());
-            const precio = parseFloat(
-                fila.children[3].textContent.replace("S/", "").trim()
+
+            const cod = fila.dataset.cod || "";
+
+            const descripcion =
+                fila.children[1]?.textContent.trim() || "";
+
+            const cantidad = parseFloat(
+                (fila.children[2]?.textContent || "")
+                    .trim()
+                    .replace(",", ".")
             );
+
+            const precio = parseFloat(
+                (fila.children[3]?.textContent || "")
+                    .replace("S/", "")
+                    .trim()
+                    .replace(",", ".")
+            );
+
+            if (
+                !descripcion ||
+                !Number.isFinite(cantidad) ||
+                cantidad <= 0 ||
+                !Number.isInteger(cantidad) ||
+                !Number.isFinite(precio) ||
+                precio < 0
+            ) {
+                detalleInvalido = true;
+                return;
+            }
+
+            // Se conserva la lógica original:
+            // precio es el importe mostrado en la fila.
             totalGeneral += precio;
-            detalles.push({cod, descripcion, cantidad, precio });
+
+            detalles.push({
+                cod: cod,
+                descripcion: descripcion,
+                cantidad: cantidad,
+                precio: precio
+            });
         });
 
-        // ====== RECETA — se arma con los campos de la izquierda ======
-        const R = id => document.getElementById(id)?.value || "";
+        if (detalleInvalido || detalles.length === 0) {
+            alert(
+                "Hay productos con descripción, cantidad o precio inválidos."
+            );
+            return;
+        }
+
+        totalGeneral = Math.round(
+            (totalGeneral + Number.EPSILON) * 100
+        ) / 100;
+
+        if (totalGeneral <= 0) {
+            alert("El total de la venta debe ser mayor a cero.");
+            return;
+        }
+
+        // ==================================================
+        // 3. RECETA
+        // ==================================================
+
+        const R = id =>
+            document.getElementById(id)?.value || "";
 
         const receta = {
-            // Lejos OD
+
+            // LEJOS OD
             esf_lejos_OD: R("id_esf_lejos_OD"),
             cil_lejos_OD: R("id_cil_lejos_OD"),
             eje_lejos_OD: R("id_eje_lejos_OD"),
             DIP_lejos_OD: R("id_DIP_lejos_OD"),
             Add_lejos_OD: R("id_Add_lejos_OD"),
-            AV_lejos_OD:  R("id_AV_lejos_OD"),
+            AV_lejos_OD: R("id_AV_lejos_OD"),
 
-            // Lejos OI
+            // LEJOS OI
             esf_lejos_OI: R("id_esf_lejos_OI"),
             cil_lejos_OI: R("id_cil_lejos_OI"),
             eje_lejos_OI: R("id_eje_lejos_OI"),
             DIP_lejos_OI: R("id_DIP_lejos_OI"),
             Add_lejos_OI: R("id_Add_lejos_OI"),
-            AV_lejos_OI:  R("id_AV_lejos_OI"),
+            AV_lejos_OI: R("id_AV_lejos_OI"),
 
-            // Cerca OD
+            // CERCA OD
             esf_cerca_OD: R("id_esf_cerca_OD"),
             cil_cerca_OD: R("id_cil_cerca_OD"),
             eje_cerca_OD: R("id_eje_cerca_OD"),
             DIP_cerca_OD: R("id_DIP_cerca_OD"),
-            AV_cerca_OD:  R("id_AV_cerca_OD"),
+            AV_cerca_OD: R("id_AV_cerca_OD"),
 
-            // Cerca OI
+            // CERCA OI
             esf_cerca_OI: R("id_esf_cerca_OI"),
             cil_cerca_OI: R("id_cil_cerca_OI"),
             eje_cerca_OI: R("id_eje_cerca_OI"),
             DIP_cerca_OI: R("id_DIP_cerca_OI"),
-            AV_cerca_OI:  R("id_AV_cerca_OI"),
+            AV_cerca_OI: R("id_AV_cerca_OI")
         };
-        // ====== RECETA — FIN ======
 
-// ====== FECHA DE EMISIÓN (por defecto HOY, editable) ======
-let fechaEmision = "";
+        // ==================================================
+        // 4. FECHA DE EMISIÓN
+        // ==================================================
 
-(() => {
-  // Fecha actual DD/MM/YYYY
-  const ahora = new Date();
-  const dd = String(ahora.getDate()).padStart(2, "0");
-  const mm = String(ahora.getMonth() + 1).padStart(2, "0");
-  const yyyy = ahora.getFullYear();
-  const fechaActual = `${dd}/${mm}/${yyyy}`;
+        const fechaActual = obtenerFechaActual();
 
-  // Preguntar fecha emisión (por defecto hoy)
-  fechaEmision = prompt(
-    "Fecha de emisión (puedes modificarla):",
-    fechaActual
-  ) || "";
-
-  // Si cancelan o dejan vacío, usa fechaActual
-  if (!fechaEmision.trim()) fechaEmision = fechaActual;
-})();
-
-
-        // ====== FECHA/HORA DE ENTREGA (como lo tenías) ======
-        let fechaEntrega = "";
-        let horaEntrega  = "";
-
-        const pedirFechaHora = confirm("¿Quieres registrar fecha y hora de entrega sugeridas en el ticket?");
-
-        if (pedirFechaHora) {
-        // Fecha actual DD/MM/YYYY
-        const ahora = new Date();
-        const dd = String(ahora.getDate()).padStart(2, "0");
-        const mm = String(ahora.getMonth() + 1).padStart(2, "0");
-        const yyyy = ahora.getFullYear();
-        const fechaActual = `${dd}/${mm}/${yyyy}`;
-
-        // Hora +1 (formato 12h con am/pm)
-        const horaMasUna = new Date();
-        horaMasUna.setHours(horaMasUna.getHours() + 1);
-        const horas = horaMasUna.getHours() % 12 || 12;
-        const minutos = String(horaMasUna.getMinutes()).padStart(2, "0");
-        const ampm = horaMasUna.getHours() >= 12 ? "p. m." : "a. m.";
-        const horaSugerida = `${horas}:${minutos} ${ampm}`;
-
-        fechaEntrega = prompt(
-            "Fecha de entrega (Los laboratorios no atienden domingos ni feriados):",
+        const fechaEmisionIngresada = prompt(
+            "Fecha de emisión (puedes modificarla):",
             fechaActual
-        ) || "";
-        horaEntrega = prompt(
-            "Hora de entrega (hh:mm am/pm):",
-            horaSugerida
-        ) || "";
+        );
+
+        if (fechaEmisionIngresada === null) {
+            return;
         }
 
-        // A cuenta / saldo
-        const aCuentaStr = prompt(
-            `El total es S/ ${totalGeneral.toFixed(2)}. ¿Cuánto deja a cuenta?`, totalGeneral.toFixed(2)
-        );
-        const aCuenta = parseFloat((aCuentaStr || "0").replace(",", ".")) || 0;
-        const saldo = totalGeneral - aCuenta;
-        const puntosIC = Math.floor(totalGeneral / 20); // Puntos IC
+        const fechaEmision =
+            fechaEmisionIngresada.trim() || fechaActual;
 
-        // Enviar al backend
-        const csrftoken = getCookie("csrftoken");
+        // Validar fecha
+        function fechaValida(fecha) {
+            const partes = fecha.split("/");
 
-        const medioPago = document.getElementById("medio_pago")?.value || "EFECTIVO";
-        fetch("/guardar-ticket/", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": csrftoken,
-            },
-            body: JSON.stringify({
-                cliente_id: clienteId || null,
-                medida_id:  medidaId  || null,
-                cliente: nombre,
-                telefono: telefono,
-                vendedor: vendedor,
+            if (partes.length !== 3) return false;
 
-                fecha_emision: fechaEmision,   // ✅ IMPORTANTE
+            const [dd, mm, yyyy] = partes.map(Number);
 
-                total: totalGeneral.toFixed(2),
-                a_cuenta: aCuenta.toFixed(2),
-                detalles: detalles,
-                pedirFechaHora: pedirFechaHora,
-                fecha_entrega: fechaEntrega,
-                hora_entrega: horaEntrega,
-                receta: receta,
-                puntos_ic: puntosIC,
-                medio_pago: medioPago,
-            }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.ok) {
-
-                // ✅ ABRIR PDF LEYENDO DESDE BD POR NUMERO
-                window.open(`/ticket/imprimir/?numero=${data.numero}`, "_blank");
-
-            } else {
-                alert("Error al guardar el ticket");
+            if (
+                !Number.isInteger(dd) ||
+                !Number.isInteger(mm) ||
+                !Number.isInteger(yyyy) ||
+                yyyy < 1900
+            ) {
+                return false;
             }
-        })
-        .catch(error => {
-            console.error("Error:", error);
-            alert("Error inesperado al guardar el ticket");
-        });
+
+            const d = new Date(yyyy, mm - 1, dd);
+
+            return (
+                d.getFullYear() === yyyy &&
+                d.getMonth() === mm - 1 &&
+                d.getDate() === dd
+            );
+        }
+
+        if (!fechaValida(fechaEmision)) {
+            alert(
+                "Fecha de emisión inválida.\n" +
+                "Utiliza el formato DD/MM/YYYY."
+            );
+            return;
+        }
+
+        // ==================================================
+        // 5. FECHA Y HORA DE ENTREGA
+        // ==================================================
+
+        let fechaEntrega = "";
+        let horaEntrega = "";
+
+        const pedirFechaHora = confirm(
+            "¿Quieres registrar fecha y hora de entrega " +
+            "sugeridas en el ticket?"
+        );
+
+        if (pedirFechaHora) {
+
+            const fechaIngresada = prompt(
+                "Fecha de entrega " +
+                "(Los laboratorios no atienden domingos ni feriados):",
+                fechaActual
+            );
+
+            if (fechaIngresada === null) return;
+
+            fechaEntrega = fechaIngresada.trim();
+
+            if (
+                fechaEntrega &&
+                !fechaValida(fechaEntrega)
+            ) {
+                alert("Fecha de entrega inválida.");
+                return;
+            }
+
+            const horaIngresada = prompt(
+                "Hora de entrega (hh:mm am/pm):",
+                obtenerHoraSugerida()
+            );
+
+            if (horaIngresada === null) return;
+
+            horaEntrega = horaIngresada.trim();
+        }
+
+        // ==================================================
+        // 6. A CUENTA Y SALDO
+        // ==================================================
+
+        const aCuentaStr = prompt(
+            `El total es S/ ${totalGeneral.toFixed(2)}.\n` +
+            "¿Cuánto deja a cuenta?",
+            totalGeneral.toFixed(2)
+        );
+
+        if (aCuentaStr === null) return;
+
+        const montoIngresado = aCuentaStr
+            .trim()
+            .replace(",", ".");
+
+        if (!montoIngresado) {
+            alert("Ingresa el monto a cuenta.");
+            return;
+        }
+
+        const aCuenta = Number(montoIngresado);
+
+        if (
+            !Number.isFinite(aCuenta) ||
+            aCuenta < 0 ||
+            aCuenta > totalGeneral ||
+            !/^\d+(\.\d{1,2})?$/.test(montoIngresado)
+        ) {
+            alert(
+                "Monto a cuenta inválido.\n\n" +
+                `Debe estar entre S/ 0.00 y S/ ${totalGeneral.toFixed(2)}.`
+            );
+            return;
+        }
+
+        const saldo = Math.round(
+            (totalGeneral - aCuenta) * 100
+        ) / 100;
+
+        const puntosIC = Math.floor(totalGeneral / 20);
+
+        // ==================================================
+        // 7. MEDIO DE PAGO
+        // ==================================================
+
+        const medioPago = (
+            document.getElementById("medio_pago")?.value ||
+            "EFECTIVO"
+        ).trim().toUpperCase();
+
+        const mediosValidos = [
+            "EFECTIVO",
+            "YAPE",
+            "TARJETA",
+            "TRANSFERENCIA"
+        ];
+
+        if (
+            aCuenta > 0 &&
+            !mediosValidos.includes(medioPago)
+        ) {
+            alert("Selecciona un medio de pago válido.");
+            return;
+        }
+
+        // ==================================================
+        // 8. CONFIRMACIÓN FINAL OBLIGATORIA
+        // ==================================================
+        //
+        // IMPORTANTE:
+        // Hasta este punto NO se ha llamado al servidor
+        // para crear el TicketVenta.
+        //
+        // Cancelar aquí significa que NO se registra venta.
+        // ==================================================
+
+        const mensajeConfirmacion =
+
+            "========== ÓPTICA IC ==========\n\n" +
+
+            "CONFIRMAR EMISIÓN DE FACTURA\n\n" +
+
+            `Cliente: ${nombre || "No seleccionado"}\n` +
+            `Vendedor: ${vendedor || "No indicado"}\n\n` +
+
+            `Productos: ${detalles.length}\n` +
+
+            "--------------------------------\n" +
+
+            `TOTAL: S/ ${totalGeneral.toFixed(2)}\n` +
+            `A CUENTA: S/ ${aCuenta.toFixed(2)}\n` +
+            `SALDO: S/ ${saldo.toFixed(2)}\n\n` +
+
+            `Medio de pago: ${medioPago}\n` +
+            `Puntos IC: ${puntosIC}\n\n` +
+
+            `Fecha de emisión: ${fechaEmision}\n` +
+
+            (
+                fechaEntrega
+                    ? `Fecha de entrega: ${fechaEntrega}\n`
+                    : ""
+            ) +
+
+            (
+                horaEntrega
+                    ? `Hora de entrega: ${horaEntrega}\n`
+                    : ""
+            ) +
+
+            "\n--------------------------------\n\n" +
+
+            "¿CONFIRMAS EL REGISTRO DE ESTA VENTA?\n\n" +
+
+            "Aceptar: guardar y emitir ticket.\n" +
+            "Cancelar: NO guardar la venta.";
+
+        const confirmarVenta = confirm(
+            mensajeConfirmacion
+        );
+
+        // CANCELACIÓN FINAL
+        if (!confirmarVenta) {
+            return;
+        }
+
+        // ==================================================
+        // 9. PREPARAR DATOS PARA DJANGO
+        // ==================================================
+
+        const datosVenta = {
+
+            cliente_id: clienteId || null,
+            medida_id: medidaId || null,
+
+            cliente: nombre,
+            telefono: telefono,
+            vendedor: vendedor,
+
+            fecha_emision: fechaEmision,
+
+            total: totalGeneral.toFixed(2),
+            a_cuenta: aCuenta.toFixed(2),
+            saldo: saldo.toFixed(2),
+
+            detalles: detalles,
+
+            pedirFechaHora: pedirFechaHora,
+            fecha_entrega: fechaEntrega,
+            hora_entrega: horaEntrega,
+
+            receta: receta,
+
+            puntos_ic: puntosIC,
+            medio_pago: medioPago
+        };
+
+        // ==================================================
+        // 10. BLOQUEAR BOTÓN DURANTE EL GUARDADO
+        // ==================================================
+
+        procesandoVenta = true;
+
+        btnEmitir.disabled = true;
+
+        const textoOriginal = btnEmitir.innerHTML;
+
+        btnEmitir.textContent = "Guardando venta...";
+
+        // ==================================================
+        // 11. GUARDAR TICKET
+        // ==================================================
+        //
+        // Esta es la ÚNICA llamada de guardado
+        // dentro de este script.
+        //
+        // Se ejecuta únicamente después de confirmar.
+        // ==================================================
+
+        try {
+
+            const response = await fetch(
+                "/guardar-ticket/",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": getCookie("csrftoken")
+                    },
+
+                    credentials: "same-origin",
+
+                    body: JSON.stringify(datosVenta)
+                }
+            );
+
+            let data;
+
+            try {
+                data = await response.json();
+            } catch (error) {
+                throw new Error(
+                    "No se pudo interpretar la respuesta del servidor."
+                );
+            }
+
+            if (!response.ok || !data.ok) {
+                throw new Error(
+                    data.error ||
+                    data.mensaje ||
+                    "No se pudo guardar el ticket."
+                );
+            }
+
+            // ==================================================
+            // 12. VENTA GUARDADA CORRECTAMENTE
+            // ==================================================
+
+            ventaRegistrada = true;
+
+            btnEmitir.textContent = "Venta registrada";
+
+            alert(
+                "VENTA REGISTRADA CORRECTAMENTE\n\n" +
+                `Ticket N.º ${data.numero}\n` +
+                `Total: S/ ${totalGeneral.toFixed(2)}\n` +
+                `A cuenta: S/ ${aCuenta.toFixed(2)}\n` +
+                `Saldo: S/ ${saldo.toFixed(2)}`
+            );
+
+            // ==================================================
+            // 13. IMPRIMIR TICKET
+            // ==================================================
+
+            window.open(
+                `/ticket/imprimir/?numero=${encodeURIComponent(data.numero)}`,
+                "_blank"
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Error al guardar ticket:",
+                error
+            );
+
+            alert(
+                "No se pudo confirmar el resultado de la venta.\n\n" +
+                error.message +
+                "\n\nAntes de volver a emitir, revisa si " +
+                "el ticket ya fue registrado para evitar duplicados."
+            );
+
+        } finally {
+
+            procesandoVenta = false;
+
+            // Si ya se guardó, mantener bloqueado el botón.
+            // Si hubo error, permitir reintentar solo después
+            // de verificar que el ticket no existe.
+            if (!ventaRegistrada) {
+                btnEmitir.disabled = false;
+                btnEmitir.innerHTML = textoOriginal;
+            }
+
+        }
 
     });
+
 });
 </script>
+
 
 
 
