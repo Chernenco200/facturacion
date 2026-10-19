@@ -1,0 +1,258 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Contabilizar compra {{ compra }}{% endblock %}
+
+{% block content %}
+<style>
+    .compra-merc-page { background: #f5f6f8; color: #17324d; padding: 22px 12px 36px; border-radius: 10px; }
+    .compra-merc-page .contenedor { max-width: 1000px; margin: auto; }
+    .compra-merc-page .card { border: 0; box-shadow: 0 1px 5px rgba(0, 0, 0, .08); }
+    .compra-merc-page .subtitulo { color: #667085; font-size: .95rem; }
+    .compra-merc-page .seccion-titulo { font-weight: 600; }
+    .compra-merc-page .importe { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .compra-merc-page .resumen { background: #f8f9fb; border-radius: .5rem; padding: 12px 16px; }
+    .compra-merc-page .resumen .fila { display: flex; justify-content: space-between; padding: 3px 0; }
+    .compra-merc-page .resumen .total { font-weight: 600; border-top: 1px solid #e4e7ec; margin-top: 4px; padding-top: 6px; }
+    .compra-merc-page .sin-cuenta { color: #b42318; font-weight: 600; }
+    .compra-merc-page .table-responsive { overflow-x: auto; }
+    .compra-merc-page .table { min-width: 640px; }
+</style>
+
+<div class="compra-merc-page">
+<div class="contenedor">
+
+    {% include "contabilidad/_mensajes.html" %}
+
+    <div class="mb-3">
+        <a href="{% url 'contabilidad:compras_por_contabilizar' %}" class="text-decoration-none">
+            ‹ Compras por contabilizar
+        </a>
+    </div>
+
+    <div class="mb-4">
+        <h2 class="mb-1">Contabilizar compra {{ compra.serie }}-{{ compra.numero }}</h2>
+        <div class="subtitulo">
+            {{ compra.get_tipo_comprobante_display }} de {{ proveedor }},
+            del {{ compra.fecha|date:"d/m/Y" }}
+        </div>
+    </div>
+
+    <!-- DETALLE -->
+    <div class="card mb-4">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Producto</th>
+                        <th>Cuenta de inventario</th>
+                        <th class="importe">Cantidad</th>
+                        <th class="importe">Precio</th>
+                        <th class="importe">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in detalles %}
+                        <tr>
+                            <td>{{ item.detalle.producto.descripcion|default:item.detalle.producto.cod }}</td>
+                            <td>
+                                {% if item.cuenta %}
+                                    {{ item.cuenta.codigo }} - {{ item.cuenta.nombre }}
+                                {% else %}
+                                    <select name="tipo_producto_{{ item.detalle.producto.id }}" form="form-contabilizar"
+                                            class="form-select form-select-sm" aria-label="Tipo del producto" required>
+                                        <option value="">Elige el tipo</option>
+                                        {% for valor, etiqueta in tipos_producto %}
+                                            <option value="{{ valor }}">{{ etiqueta }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="sin-cuenta small mt-1">Sin tipo: elígelo para saber la cuenta</div>
+                                {% endif %}
+                            </td>
+                            <td class="importe">{{ item.detalle.cantidad|floatformat:2 }}</td>
+                            <td class="importe">S/ {{ item.detalle.precio_compra|floatformat:2 }}</td>
+                            <td class="importe">S/ {{ item.detalle.subtotal|floatformat:2 }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_difiere %}
+            <div class="card-footer bg-white small text-danger">
+                El total guardado en la compra (S/ {{ compra.total|floatformat:2 }}) no coincide
+                con la suma del detalle (S/ {{ opciones.sin_credito.2|floatformat:2 }}).
+                Se contabiliza la suma del detalle.
+            </div>
+        {% endif %}
+    </div>
+
+    <form method="post" id="form-contabilizar">
+        {% csrf_token %}
+
+        <!-- IGV -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="seccion-titulo mb-3">IGV</div>
+
+                {% if es_factura %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" value="1"
+                               id="usa_credito_fiscal" name="usa_credito_fiscal"
+                               {% if datos.usa_credito_fiscal == "1" %}checked{% endif %}>
+                        <label class="form-check-label" for="usa_credito_fiscal">
+                            Usar el IGV de esta factura como crédito fiscal
+                        </label>
+                    </div>
+                    <div class="form-check mb-3 ms-4" id="bloque-incluye">
+                        <input class="form-check-input" type="checkbox" value="1"
+                               id="precios_incluyen_igv" name="precios_incluyen_igv"
+                               {% if datos.precios_incluyen_igv == "1" %}checked{% endif %}>
+                        <label class="form-check-label" for="precios_incluyen_igv">
+                            Los precios del detalle ya incluyen IGV
+                        </label>
+                    </div>
+                {% else %}
+                    <p class="subtitulo mb-3">
+                        Es {{ compra.get_tipo_comprobante_display|lower }}: el IGV no se recupera
+                        y forma parte del costo del inventario.
+                    </p>
+                {% endif %}
+
+                <div class="resumen" style="max-width: 380px;">
+                    <div class="fila"><span>Inventario (sin IGV recuperable)</span><span class="importe" id="res-base">—</span></div>
+                    <div class="fila"><span>IGV crédito fiscal</span><span class="importe" id="res-igv">—</span></div>
+                    <div class="fila total"><span>Total a pagar al proveedor</span><span class="importe" id="res-total">—</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGO -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="seccion-titulo mb-3">Pago</div>
+                <div class="row g-3">
+
+                    <div class="col-md-4">
+                        <label for="forma_pago" class="form-label">Forma de pago</label>
+                        <select id="forma_pago" name="forma_pago" class="form-select" required>
+                            {% for valor, etiqueta in formas_pago %}
+                                <option value="{{ valor }}" {% if datos.forma_pago == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 bloque-parcial">
+                        <label for="monto_pagado" class="form-label">Monto pagado ahora</label>
+                        <div class="input-group">
+                            <span class="input-group-text">S/</span>
+                            <input type="number" id="monto_pagado" name="monto_pagado" class="form-control"
+                                   min="0.01" step="0.01" value="{{ datos.monto_pagado }}">
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 bloque-pago">
+                        <label for="fecha_pago" class="form-label">Fecha de pago</label>
+                        <input type="date" id="fecha_pago" name="fecha_pago" class="form-control" value="{{ datos.fecha_pago }}">
+                    </div>
+
+                    <div class="col-md-6 bloque-pago">
+                        <label for="cuenta_pago" class="form-label">Pagado desde</label>
+                        <select id="cuenta_pago" name="cuenta_pago" class="form-select">
+                            <option value="">Seleccione</option>
+                            {% for cuenta in cuentas_pago %}
+                                <option value="{{ cuenta.id }}" {% if datos.cuenta_pago == cuenta.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ cuenta.codigo }} - {{ cuenta.nombre }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6 bloque-credito">
+                        <label for="cuenta_proveedor" class="form-label">Cuenta por pagar</label>
+                        <select id="cuenta_proveedor" name="cuenta_proveedor" class="form-select">
+                            <option value="">Seleccione</option>
+                            {% for cuenta in cuentas_proveedor %}
+                                <option value="{{ cuenta.id }}" {% if datos.cuenta_proveedor == cuenta.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ cuenta.codigo }} - {{ cuenta.nombre }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 bloque-credito">
+                        <label for="fecha_vencimiento" class="form-label">Vence</label>
+                        <input type="date" id="fecha_vencimiento" name="fecha_vencimiento" class="form-control" value="{{ datos.fecha_vencimiento }}">
+                    </div>
+
+                    <div class="col-12">
+                        <label for="observacion" class="form-label">Observación</label>
+                        <textarea id="observacion" name="observacion" class="form-control" rows="2">{{ datos.observacion }}</textarea>
+                    </div>
+
+                </div>
+            </div>
+            <div class="card-footer bg-white text-end">
+                <button type="submit" class="btn btn-primary">Contabilizar compra</button>
+            </div>
+        </div>
+    </form>
+
+</div>
+</div>
+
+{{ opciones.con_igv.0|stringformat:"s"|json_script:"op-con-base" }}
+{{ opciones.con_igv.1|stringformat:"s"|json_script:"op-con-igv" }}
+{{ opciones.con_igv.2|stringformat:"s"|json_script:"op-con-total" }}
+{{ opciones.sin_igv.0|stringformat:"s"|json_script:"op-sin-base" }}
+{{ opciones.sin_igv.1|stringformat:"s"|json_script:"op-sin-igv" }}
+{{ opciones.sin_igv.2|stringformat:"s"|json_script:"op-sin-total" }}
+{{ opciones.sin_credito.2|stringformat:"s"|json_script:"op-nocf-total" }}
+
+<script>
+(function () {
+    function leer(id) {
+        return parseFloat(JSON.parse(document.getElementById(id).textContent)) || 0;
+    }
+
+    const op = {
+        con: [leer("op-con-base"), leer("op-con-igv"), leer("op-con-total")],
+        sin: [leer("op-sin-base"), leer("op-sin-igv"), leer("op-sin-total")],
+        nocf: [leer("op-nocf-total"), 0, leer("op-nocf-total")],
+    };
+
+    const usaCf = document.getElementById("usa_credito_fiscal");
+    const incluye = document.getElementById("precios_incluyen_igv");
+    const bloqueIncluye = document.getElementById("bloque-incluye");
+    const formaPago = document.getElementById("forma_pago");
+
+    function soles(valor) { return "S/ " + valor.toFixed(2); }
+
+    function actualizarIgv() {
+        let valores = op.nocf;
+        if (usaCf && usaCf.checked) {
+            valores = incluye.checked ? op.con : op.sin;
+        }
+        if (bloqueIncluye) { bloqueIncluye.hidden = !(usaCf && usaCf.checked); }
+        document.getElementById("res-base").textContent = soles(valores[0]);
+        document.getElementById("res-igv").textContent = soles(valores[1]);
+        document.getElementById("res-total").textContent = soles(valores[2]);
+    }
+
+    function mostrar(selector, visible) {
+        document.querySelectorAll(selector).forEach(function (el) { el.hidden = !visible; });
+    }
+
+    function actualizarPago() {
+        const forma = formaPago.value;
+        mostrar(".bloque-pago", forma !== "CREDITO");
+        mostrar(".bloque-credito", forma === "CREDITO" || forma === "PARCIAL");
+        mostrar(".bloque-parcial", forma === "PARCIAL");
+    }
+
+    [usaCf, incluye].forEach(function (el) { if (el) { el.addEventListener("change", actualizarIgv); } });
+    formaPago.addEventListener("change", actualizarPago);
+
+    actualizarIgv();
+    actualizarPago();
+})();
+</script>
+{% endblock %}

@@ -5,6 +5,8 @@ from decimal import Decimal
 from django.db.models import Q
 from django.conf import settings
 
+from .igv import validar_igv_documento
+
 
 
 # ============================================================
@@ -220,6 +222,144 @@ class CentroCosto(models.Model):
             raise ValidationError(
                 "Un centro de costo no puede ser su propio centro padre."
             )
+
+# ============================================================
+# 3-B. TERCERO (PROVEEDOR / TRABAJADOR)
+# ============================================================
+#
+# Identifica a la persona o empresa con la que existe una
+# cuenta por pagar. Se usa como "auxiliar" de las cuentas
+# 41 (remuneraciones por pagar) y 42 (proveedores): cada
+# línea de asiento en esas cuentas lleva su tercero, y así el
+# saldo de cada uno sale directamente del libro mayor.
+# ============================================================
+
+def normalizar_nombre_tercero(nombre):
+    """
+    Normaliza un nombre para evitar duplicados por
+    mayúsculas, tildes o espacios repetidos.
+
+    "  Juan  PÉREZ " -> "juan perez"
+    """
+    import unicodedata
+
+    texto = (nombre or "").strip().lower()
+
+    texto = unicodedata.normalize("NFKD", texto)
+
+    texto = "".join(
+        caracter
+        for caracter in texto
+        if not unicodedata.combining(caracter)
+    )
+
+    return " ".join(texto.split())
+
+
+class Tercero(models.Model):
+
+    class Tipo(models.TextChoices):
+        PROVEEDOR = "PROVEEDOR", "Proveedor"
+        TRABAJADOR = "TRABAJADOR", "Trabajador"
+        OTRO = "OTRO", "Otro"
+
+    tipo = models.CharField(
+        max_length=15,
+        choices=Tipo.choices,
+        default=Tipo.PROVEEDOR,
+        db_index=True,
+    )
+
+    nombre = models.CharField(
+        max_length=200,
+    )
+
+    nombre_normalizado = models.CharField(
+        max_length=200,
+        editable=False,
+        db_index=True,
+    )
+
+    numero_documento = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="RUC o DNI (opcional).",
+    )
+
+    activo = models.BooleanField(
+        default=True,
+    )
+
+    observacion = models.TextField(
+        blank=True,
+    )
+
+    creado_en = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["tipo", "nombre"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tipo", "nombre_normalizado"],
+                name="unique_tercero_tipo_nombre",
+            ),
+        ]
+
+        verbose_name = "Tercero (proveedor / trabajador)"
+        verbose_name_plural = "Terceros (proveedores / trabajadores)"
+
+    def __str__(self):
+        return self.nombre
+
+    def save(self, *args, **kwargs):
+        self.nombre = " ".join((self.nombre or "").split())
+        self.nombre_normalizado = normalizar_nombre_tercero(
+            self.nombre
+        )
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+
+        if not normalizar_nombre_tercero(self.nombre):
+            raise ValidationError({
+                "nombre": "Debe ingresar el nombre."
+            })
+
+    @classmethod
+    def obtener_o_crear(cls, nombre, tipo=None):
+        """
+        Devuelve el tercero con ese nombre (sin distinguir
+        mayúsculas ni tildes) o lo crea. Si el nombre está
+        vacío devuelve None.
+        """
+        tipo = tipo or cls.Tipo.PROVEEDOR
+
+        normalizado = normalizar_nombre_tercero(nombre)
+
+        if not normalizado:
+            return None
+
+        tercero = (
+            cls.objects
+            .filter(
+                tipo=tipo,
+                nombre_normalizado=normalizado,
+            )
+            .first()
+        )
+
+        if tercero:
+            return tercero
+
+        return cls.objects.create(
+            tipo=tipo,
+            nombre=nombre,
+        )
+
 
 # ============================================================
 # 4. CONCEPTO DE OPERACIÓN
@@ -683,6 +823,18 @@ class DetalleAsiento(models.Model):
         related_name="movimientos",
     )
 
+    tercero = models.ForeignKey(
+        "Tercero",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="movimientos",
+        help_text=(
+            "Proveedor o trabajador al que corresponde la línea. "
+            "Obligatorio en la práctica para cuentas 41 y 42."
+        ),
+    )
+
     referencia = models.CharField(
         max_length=100,
         blank=True,
@@ -959,9 +1111,17 @@ class CompraDirectaVenta(models.Model):
         max_length=200,
         blank=True,
         help_text=(
-            "Nombre del proveedor. Más adelante podremos "
-            "reemplazarlo por un modelo Proveedor."
+            "Nombre del proveedor. Al contabilizar se vincula "
+            "automáticamente con un Tercero."
         ),
+    )
+
+    tercero = models.ForeignKey(
+        "Tercero",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="compras_directas",
     )
 
     fecha_compra = models.DateField()
@@ -989,6 +1149,17 @@ class CompraDirectaVenta(models.Model):
     costo_unitario = models.DecimalField(
         max_digits=12,
         decimal_places=4,
+    )
+
+    igv_credito_fiscal = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text=(
+            "IGV incluido en el importe que da derecho a "
+            "crédito fiscal (solo comprobantes con factura). "
+            "Cero si no hay crédito fiscal."
+        ),
     )
 
     # ========================================================
@@ -1107,6 +1278,17 @@ class CompraDirectaVenta(models.Model):
         return (
             self.cantidad
             * self.costo_unitario
+        )
+
+    @property
+    def costo_sin_igv(self):
+        """
+        Lo que va al costo de ventas: el total menos el IGV
+        que se recupera como crédito fiscal.
+        """
+        return (
+            Decimal(self.costo_total).quantize(Decimal("0.01"))
+            - (self.igv_credito_fiscal or Decimal("0.00"))
         )
 
     @property
@@ -1239,6 +1421,14 @@ class CompraDirectaVenta(models.Model):
                     "por pagar al proveedor."
                 })
 
+            if not (self.proveedor_nombre or "").strip():
+
+                raise ValidationError({
+                    "proveedor_nombre":
+                    "Una compra al crédito debe indicar "
+                    "el proveedor al que se le debe."
+                })
+
             if self.cuenta_pago:
 
                 raise ValidationError({
@@ -1296,6 +1486,14 @@ class CompraDirectaVenta(models.Model):
                     "cuenta_proveedor":
                     "Debe seleccionar la cuenta "
                     "por pagar donde quedará el saldo."
+                })
+
+            if not (self.proveedor_nombre or "").strip():
+
+                raise ValidationError({
+                    "proveedor_nombre":
+                    "Una compra con saldo pendiente debe "
+                    "indicar el proveedor al que se le debe."
                 })
 
             if not self.fecha_pago:
@@ -1358,6 +1556,28 @@ class CompraDirectaVenta(models.Model):
                 "fecha_vencimiento":
                 "La fecha de vencimiento no puede "
                 "ser anterior a la fecha de compra."
+            })
+
+        # ====================================================
+        # IGV CRÉDITO FISCAL
+        # ====================================================
+
+        errores_igv = validar_igv_documento(
+            self.igv_credito_fiscal,
+            total,
+        )
+
+        if errores_igv:
+            raise ValidationError(errores_igv)
+
+        if (
+            (self.igv_credito_fiscal or 0) > 0
+            and not (self.numero_documento or "").strip()
+        ):
+            raise ValidationError({
+                "numero_documento":
+                "Para usar el IGV como crédito fiscal "
+                "debe registrar el número de la factura."
             })
 
 
@@ -1600,6 +1820,14 @@ class ServicioTerceroVenta(models.Model):
         blank=True,
     )
 
+    tercero = models.ForeignKey(
+        "Tercero",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="servicios_venta",
+    )
+
     fecha_servicio = models.DateField(
         null=True,
         blank=True,
@@ -1609,6 +1837,17 @@ class ServicioTerceroVenta(models.Model):
         max_digits=12,
         decimal_places=2,
         default=Decimal("0.00"),
+    )
+
+    igv_credito_fiscal = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text=(
+            "IGV incluido en el importe que da derecho a "
+            "crédito fiscal (solo comprobantes con factura). "
+            "Cero si no hay crédito fiscal."
+        ),
     )
 
     forma_pago = models.CharField(
@@ -1684,6 +1923,14 @@ class ServicioTerceroVenta(models.Model):
                 "El costo del servicio no puede ser negativo."
             })
 
+        errores_igv = validar_igv_documento(
+            self.igv_credito_fiscal,
+            self.costo,
+        )
+
+        if errores_igv:
+            raise ValidationError(errores_igv)
+
         # Si queda en cero, sigue siendo solo una propuesta.
         if self.costo == 0:
             return
@@ -1694,6 +1941,13 @@ class ServicioTerceroVenta(models.Model):
                 raise ValidationError({
                     "cuenta_proveedor":
                     "Debe seleccionar la cuenta por pagar."
+                })
+
+            if not (self.proveedor_nombre or "").strip():
+                raise ValidationError({
+                    "proveedor_nombre":
+                    "Un servicio al crédito debe indicar "
+                    "el proveedor al que se le debe."
                 })
 
         else:
@@ -1752,6 +2006,18 @@ class OperacionContable(models.Model):
     proveedor_nombre = models.CharField(
         max_length=200,
         blank=True,
+        help_text=(
+            "Proveedor o trabajador. Obligatorio cuando queda "
+            "un saldo por pagar."
+        ),
+    )
+
+    tercero = models.ForeignKey(
+        "Tercero",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="operaciones_contables",
     )
 
     cliente_nombre = models.CharField(
@@ -1779,6 +2045,17 @@ class OperacionContable(models.Model):
     importe_total = models.DecimalField(
         max_digits=15,
         decimal_places=2,
+    )
+
+    igv_credito_fiscal = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text=(
+            "IGV incluido en el importe que da derecho a "
+            "crédito fiscal (solo comprobantes con factura). "
+            "Cero si no hay crédito fiscal."
+        ),
     )
 
     # --------------------------------------------------------
@@ -2062,6 +2339,43 @@ class OperacionContable(models.Model):
             )
 
         # ====================================================
+        # IGV CRÉDITO FISCAL
+        # ====================================================
+
+        errores.update(
+            validar_igv_documento(
+                self.igv_credito_fiscal,
+                self.importe_total,
+            )
+        )
+
+        if (self.igv_credito_fiscal or 0) > 0:
+
+            if (
+                not self.tipo_documento.strip()
+                or not self.numero_documento.strip()
+            ):
+                errores["numero_documento"] = (
+                    "Para usar el IGV como crédito fiscal debe "
+                    "registrar el tipo y número de la factura."
+                )
+
+            if (
+                self.concepto_id
+                and self.concepto.cuenta_contable_id
+                and self.concepto.cuenta_contable.tipo
+                in (
+                    CuentaContable.TipoCuenta.PASIVO,
+                    CuentaContable.TipoCuenta.PATRIMONIO,
+                    CuentaContable.TipoCuenta.INGRESO,
+                )
+            ):
+                errores["igv_credito_fiscal"] = (
+                    "Este concepto no es una compra ni un gasto; "
+                    "no lleva IGV crédito fiscal."
+                )
+
+        # ====================================================
         # PAGO AL CONTADO
         # ====================================================
 
@@ -2134,6 +2448,12 @@ class OperacionContable(models.Model):
                     "Debe seleccionar la cuenta por pagar."
                 )
 
+            if not (self.proveedor_nombre or "").strip():
+                errores["proveedor_nombre"] = (
+                    "Debe indicar el proveedor o trabajador "
+                    "al que se le debe."
+                )
+
         # ====================================================
         # PAGO PARCIAL
         # ====================================================
@@ -2175,6 +2495,12 @@ class OperacionContable(models.Model):
                     "del saldo pendiente."
                 )
 
+            if not (self.proveedor_nombre or "").strip():
+                errores["proveedor_nombre"] = (
+                    "Debe indicar el proveedor o trabajador "
+                    "al que se le debe."
+                )
+
         # ====================================================
         # VALIDAR CUENTA DE PAGO
         # ====================================================
@@ -2208,6 +2534,15 @@ class OperacionContable(models.Model):
             ):
                 errores["cuenta_por_pagar"] = (
                     "La cuenta por pagar no acepta movimientos."
+                )
+
+            elif (
+                self.cuenta_por_pagar.tipo
+                != CuentaContable.TipoCuenta.PASIVO
+            ):
+                errores["cuenta_por_pagar"] = (
+                    "La cuenta por pagar debe ser una "
+                    "cuenta de pasivo (41 o 42)."
                 )
 
         # ====================================================
@@ -2256,6 +2591,7 @@ class OperacionContable(models.Model):
                     "fecha",
                     "concepto_id",
                     "importe_total",
+                    "igv_credito_fiscal",
                     "forma_pago",
                     "monto_pagado",
                     "fecha_pago",
@@ -3118,3 +3454,383 @@ class DetalleNotaCredito(models.Model):
                     "producto de inventario y no puede "
                     "regresar automáticamente al stock."
             })
+
+# ============================================================
+# COMPRA DE MERCADERÍA (CONDICIÓN CONTABLE DE core.Compra)
+# ============================================================
+#
+# core.Compra registra qué entró al almacén. Este modelo guarda
+# lo que la contabilidad necesita y core no tiene: forma de pago,
+# IGV y cuentas. Así no hay que modificar las tablas de core.
+# ============================================================
+
+class CompraMercaderia(models.Model):
+
+    class FormaPago(models.TextChoices):
+        EFECTIVO = "EFECTIVO", "Efectivo"
+        BANCO = "BANCO", "Banco / transferencia"
+        CREDITO = "CREDITO", "Crédito proveedor"
+        PARCIAL = "PARCIAL", "Pago parcial"
+
+    class Estado(models.TextChoices):
+        BORRADOR = "BORRADOR", "Borrador"
+        CONTABILIZADA = "CONTABILIZADA", "Contabilizada"
+
+    compra = models.OneToOneField(
+        "core.Compra",
+        on_delete=models.PROTECT,
+        related_name="condicion_contable",
+    )
+
+    # --------------------------------------------------------
+    # IGV
+    # --------------------------------------------------------
+
+    usa_credito_fiscal = models.BooleanField(
+        default=True,
+        help_text=(
+            "Solo facturas: el IGV se recupera como crédito "
+            "fiscal y no forma parte del costo del inventario."
+        ),
+    )
+
+    precios_incluyen_igv = models.BooleanField(
+        default=True,
+        help_text=(
+            "Indica si los precios de compra ingresados en el "
+            "detalle ya incluyen el IGV."
+        ),
+    )
+
+    base_imponible = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Valor del inventario (sin IGV recuperable).",
+    )
+
+    igv_credito_fiscal = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    total_comprobante = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Lo que se paga o se debe al proveedor.",
+    )
+
+    # --------------------------------------------------------
+    # PAGO
+    # --------------------------------------------------------
+
+    forma_pago = models.CharField(
+        max_length=15,
+        choices=FormaPago.choices,
+    )
+
+    monto_pagado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    fecha_pago = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    cuenta_pago = models.ForeignKey(
+        CuentaContable,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="compras_mercaderia_pagadas",
+    )
+
+    cuenta_proveedor = models.ForeignKey(
+        CuentaContable,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="compras_mercaderia_credito",
+    )
+
+    fecha_vencimiento = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    tercero = models.ForeignKey(
+        "Tercero",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="compras_mercaderia",
+    )
+
+    # --------------------------------------------------------
+    # ASIENTO
+    # --------------------------------------------------------
+
+    asiento = models.OneToOneField(
+        AsientoContable,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="compra_mercaderia",
+    )
+
+    estado = models.CharField(
+        max_length=20,
+        choices=Estado.choices,
+        default=Estado.BORRADOR,
+        db_index=True,
+    )
+
+    observacion = models.TextField(
+        blank=True,
+    )
+
+    creado_en = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    contabilizado_en = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-compra__fecha", "-id"]
+        verbose_name = "Compra de mercadería (contable)"
+        verbose_name_plural = "Compras de mercadería (contable)"
+
+    def __str__(self):
+        return f"Compra de mercadería {self.compra}"
+
+    @property
+    def saldo_inicial(self):
+        return (
+            (self.total_comprobante or Decimal("0.00"))
+            - (self.monto_pagado or Decimal("0.00"))
+        )
+
+    def clean(self):
+        super().clean()
+
+        errores = {}
+
+        total = self.total_comprobante or Decimal("0.00")
+        pagado = self.monto_pagado or Decimal("0.00")
+
+        if pagado < 0:
+            errores["monto_pagado"] = "El monto pagado no puede ser negativo."
+
+        if self.forma_pago in (
+            self.FormaPago.EFECTIVO,
+            self.FormaPago.BANCO,
+        ):
+            if pagado != total:
+                errores["monto_pagado"] = (
+                    "Pagada al contado: el monto pagado debe ser "
+                    f"igual al total (S/ {total:.2f})."
+                )
+            if not self.cuenta_pago_id:
+                errores["cuenta_pago"] = "Seleccione la cuenta de pago."
+            if not self.fecha_pago:
+                errores["fecha_pago"] = "Indique la fecha de pago."
+            if self.cuenta_proveedor_id:
+                errores["cuenta_proveedor"] = (
+                    "Una compra pagada al contado no lleva cuenta por pagar."
+                )
+
+        elif self.forma_pago == self.FormaPago.CREDITO:
+            if pagado != 0:
+                errores["monto_pagado"] = (
+                    "Una compra al crédito empieza con pago cero."
+                )
+            if not self.cuenta_proveedor_id:
+                errores["cuenta_proveedor"] = "Seleccione la cuenta por pagar."
+            if self.cuenta_pago_id:
+                errores["cuenta_pago"] = (
+                    "Una compra al crédito no lleva cuenta de pago inicial."
+                )
+
+        elif self.forma_pago == self.FormaPago.PARCIAL:
+            if not (Decimal("0.00") < pagado < total):
+                errores["monto_pagado"] = (
+                    "El pago parcial debe ser mayor que cero y "
+                    "menor que el total."
+                )
+            if not self.cuenta_pago_id:
+                errores["cuenta_pago"] = "Seleccione la cuenta del pago inicial."
+            if not self.fecha_pago:
+                errores["fecha_pago"] = "Indique la fecha del pago inicial."
+            if not self.cuenta_proveedor_id:
+                errores["cuenta_proveedor"] = (
+                    "Seleccione la cuenta por pagar del saldo."
+                )
+
+        if (
+            self.fecha_vencimiento
+            and self.compra_id
+            and self.fecha_vencimiento < self.compra.fecha
+        ):
+            errores["fecha_vencimiento"] = (
+                "El vencimiento no puede ser anterior a la compra."
+            )
+
+        if errores:
+            raise ValidationError(errores)
+
+
+# ============================================================
+# PAGO A UN TERCERO (A CUENTA DE SU SALDO)
+# ============================================================
+#
+# Cancela deuda con un proveedor o trabajador sin atarla a un
+# documento: sirve para compras de mercadería, servicios de
+# terceros al crédito o deudas cargadas con asiento de apertura.
+# El saldo de cada tercero sale del mayor, así que el pago lo
+# reduce directamente.
+# ============================================================
+
+class PagoTercero(models.Model):
+
+    class Estado(models.TextChoices):
+        CONTABILIZADO = "CONTABILIZADO", "Contabilizado"
+        ANULADO = "ANULADO", "Anulado"
+
+    tercero = models.ForeignKey(
+        "Tercero",
+        on_delete=models.PROTECT,
+        related_name="pagos",
+    )
+
+    cuenta_por_pagar = models.ForeignKey(
+        CuentaContable,
+        on_delete=models.PROTECT,
+        related_name="pagos_terceros_cancelados",
+    )
+
+    fecha_pago = models.DateField(
+        db_index=True,
+    )
+
+    monto = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    cuenta_pago = models.ForeignKey(
+        CuentaContable,
+        on_delete=models.PROTECT,
+        related_name="pagos_terceros_realizados",
+    )
+
+    referencia = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Factura o documento que se cancela (opcional).",
+    )
+
+    observacion = models.TextField(
+        blank=True,
+    )
+
+    asiento = models.OneToOneField(
+        AsientoContable,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="pago_tercero",
+    )
+
+    estado = models.CharField(
+        max_length=20,
+        choices=Estado.choices,
+        default=Estado.CONTABILIZADO,
+    )
+
+    creado_en = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["-fecha_pago", "-id"]
+        verbose_name = "Pago a proveedor / trabajador"
+        verbose_name_plural = "Pagos a proveedores / trabajadores"
+
+    def __str__(self):
+        return f"Pago a {self.tercero} - S/ {self.monto}"
+
+
+# ============================================================
+# REGISTRO DE VENTAS ANULADAS
+# ============================================================
+#
+# Al anular una venta (recibo interno con error, mes abierto)
+# el recibo se elimina y sus asientos quedan ANULADOS. Aquí se
+# conserva qué se anuló, por qué y quién lo hizo.
+# ============================================================
+
+class VentaAnulada(models.Model):
+
+    numero_recibo = models.PositiveIntegerField(
+        db_index=True,
+    )
+
+    fecha_venta = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    cliente = models.CharField(
+        max_length=200,
+        blank=True,
+    )
+
+    total = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    motivo = models.TextField()
+
+    compras_anuladas = models.BooleanField(
+        default=False,
+        help_text=(
+            "Si también se anularon compras a proveedores o "
+            "servicios de terceros asociados a la venta."
+        ),
+    )
+
+    detalle = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Copia de productos, pagos y asientos anulados.",
+    )
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ventas_anuladas",
+    )
+
+    anulado_en = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["-anulado_en"]
+        verbose_name = "Venta anulada"
+        verbose_name_plural = "Ventas anuladas"
+
+    def __str__(self):
+        return f"Recibo {self.numero_recibo:06d} anulado"

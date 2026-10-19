@@ -5,6 +5,7 @@
 {% block title %}Lista de Compras{% endblock %}
 
 {% block content %}
+{% include "contabilidad/_mensajes.html" %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -28,6 +29,7 @@
                 <th>Proveedor</th>
                 <th>Comprobante</th>
                 <th>Total</th>
+                <th>Contabilidad</th>
                 <th>Acciones</th>
             </tr>
         </thead>
@@ -40,13 +42,27 @@
                 <td>{{ c.tipo_comprobante }}-{{ c.serie }}-{{ c.numero }}</td>
                 <td>{{ c.total }}</td>
                 <td>
+                    {% with cond=c.condicion_contable %}
+                        {% if cond and cond.estado == "CONTABILIZADA" %}
+                            <span class="badge text-bg-success">Contabilizada</span>
+                            {% if cond.saldo_inicial > 0 %}
+                                <div class="small text-muted">Al crédito: S/ {{ cond.saldo_inicial|floatformat:2 }}</div>
+                            {% endif %}
+                        {% elif c.tipo_comprobante == "NC" %}
+                            <span class="badge text-bg-secondary">Asiento manual</span>
+                        {% else %}
+                            <a href="{% url 'contabilidad:contabilizar_compra_mercaderia' c.id %}" class="btn btn-sm btn-outline-primary">Contabilizar</a>
+                        {% endif %}
+                    {% endwith %}
+                </td>
+                <td>
                     <a href="{% url 'editar_compra' c.id %}" class="btn btn-sm btn-warning">Editar</a>
                     <a href="{% url 'eliminar_compra' c.id %}" class="btn btn-sm btn-danger">Eliminar</a>
                 </td>
             </tr>
         {% empty %}
             <tr>
-                <td colspan="6" class="text-center">No hay compras registradas.</td>
+                <td colspan="7" class="text-center">No hay compras registradas.</td>
             </tr>
         {% endfor %}
         </tbody>

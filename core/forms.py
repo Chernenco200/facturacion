@@ -1,5 +1,6 @@
+from django.db import models
 from django import forms
-from .models import Cliente, MedidaVista, Venta, Producto, TipoLunas, Proveedor, Compra, DetalleCompra
+from .models import Cliente, MedidaVista, Venta, Producto, TipoLunas, Proveedor, Compra, DetalleCompra, DetalleTicketVenta
 
 
 class ProductoForm(forms.ModelForm):
@@ -112,8 +113,34 @@ class CompraForm(forms.ModelForm):
         model = Compra
         fields = ['proveedor', 'fecha', 'tipo_comprobante', 'serie', 'numero']
         widgets = {
-            'fecha': forms.DateInput(attrs={'type': 'date'})
+            'fecha': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Proveedores activos, más el de la compra si se está editando.
+        self.fields['proveedor'].queryset = (
+            Proveedor.objects
+            .filter(
+                models.Q(activo=True)
+                | models.Q(pk=getattr(self.instance, 'proveedor_id', None))
+            )
+            .order_by('nombre')
+        )
+
+        for nombre, campo in self.fields.items():
+            clase = 'form-select' if isinstance(campo.widget, forms.Select) else 'form-control'
+            campo.widget.attrs.setdefault('class', clase)
+
+        self.fields['serie'].widget.attrs.setdefault('placeholder', 'F001')
+        self.fields['numero'].widget.attrs.setdefault('placeholder', '00012345')
+
+    def clean_serie(self):
+        return (self.cleaned_data.get('serie') or '').strip().upper()
+
+    def clean_numero(self):
+        return (self.cleaned_data.get('numero') or '').strip()
 
 
 class DetalleCompraForm(forms.ModelForm):
@@ -121,3 +148,38 @@ class DetalleCompraForm(forms.ModelForm):
         model = DetalleCompra
         fields = ['producto', 'cantidad', 'precio_compra', 'precio_venta']
 
+
+class DetalleTicketVentaForm(forms.ModelForm):
+    """Corrige descripción, cantidad o precio de un producto vendido."""
+
+    class Meta:
+        model = DetalleTicketVenta
+        fields = ['descripcion', 'cantidad', 'precio']
+        widgets = {
+            'descripcion': forms.Textarea(attrs={'rows': 2, 'class': 'form-control'}),
+            'cantidad': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+            'precio': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
+        }
+
+    def clean_cantidad(self):
+        cantidad = self.cleaned_data.get('cantidad')
+        if not cantidad or cantidad < 1:
+            raise forms.ValidationError('La cantidad debe ser al menos 1.')
+        return cantidad
+
+    def clean_precio(self):
+        precio = self.cleaned_data.get('precio')
+        if precio is None or precio < 0:
+            raise forms.ValidationError('El precio no puede ser negativo.')
+        return precio
+
+
+class DescripcionVentaForm(forms.ModelForm):
+    """Para ventas contabilizadas: solo se corrige el texto."""
+
+    class Meta:
+        model = DetalleTicketVenta
+        fields = ['descripcion']
+        widgets = {
+            'descripcion': forms.Textarea(attrs={'rows': 2, 'class': 'form-control'}),
+        }

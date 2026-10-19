@@ -47,7 +47,23 @@ urlpatterns = [
     path('clientes/<int:cliente_id>/editar/', views.editar_cliente, name='editar_cliente'),
     path('clientes/<int:cliente_id>/eliminar/', views.eliminar_cliente, name='eliminar_cliente'),
     path('clientes/<int:cliente_id>/historial/', views.cliente_historial, name='cliente_historial'),
+    path(
+        'clientes/<int:cliente_id>/historial/',
+        views.cliente_historial,
+        name='cliente_historial'
+    ),
 
+    path(
+        'clientes/<int:cliente_id>/medida/<int:medida_id>/editar/',
+        views.editar_medida_vista,
+        name='editar_medida_vista'
+    ),
+
+    path(
+        'clientes/<int:cliente_id>/medida/<int:medida_id>/eliminar/',
+        views.eliminar_medida_vista,
+        name='eliminar_medida_vista'
+    ),
     path('clientes/consulta_dni/', views.consulta_dni, name='consulta_dni'),
 
     path('buscar-clientes/', views.buscar_clientes, name='buscar_clientes'),
@@ -108,6 +124,7 @@ urlpatterns = [
     path("ventas/<int:pk>/editar/", views.editar_venta, name="editar_venta"),
     path("ventas/<int:pk>/eliminar/", views.eliminar_venta, name="eliminar_venta"),
     path("ventas/recibo/<int:ticket_id>/eliminar/", views.eliminar_recibo, name="eliminar_recibo"),
+    path("ventas/recibo/<int:ticket_id>/anular/", views.anular_venta, name="anular_venta"),
     
     
     path("caja/movimiento/<int:id>/eliminar/", views.eliminar_movimiento, name="eliminar_movimiento"),

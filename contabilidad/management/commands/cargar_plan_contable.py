@@ -747,6 +747,9 @@ class Command(BaseCommand):
             ("70403", "Otros servicios ópticos", "70", "INGRESO", "ACREEDORA", "70", "ER", True),
 
             ("77", "Ingresos financieros", None, "INGRESO", "ACREEDORA", "77", "ER", True),
+
+            ("88", "Impuesto a la renta", None, "GASTO", "DEUDORA", "88", "ER", False),
+            ("88101", "Impuesto a la renta - RER (cuota mensual)", "88", "GASTO", "DEUDORA", "881", "ER", True),
         ]
 
         # Se crean respetando el orden:
@@ -1929,4 +1932,4 @@ class Command(BaseCommand):
             f"{ConceptoOperacion.objects.filter(es_grupo=False, activo=True).count()}"
         )
 
-        self.stdout.write("-------------------------------------\n")
+        self.stdout.write("-------------------------------------\n")

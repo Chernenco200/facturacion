@@ -1,10 +1,13 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.exceptions import ValidationError
 from core.models import KardexMovimiento
 from django.db import transaction
+from django.db.models import Max, Sum
 from django.utils import timezone
+from .igv import CUENTA_IGV, DESCRIPCION_CREDITO_FISCAL
 from .models import (
+    Tercero,
     AsientoContable,
     PeriodoContable,
     PropuestaCostoVenta,
@@ -22,9 +25,74 @@ from .models import (
 )
 
 
-from decimal import Decimal, ROUND_HALF_UP
+CENTIMO = Decimal("0.01")
 
 
+# ============================================================
+# UTILIDADES COMUNES
+# ============================================================
+
+def ultimo_numero_asiento(periodo):
+    """
+    Devuelve el último número de asiento del período.
+
+    Bloquea la fila del período (SELECT ... FOR UPDATE) para
+    que dos registros simultáneos no obtengan el mismo número
+    y choquen con la restricción unique (periodo, numero).
+    Debe llamarse dentro de una transacción atómica.
+    """
+
+    (
+        PeriodoContable.objects
+        .select_for_update()
+        .filter(pk=periodo.pk)
+        .exists()
+    )
+
+    return (
+        AsientoContable.objects
+        .filter(periodo=periodo)
+        .aggregate(maximo=Max("numero"))
+        ["maximo"]
+    )
+
+
+def tipo_tercero_para_cuenta(cuenta):
+    """
+    41xxx (remuneraciones por pagar) -> trabajador.
+    Cualquier otra cuenta por pagar   -> proveedor.
+    """
+
+    if cuenta and (cuenta.codigo or "").startswith("41"):
+        return Tercero.Tipo.TRABAJADOR
+
+    return Tercero.Tipo.PROVEEDOR
+
+
+def resolver_tercero(documento, cuenta_por_pagar):
+    """
+    Vincula un documento (compra directa, servicio u
+    operación) con su Tercero a partir de proveedor_nombre.
+    Si ya tiene tercero, lo respeta.
+    """
+
+    if documento.tercero_id:
+        return documento.tercero
+
+    tercero = Tercero.obtener_o_crear(
+        documento.proveedor_nombre,
+        tipo_tercero_para_cuenta(cuenta_por_pagar),
+    )
+
+    if tercero:
+        documento.tercero = tercero
+        documento.save(update_fields=["tercero"])
+
+    return tercero
+
+
+def cuenta_igv():
+    return CuentaContable.objects.get(codigo=CUENTA_IGV)
 
 
 @transaction.atomic
@@ -172,15 +240,13 @@ def contabilizar_pago_proveedor(
     pago: PagoProveedor,
 ) -> AsientoContable:
     """
-    Contabiliza un pago posterior realizado a un proveedor.
+    Contabiliza un pago posterior realizado a un proveedor
+    por una compra directa con saldo pendiente.
 
     Asiento:
 
-        DEBE:
-            Cuenta por pagar al proveedor
-
-        HABER:
-            Caja / Banco
+        DEBE   42xxx  Cuenta por pagar al proveedor
+        HABER  10xxx  Caja / Banco
 
     Ejemplo:
 
@@ -210,10 +276,21 @@ def contabilizar_pago_proveedor(
         )
 
     # ========================================================
-    # 2. OBTENER COMPRA
+    # 2. OBTENER Y BLOQUEAR LA COMPRA
+    #
+    # El bloqueo evita que dos pagos simultáneos superen
+    # entre ambos el saldo pendiente.
     # ========================================================
 
-    compra = pago.compra
+    compra = (
+        CompraDirectaVenta.objects
+        .select_for_update()
+        .select_related(
+            "cuenta_proveedor",
+            "tercero",
+        )
+        .get(pk=pago.compra_id)
+    )
 
     if (
         compra.estado
@@ -228,220 +305,222 @@ def contabilizar_pago_proveedor(
     # 3. VALIDAR CUENTA POR PAGAR
     # ========================================================
 
-# ====================================================
-# VALIDAR CUENTA POR PAGAR
-# ====================================================
+    cuenta_proveedor = compra.cuenta_proveedor
 
-    if self.cuenta_por_pagar_id:
+    if not cuenta_proveedor:
+        raise ValidationError(
+            "La compra no tiene una cuenta por pagar "
+            "asociada; no existe deuda que cancelar."
+        )
 
-        if not self.cuenta_por_pagar.activo:
-            errores["cuenta_por_pagar"] = (
-                "La cuenta por pagar está inactiva."
-            )
+    if not cuenta_proveedor.activo:
+        raise ValidationError(
+            "La cuenta por pagar está inactiva."
+        )
 
-        elif not self.cuenta_por_pagar.acepta_movimientos:
-            errores["cuenta_por_pagar"] = (
-                "La cuenta por pagar no acepta movimientos."
-            )
+    if not cuenta_proveedor.acepta_movimientos:
+        raise ValidationError(
+            "La cuenta por pagar no acepta movimientos."
+        )
 
-        elif (
-            self.cuenta_por_pagar.tipo
-            != CuentaContable.TipoCuenta.PASIVO
-        ):
-            errores["cuenta_por_pagar"] = (
-                "La cuenta por pagar debe ser una cuenta "
-                "de pasivo."
-            )
+    if cuenta_proveedor.tipo != CuentaContable.TipoCuenta.PASIVO:
+        raise ValidationError(
+            "La cuenta por pagar debe ser una cuenta de pasivo."
+        )
 
     # ========================================================
     # 4. VALIDAR CUENTA DE PAGO
     # ========================================================
 
-    # ====================================================
-    # VALIDAR CUENTA DE PAGO
-    # ====================================================
+    cuenta_pago = pago.cuenta_pago
 
-    if self.cuenta_pago_id:
-
-        if not self.cuenta_pago.activo:
-            errores["cuenta_pago"] = (
-                "La cuenta de pago está inactiva."
-            )
-
-        elif not self.cuenta_pago.acepta_movimientos:
-            errores["cuenta_pago"] = (
-                "La cuenta de pago no acepta movimientos."
-            )
-
-        elif (
-            self.cuenta_pago.tipo
-            != CuentaContable.TipoCuenta.ACTIVO
-        ):
-            errores["cuenta_pago"] = (
-                "La cuenta de pago debe ser una cuenta de activo "
-                "correspondiente a Caja o Bancos."
-            )
-        # ========================================================
-        # 5. VALIDAR MONTO
-        # ========================================================
-
-        if pago.monto is None:
-            raise ValidationError(
-                "El pago no tiene un monto informado."
-            )
-
-        if pago.monto <= Decimal("0.00"):
-            raise ValidationError(
-                "El monto del pago debe ser mayor que cero."
-            )
-
-        # ========================================================
-        # 6. OBTENER PERÍODO CONTABLE DEL PAGO
-        # ========================================================
-
-        periodo = (
-            PeriodoContable.objects
-            .filter(
-                fecha_inicio__lte=pago.fecha_pago,
-                fecha_fin__gte=pago.fecha_pago,
-            )
-            .first()
+    if not cuenta_pago:
+        raise ValidationError(
+            "Debe seleccionar la cuenta desde la que "
+            "se realizó el pago."
         )
 
-        if not periodo:
-            raise ValidationError(
-                "No existe un período contable para "
-                f"la fecha {pago.fecha_pago:%d/%m/%Y}."
-            )
-
-        if periodo.estado == PeriodoContable.Estado.CERRADO:
-            raise ValidationError(
-                f"El período {periodo} se encuentra cerrado."
-            )
-
-        # ========================================================
-        # 7. EVITAR DUPLICIDAD DEL ASIENTO
-        # ========================================================
-
-        asiento_existente = (
-            AsientoContable.objects
-            .filter(
-                origen="PAGO_PROVEEDOR",
-                origen_id=pago.id,
-            )
-            .exclude(
-                estado=AsientoContable.Estado.ANULADO
-            )
-            .first()
+    if not cuenta_pago.activo:
+        raise ValidationError(
+            "La cuenta de pago está inactiva."
         )
 
-        if asiento_existente:
-            raise ValidationError(
-                "Ya existe un asiento contable para este "
-                "pago al proveedor."
-            )
-
-        # ========================================================
-        # 8. GENERAR NÚMERO DEL ASIENTO
-        # ========================================================
-
-        ultimo_numero = (
-            AsientoContable.objects
-            .filter(
-                periodo=periodo
-            )
-            .order_by("-numero")
-            .values_list(
-                "numero",
-                flat=True,
-            )
-            .first()
+    if not cuenta_pago.acepta_movimientos:
+        raise ValidationError(
+            "La cuenta de pago no acepta movimientos."
         )
 
-        numero = (
-            ultimo_numero or 0
-        ) + 1
-
-        # ========================================================
-        # 9. CREAR ASIENTO EN BORRADOR
-        # ========================================================
-
-        proveedor = (
-            compra.proveedor_nombre.strip()
-            if compra.proveedor_nombre
-            else "Proveedor"
+    if cuenta_pago.tipo != CuentaContable.TipoCuenta.ACTIVO:
+        raise ValidationError(
+            "La cuenta de pago debe ser una cuenta de activo "
+            "correspondiente a Caja o Bancos."
         )
 
-        documento = ""
+    # ========================================================
+    # 5. VALIDAR MONTO CONTRA EL SALDO (CON LA COMPRA BLOQUEADA)
+    # ========================================================
 
-        if compra.numero_documento:
-            documento = (
-                f" - {compra.numero_documento}"
-            )
+    if pago.monto is None or pago.monto <= Decimal("0.00"):
+        raise ValidationError(
+            "El monto del pago debe ser mayor que cero."
+        )
 
-        asiento = AsientoContable.objects.create(
-            periodo=periodo,
-            numero=numero,
-            fecha=pago.fecha_pago,
-            glosa=(
-                f"Pago a proveedor {proveedor}"
-                f"{documento}"
-            ),
-            estado=AsientoContable.Estado.BORRADOR,
+    pagos_contabilizados = (
+        compra.pagos_proveedor
+        .filter(estado=PagoProveedor.Estado.CONTABILIZADO)
+        .exclude(pk=pago.pk)
+        .aggregate(total=Sum("monto"))
+        ["total"]
+        or Decimal("0.00")
+    )
+
+    saldo_antes_pago = (
+        compra.costo_total.quantize(CENTIMO, ROUND_HALF_UP)
+        - (compra.monto_pagado or Decimal("0.00"))
+        - pagos_contabilizados
+    )
+
+    if pago.monto > saldo_antes_pago:
+        raise ValidationError(
+            "El pago no puede superar el saldo pendiente "
+            f"de S/ {saldo_antes_pago:.2f}."
+        )
+
+    # ========================================================
+    # 6. PERÍODO CONTABLE DEL PAGO
+    # ========================================================
+
+    periodo = (
+        PeriodoContable.objects
+        .filter(
+            fecha_inicio__lte=pago.fecha_pago,
+            fecha_fin__gte=pago.fecha_pago,
+        )
+        .first()
+    )
+
+    if not periodo:
+        raise ValidationError(
+            "No existe un período contable para "
+            f"la fecha {pago.fecha_pago:%d/%m/%Y}."
+        )
+
+    if periodo.estado == PeriodoContable.Estado.CERRADO:
+        raise ValidationError(
+            f"El período {periodo} se encuentra cerrado."
+        )
+
+    # ========================================================
+    # 7. EVITAR DUPLICIDAD DEL ASIENTO
+    # ========================================================
+
+    asiento_existente = (
+        AsientoContable.objects
+        .filter(
             origen="PAGO_PROVEEDOR",
             origen_id=pago.id,
         )
+        .exclude(
+            estado=AsientoContable.Estado.ANULADO
+        )
+        .exists()
+    )
 
-        # ========================================================
-        # 10. DEBE - CUENTA POR PAGAR
-        # ========================================================
-
-        DetalleAsiento.objects.create(
-            asiento=asiento,
-            secuencia=1,
-            cuenta=cuenta_proveedor,
-            debe=pago.monto,
-            haber=Decimal("0.00"),
+    if asiento_existente:
+        raise ValidationError(
+            "Ya existe un asiento contable para este "
+            "pago al proveedor."
         )
 
-        # ========================================================
-        # 11. HABER - CAJA / BANCO
-        # ========================================================
+    # ========================================================
+    # 8. NÚMERO, TERCERO Y CABECERA
+    # ========================================================
 
-        DetalleAsiento.objects.create(
-            asiento=asiento,
-            secuencia=2,
-            cuenta=cuenta_pago,
-            debe=Decimal("0.00"),
-            haber=pago.monto,
-        )
+    ultimo_numero = ultimo_numero_asiento(periodo)
 
-        # ========================================================
-        # 12. CONTABILIZAR ASIENTO
-        # ========================================================
+    numero = (ultimo_numero or 0) + 1
 
-        contabilizar_asiento(
-            asiento
-        )
+    tercero = resolver_tercero(
+        compra,
+        cuenta_proveedor,
+    )
 
-        # ========================================================
-        # 13. ACTUALIZAR PAGO
-        # ========================================================
+    proveedor = (
+        compra.proveedor_nombre.strip()
+        if compra.proveedor_nombre
+        else "Proveedor"
+    )
 
-        pago.estado = (
-            PagoProveedor.Estado.CONTABILIZADO
-        )
+    documento = ""
 
-        pago.contabilizado_en = timezone.now()
+    if compra.numero_documento:
+        documento = f" - {compra.numero_documento}"
 
-        pago.save(
-            update_fields=[
-                "estado",
-                "contabilizado_en",
-            ]
-        )
+    referencia = (
+        compra.numero_documento
+        or f"Compra directa {compra.id}"
+    )
 
-        return asiento
+    asiento = AsientoContable.objects.create(
+        periodo=periodo,
+        numero=numero,
+        fecha=pago.fecha_pago,
+        tipo=AsientoContable.TipoAsiento.AUTOMATICO,
+        glosa=(
+            f"Pago a proveedor {proveedor}"
+            f"{documento}"
+        )[:500],
+        estado=AsientoContable.Estado.BORRADOR,
+        origen="PAGO_PROVEEDOR",
+        origen_id=pago.id,
+    )
+
+    # ========================================================
+    # 9. DEBE - CUENTA POR PAGAR
+    # ========================================================
+
+    DetalleAsiento.objects.create(
+        asiento=asiento,
+        secuencia=1,
+        cuenta=cuenta_proveedor,
+        descripcion=f"Cancelación deuda {proveedor}"[:300],
+        debe=pago.monto,
+        haber=Decimal("0.00"),
+        tercero=tercero,
+        referencia=referencia,
+    )
+
+    # ========================================================
+    # 10. HABER - CAJA / BANCO
+    # ========================================================
+
+    DetalleAsiento.objects.create(
+        asiento=asiento,
+        secuencia=2,
+        cuenta=cuenta_pago,
+        descripcion=f"Pago a {proveedor}"[:300],
+        debe=Decimal("0.00"),
+        haber=pago.monto,
+        referencia=referencia,
+    )
+
+    # ========================================================
+    # 11. CONTABILIZAR ASIENTO Y ACTUALIZAR PAGO
+    # ========================================================
+
+    contabilizar_asiento(asiento)
+
+    pago.estado = PagoProveedor.Estado.CONTABILIZADO
+    pago.contabilizado_en = timezone.now()
+
+    pago.save(
+        update_fields=[
+            "estado",
+            "contabilizado_en",
+        ]
+    )
+
+    return asiento
 
 
 @transaction.atomic
@@ -897,16 +976,7 @@ def contabilizar_costo_venta(propuesta):
     # 5. SIGUIENTE NÚMERO DE ASIENTO
     # ========================================================
 
-    ultimo_numero = (
-        AsientoContable.objects
-        .filter(periodo=periodo)
-        .order_by("-numero")
-        .values_list(
-            "numero",
-            flat=True,
-        )
-        .first()
-    )
+    ultimo_numero = ultimo_numero_asiento(periodo)
 
     numero_asiento = (
         (ultimo_numero or 0) + 1
@@ -1035,7 +1105,29 @@ def contabilizar_costo_venta(propuesta):
 
     for detalle in detalles:
 
-        costo_total = detalle.costo_total
+        compra_directa = getattr(
+            detalle,
+            "compra_directa",
+            None,
+        )
+
+        # ----------------------------------------------------
+        # Si hubo compra directa, el importe que manda es el
+        # de la compra (lo que realmente se pagó o se debe al
+        # proveedor). Así la cuenta 42 queda igual al saldo
+        # que muestra la compra, aunque la compra se haya
+        # editado después de validar el costo.
+        # ----------------------------------------------------
+
+        if compra_directa:
+            costo_total = compra_directa.costo_total
+        else:
+            costo_total = detalle.costo_total
+
+        costo_total = Decimal(costo_total).quantize(
+            CENTIMO,
+            rounding=ROUND_HALF_UP,
+        )
 
         if costo_total <= 0:
             continue
@@ -1052,12 +1144,24 @@ def contabilizar_costo_venta(propuesta):
         # DEBE: COSTO DE VENTA
         # ----------------------------------------------------
 
+        # Con factura, el IGV no es costo: va a la 40111
+        # como crédito fiscal. Al proveedor se le debe/paga
+        # el total (costo_total).
+
+        igv_compra = Decimal("0.00")
+
+        if compra_directa:
+            igv_compra = (
+                compra_directa.igv_credito_fiscal
+                or Decimal("0.00")
+            )
+
         DetalleAsiento.objects.create(
             asiento=asiento,
             secuencia=secuencia,
             cuenta=cuenta_costo,
             descripcion=descripcion,
-            debe=costo_total,
+            debe=costo_total - igv_compra,
             haber=Decimal("0.00"),
             referencia=(
                 f"Ticket {ticket.numero:06d}"
@@ -1066,15 +1170,29 @@ def contabilizar_costo_venta(propuesta):
 
         secuencia += 1
 
+        if igv_compra > 0:
+
+            DetalleAsiento.objects.create(
+                asiento=asiento,
+                secuencia=secuencia,
+                cuenta=cuenta_igv(),
+                descripcion=(
+                    f"{DESCRIPCION_CREDITO_FISCAL} - "
+                    f"{descripcion}"
+                )[:300],
+                debe=igv_compra,
+                haber=Decimal("0.00"),
+                referencia=(
+                    compra_directa.numero_documento
+                    or f"Ticket {ticket.numero:06d}"
+                ),
+            )
+
+            secuencia += 1
+
         # ----------------------------------------------------
         # A. COMPRA DIRECTA
         # ----------------------------------------------------
-
-        compra_directa = getattr(
-            detalle,
-            "compra_directa",
-            None,
-        )
 
         if compra_directa:
 
@@ -1115,6 +1233,10 @@ def contabilizar_costo_venta(propuesta):
                     descripcion=descripcion,
                     debe=Decimal("0.00"),
                     haber=costo_total,
+                    tercero=resolver_tercero(
+                        compra_directa,
+                        cuenta_proveedor,
+                    ),
                     referencia=(
                         compra_directa.numero_documento
                         or f"Ticket {ticket.numero:06d}"
@@ -1219,6 +1341,10 @@ def contabilizar_costo_venta(propuesta):
                     ),
                     debe=Decimal("0.00"),
                     haber=saldo_pendiente,
+                    tercero=resolver_tercero(
+                        compra_directa,
+                        cuenta_proveedor,
+                    ),
                     referencia=(
                         compra_directa.numero_documento
                         or f"Ticket {ticket.numero:06d}"
@@ -1440,12 +1566,17 @@ def contabilizar_costo_venta(propuesta):
         # DEBE: SERVICIO TERCERIZADO
         # ----------------------------------------------------
 
+        igv_servicio = (
+            servicio.igv_credito_fiscal
+            or Decimal("0.00")
+        )
+
         DetalleAsiento.objects.create(
             asiento=asiento,
             secuencia=secuencia,
             cuenta=cuenta_servicio,
             descripcion=servicio.descripcion,
-            debe=servicio.costo,
+            debe=servicio.costo - igv_servicio,
             haber=Decimal("0.00"),
             categoria_gerencial=categoria,
             centro_costo=centro,
@@ -1455,6 +1586,25 @@ def contabilizar_costo_venta(propuesta):
         )
 
         secuencia += 1
+
+        if igv_servicio > 0:
+
+            DetalleAsiento.objects.create(
+                asiento=asiento,
+                secuencia=secuencia,
+                cuenta=cuenta_igv(),
+                descripcion=(
+                    f"{DESCRIPCION_CREDITO_FISCAL} - "
+                    f"{servicio.descripcion}"
+                )[:300],
+                debe=igv_servicio,
+                haber=Decimal("0.00"),
+                referencia=(
+                    f"Ticket {ticket.numero:06d}"
+                ),
+            )
+
+            secuencia += 1
 
         # ----------------------------------------------------
         # DETERMINAR CONTRAPARTIDA
@@ -1495,6 +1645,17 @@ def contabilizar_costo_venta(propuesta):
         # HABER
         # ----------------------------------------------------
 
+        tercero_servicio = None
+
+        if (
+            servicio.forma_pago
+            == ServicioTerceroVenta.FormaPago.CREDITO
+        ):
+            tercero_servicio = resolver_tercero(
+                servicio,
+                cuenta_contrapartida,
+            )
+
         DetalleAsiento.objects.create(
             asiento=asiento,
             secuencia=secuencia,
@@ -1502,6 +1663,7 @@ def contabilizar_costo_venta(propuesta):
             descripcion=servicio.descripcion,
             debe=Decimal("0.00"),
             haber=servicio.costo,
+            tercero=tercero_servicio,
             referencia=(
                 f"Ticket {ticket.numero:06d}"
             ),
@@ -1844,16 +2006,7 @@ def contabilizar_ingreso_venta(ticket):
     # 7. SIGUIENTE NÚMERO DE ASIENTO
     # ========================================================
 
-    ultimo_numero = (
-        AsientoContable.objects
-        .filter(periodo=periodo)
-        .order_by("-numero")
-        .values_list(
-            "numero",
-            flat=True,
-        )
-        .first()
-    )
+    ultimo_numero = ultimo_numero_asiento(periodo)
 
     numero_asiento = (
         (ultimo_numero or 0) + 1
@@ -2169,16 +2322,7 @@ def contabilizar_cobros_ticket(ticket):
         # SIGUIENTE NÚMERO DE ASIENTO DEL PERIODO
         # ----------------------------------------------------
 
-        ultimo_numero = (
-            AsientoContable.objects
-            .filter(periodo=periodo)
-            .order_by("-numero")
-            .values_list(
-                "numero",
-                flat=True,
-            )
-            .first()
-        )
+        ultimo_numero = ultimo_numero_asiento(periodo)
 
         numero_asiento = (
             (ultimo_numero or 0) + 1
@@ -2278,77 +2422,6 @@ def contabilizar_cobros_ticket(ticket):
 @transaction.atomic
 def procesar_venta_contablemente(ticket):
     """
-    Procesa contablemente una ventexita.
-
-    1. Genera el asiento de ingreso si todavía no existe.
-    2. Genera la propuesta de costo de venta.
-    3. Contabiliza los PagoTicket existentes que aún no
-       hayan sido contabilizados.
-
-    El costo de venta NO se contabiliza automáticamente,
-    porque puede requerir validación manual.
-    """
-
-    resultado = {
-        "asiento_venta": None,
-        "propuesta_costo": None,
-        "asientos_cobro": [],
-        "pagos_omitidos": [],
-    }
-
-    # ========================================================
-    # 1. ASIENTO DE INGRESO POR VENTA
-    # ========================================================
-
-    asiento_venta = (
-        AsientoContable.objects
-        .filter(
-            origen="VENTA",
-            origen_id=ticket.id,
-        )
-        .exclude(
-            estado=AsientoContable.Estado.ANULADO
-        )
-        .first()
-    )
-
-    if not asiento_venta:
-        asiento_venta = contabilizar_ingreso_venta(ticket)
-
-    resultado["asiento_venta"] = asiento_venta
-
-    # ========================================================
-    # 2. PROPUESTA DE COSTO
-    # ========================================================
-
-    propuesta = generar_propuesta_costo_venta(ticket)
-
-    resultado["propuesta_costo"] = propuesta
-
-    # ========================================================
-    # 3. COBROS
-    # ========================================================
-
-    if ticket.pagos.exists():
-
-        resultado_cobros = contabilizar_cobros_ticket(
-            ticket
-        )
-
-        resultado["asientos_cobro"] = (
-            resultado_cobros["asientos_creados"]
-        )
-
-        resultado["pagos_omitidos"] = (
-            resultado_cobros["pagos_omitidos"]
-        )
-
-    return resultado
-
-
-@transaction.atomic
-def procesar_venta_contablemente(ticket):
-    """
     Procesa contablemente una venta.
 
     1. Genera el asiento de ingreso si todavía no existe.
@@ -2415,13 +2488,6 @@ def procesar_venta_contablemente(ticket):
         )
 
     return resultado
-
-from decimal import Decimal
-
-from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.db.models import Sum
-
 
 @transaction.atomic
 def generar_cierre_anual(anio):
@@ -2531,13 +2597,7 @@ def generar_cierre_anual(anio):
     # 6. SIGUIENTE NÚMERO DE ASIENTO DE DICIEMBRE
     # ========================================================
 
-    ultimo_numero = (
-        AsientoContable.objects
-        .filter(periodo=diciembre)
-        .order_by("-numero")
-        .values_list("numero", flat=True)
-        .first()
-    )
+    ultimo_numero = ultimo_numero_asiento(diciembre)
 
     numero = (ultimo_numero or 0) + 1
 
@@ -2549,6 +2609,7 @@ def generar_cierre_anual(anio):
         periodo=diciembre,
         numero=numero,
         fecha=diciembre.fecha_fin,
+        tipo=AsientoContable.TipoAsiento.CIERRE,
         glosa=f"Cierre de cuentas de resultados - Ejercicio {anio}",
         estado=AsientoContable.Estado.BORRADOR,
         origen="CIERRE_ANUAL",
@@ -2755,13 +2816,7 @@ def contabilizar_operacion_contable(operacion):
     # NÚMERO DEL ASIENTO
     # --------------------------------------------------------
 
-    ultimo_numero = (
-        AsientoContable.objects
-        .filter(periodo=periodo)
-        .order_by("-numero")
-        .values_list("numero", flat=True)
-        .first()
-    )
+    ultimo_numero = ultimo_numero_asiento(periodo)
 
     numero = (ultimo_numero or 0) + 1
 
@@ -2813,12 +2868,17 @@ def contabilizar_operacion_contable(operacion):
     # 1. DÉBITO: CUENTA PRINCIPAL
     # ========================================================
 
+    igv_operacion = (
+        operacion.igv_credito_fiscal
+        or Decimal("0.00")
+    )
+
     detalle_debe = DetalleAsiento(
         asiento=asiento,
         secuencia=secuencia,
         cuenta=cuenta_principal,
         descripcion=concepto.nombre,
-        debe=operacion.importe_total,
+        debe=operacion.importe_total - igv_operacion,
         haber=Decimal("0.00"),
         categoria_gerencial=concepto.categoria_gerencial,
         centro_costo=concepto.centro_costo,
@@ -2829,6 +2889,30 @@ def contabilizar_operacion_contable(operacion):
     detalle_debe.save()
 
     secuencia += 1
+
+    # ========================================================
+    # 1-B. DÉBITO: IGV CRÉDITO FISCAL (SOLO CON FACTURA)
+    # ========================================================
+
+    if igv_operacion > 0:
+
+        detalle_igv = DetalleAsiento(
+            asiento=asiento,
+            secuencia=secuencia,
+            cuenta=cuenta_igv(),
+            descripcion=(
+                f"{DESCRIPCION_CREDITO_FISCAL} - "
+                f"{concepto.nombre}"
+            )[:300],
+            debe=igv_operacion,
+            haber=Decimal("0.00"),
+            referencia=referencia,
+        )
+
+        detalle_igv.full_clean()
+        detalle_igv.save()
+
+        secuencia += 1
 
     # ========================================================
     # 2. PAGO TOTAL
@@ -2876,6 +2960,10 @@ def contabilizar_operacion_contable(operacion):
             descripcion="Obligación pendiente de pago",
             debe=Decimal("0.00"),
             haber=operacion.importe_total,
+            tercero=resolver_tercero(
+                operacion,
+                operacion.cuenta_por_pagar,
+            ),
             referencia=referencia,
         )
 
@@ -2930,6 +3018,10 @@ def contabilizar_operacion_contable(operacion):
             descripcion="Saldo pendiente de pago",
             debe=Decimal("0.00"),
             haber=saldo,
+            tercero=resolver_tercero(
+                operacion,
+                operacion.cuenta_por_pagar,
+            ),
             referencia=referencia,
         )
 
@@ -3106,20 +3198,7 @@ def contabilizar_pago_operacion_contable(pago):
     # 8. NÚMERO DEL ASIENTO
     # ========================================================
 
-    ultimo_numero = (
-        AsientoContable.objects
-        .filter(
-            periodo=periodo
-        )
-        .order_by(
-            "-numero"
-        )
-        .values_list(
-            "numero",
-            flat=True,
-        )
-        .first()
-    )
+    ultimo_numero = ultimo_numero_asiento(periodo)
 
     numero = (
         (ultimo_numero or 0)
@@ -3186,6 +3265,10 @@ def contabilizar_pago_operacion_contable(pago):
         ),
         debe=pago.monto,
         haber=Decimal("0.00"),
+        tercero=resolver_tercero(
+            operacion,
+            cuenta_por_pagar,
+        ),
         referencia=referencia,
     )
 
@@ -3907,18 +3990,7 @@ def contabilizar_nota_credito(nota):
     # 13. SIGUIENTE NÚMERO DE ASIENTO
     # ========================================================
 
-    ultimo_numero = (
-        AsientoContable.objects
-        .filter(
-            periodo=periodo
-        )
-        .order_by("-numero")
-        .values_list(
-            "numero",
-            flat=True,
-        )
-        .first()
-    )
+    ultimo_numero = ultimo_numero_asiento(periodo)
 
     numero_asiento = (
         (ultimo_numero or 0)

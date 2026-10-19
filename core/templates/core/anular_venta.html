@@ -1,0 +1,124 @@
+{% extends 'core/base.html' %}
+{% block title %}Anular venta {{ ticket.numero|stringformat:"06d" }}{% endblock %}
+
+{% block content %}
+<style>
+    .anular-page .card { border: 0; box-shadow: 0 1px 5px rgba(0, 0, 0, .08); }
+    .anular-page .importe { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .anular-page .table-responsive { overflow-x: auto; }
+</style>
+
+<div class="container mt-4 anular-page" style="max-width: 860px;">
+
+    {% include "contabilidad/_mensajes.html" %}
+
+    <a href="{% url 'lista_ventas' %}" class="text-decoration-none">‹ Lista de ventas</a>
+
+    <h3 class="mt-2 mb-1">Anular venta {{ ticket.numero|stringformat:"06d" }}</h3>
+    <p class="text-muted">
+        {{ ticket.fecha_emision|date:"d/m/Y" }}
+        {% if ticket.cliente %}· {{ ticket.cliente }}{% endif %}
+        · Total S/ {{ ticket.total|floatformat:2 }}
+    </p>
+
+    <!-- PRODUCTOS -->
+    <div class="card mb-3">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="table-light">
+                    <tr><th>Producto</th><th class="importe">Cant.</th><th class="importe">Precio</th></tr>
+                </thead>
+                <tbody>
+                    {% for d in detalles %}
+                        <tr>
+                            <td>{{ d.descripcion }}</td>
+                            <td class="importe">{{ d.cantidad }}</td>
+                            <td class="importe">S/ {{ d.precio|floatformat:2 }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if revision.bloqueos %}
+
+        <div class="alert alert-warning">
+            <strong>Esta venta no puede anularse aquí.</strong>
+            <ul class="mb-2 mt-2">
+                {% for bloqueo in revision.bloqueos %}<li>{{ bloqueo }}</li>{% endfor %}
+            </ul>
+            Corrígela con una nota de crédito en Contabilidad &gt; Notas de crédito.
+        </div>
+        <a href="{% url 'lista_ventas' %}" class="btn btn-secondary">Volver</a>
+
+    {% else %}
+
+        <!-- QUÉ VA A PASAR -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title fs-6 fw-semibold">Al anular</h5>
+                <ul class="mb-0">
+                    <li>El recibo, sus pagos y su orden de trabajo se eliminan.</li>
+                    <li>Los productos vuelven al stock.</li>
+                    {% if revision.asientos %}
+                        <li>
+                            Quedan anulados {{ revision.asientos|length }} asiento{{ revision.asientos|length|pluralize }}
+                            ({% for a in revision.asientos %}N.° {{ a.numero }} de {{ a.periodo }}{% if not forloop.last %}, {% endif %}{% endfor %}).
+                            Siguen visibles en el historial, pero dejan de sumar en los libros, el IGV y la renta.
+                        </li>
+                    {% endif %}
+                    <li>Queda un registro de la anulación con el motivo y tu usuario.</li>
+                </ul>
+            </div>
+        </div>
+
+        <form method="post" class="card">
+            {% csrf_token %}
+            <div class="card-body">
+
+                {% if revision.requiere_confirmar_compras %}
+                    <div class="alert alert-warning">
+                        <strong>Esta venta tiene costos con terceros registrados:</strong>
+                        <ul class="mb-2 mt-2">
+                            {% for c in revision.compras_con_efecto %}
+                                <li>
+                                    Compra a {{ c.proveedor_nombre|default:"proveedor" }}
+                                    {% if c.numero_documento %}({{ c.numero_documento }}){% endif %}
+                                    por S/ {{ c.costo_total|floatformat:2 }}
+                                </li>
+                            {% endfor %}
+                            {% for s in revision.servicios %}
+                                <li>Servicio de {{ s.proveedor_nombre|default:"tercero" }}: {{ s.descripcion }} (S/ {{ s.costo|floatformat:2 }})</li>
+                            {% endfor %}
+                            {% if revision.pagos_proveedor %}
+                                <li>{{ revision.pagos_proveedor|length }} pago{{ revision.pagos_proveedor|length|pluralize }} a proveedores, que también se anularían.</li>
+                            {% endif %}
+                        </ul>
+                        Si esas compras <strong>sí ocurrieron</strong> (por ejemplo, las lunas se pidieron al laboratorio),
+                        no anules la venta: usa una nota de crédito, para que su costo siga registrado.
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" value="1" id="anular_compras" name="anular_compras" required>
+                            <label class="form-check-label" for="anular_compras">
+                                Confirmo que estas compras y servicios también fueron parte del error y deben anularse.
+                            </label>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <label for="motivo" class="form-label fw-semibold">Motivo de la anulación</label>
+                <textarea id="motivo" name="motivo" class="form-control" rows="2" required minlength="5"
+                          placeholder="Ej.: se ingresó el precio 280 en lugar de 250">{{ motivo }}</textarea>
+            </div>
+            <div class="card-footer bg-white d-flex justify-content-end gap-2">
+                <a href="{% url 'lista_ventas' %}" class="btn btn-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-danger"
+                        onclick="return confirm('¿Anular la venta {{ ticket.numero|stringformat:'06d' }}? Esta acción no se puede deshacer.');">
+                    Anular venta
+                </button>
+            </div>
+        </form>
+
+    {% endif %}
+</div>
+{% endblock %}

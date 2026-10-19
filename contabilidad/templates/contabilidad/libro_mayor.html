@@ -1,546 +1,680 @@
-<!DOCTYPE html>
-<html lang="es">
+{% extends 'core/base.html' %}
 
-<head>
-    <meta charset="UTF-8">
+{% block title %}Libro Mayor - Óptica IC{% endblock %}
 
-    <title>
-        Libro Mayor - Óptica IC
-    </title>
+{% block content %}
 
-    <style>
+<style>
+    /* ==========================================
+       ESTILOS EXCLUSIVOS DEL LIBRO MAYOR
+       ========================================== */
 
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f7fa;
-            margin: 0;
-            color: #243447;
+    .libro-mayor-page {
+        width: 100%;
+        font-family: Arial, sans-serif;
+        color: #243447;
+    }
+
+    .libro-mayor-page .contenedor {
+        width: 100%;
+        max-width: 1400px;
+        margin: 20px auto;
+        padding: 0;
+    }
+
+    /* ENCABEZADO */
+
+    .libro-mayor-page .encabezado {
+        margin-bottom: 24px;
+    }
+
+    .libro-mayor-page .encabezado h1 {
+        font-size: 30px;
+        font-weight: 600;
+        margin: 0 0 8px;
+    }
+
+    .libro-mayor-page .encabezado p {
+        margin: 0;
+        color: #667085;
+        font-size: 15px;
+    }
+
+    /* FILTROS */
+
+    .libro-mayor-page .filtros {
+        background: #ffffff;
+        padding: 24px;
+        margin-bottom: 24px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .libro-mayor-page .filtros form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        align-items: end;
+    }
+
+    .libro-mayor-page .campo {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .libro-mayor-page .campo label {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0;
+        color: #344054;
+    }
+
+    .libro-mayor-page .campo select,
+    .libro-mayor-page .campo input {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 10px 12px;
+        border: 1px solid #d0d5dd;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #243447;
+        font-size: 14px;
+    }
+
+    .libro-mayor-page .campo select:focus,
+    .libro-mayor-page .campo input:focus {
+        border-color: #285f7d;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(40, 95, 125, 0.12);
+    }
+
+    .libro-mayor-page .cuenta-select {
+        min-width: 0;
+    }
+
+    .libro-mayor-page .acciones-filtros {
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: flex-start;
+    }
+
+    .libro-mayor-page .btn-consultar {
+        padding: 11px 24px;
+        background: #285f7d;
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        min-width: 140px;
+    }
+
+    .libro-mayor-page .btn-consultar:hover {
+        background: #1d4961;
+    }
+
+    /* TARJETA DE CUENTA */
+
+    .libro-mayor-page .tarjeta {
+        background: #ffffff;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .libro-mayor-page .cuenta-cabecera {
+        background: #eaf1f5;
+        padding: 18px 20px;
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        border-bottom: 1px solid #dce4ea;
+    }
+
+    .libro-mayor-page .cuenta-nombre {
+        font-size: 20px;
+        font-weight: bold;
+    }
+
+    .libro-mayor-page .cuenta-info {
+        color: #667085;
+        font-size: 14px;
+        margin-top: 6px;
+    }
+
+    /* TABLA */
+
+    .libro-mayor-page .tabla-responsive {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .libro-mayor-page table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 0;
+    }
+
+    .libro-mayor-page th {
+        background: #f8fafc;
+        text-align: left;
+        padding: 11px 12px;
+        font-size: 13px;
+        color: #475467;
+        border-bottom: 1px solid #eaecf0;
+        white-space: nowrap;
+    }
+
+    .libro-mayor-page td {
+        padding: 11px 12px;
+        border-bottom: 1px solid #f0f2f5;
+        font-size: 14px;
+        vertical-align: middle;
+    }
+
+    .libro-mayor-page .numero {
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .libro-mayor-page .totales {
+        font-weight: bold;
+        background: #fafafa;
+    }
+
+    /* RESUMEN */
+
+    .libro-mayor-page .resumen {
+        margin-top: 20px;
+        background: #ffffff;
+        padding: 18px;
+        border-radius: 10px;
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 30px;
+        font-size: 17px;
+        font-weight: bold;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .libro-mayor-page .vacio {
+        padding: 40px 20px;
+        text-align: center;
+        color: #667085;
+    }
+
+    /* RESPONSIVE */
+
+    @media (max-width: 768px) {
+        .libro-mayor-page .filtros {
+            padding: 16px;
         }
 
-        .contenedor {
-            max-width: 1400px;
-            margin: 30px auto;
-            padding: 0 20px;
+        .libro-mayor-page .filtros form {
+            grid-template-columns: 1fr;
         }
 
-        .encabezado h1 {
-            margin-bottom: 5px;
+        .libro-mayor-page .encabezado h1 {
+            font-size: 26px;
         }
 
-        .encabezado p {
-            margin-top: 0;
-            color: #667085;
-        }
-
-        .filtros {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 25px;
-            margin-bottom: 20px;
-
-            box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .filtros form {
-            display: flex;
+        .libro-mayor-page .resumen {
+            justify-content: flex-start;
+            font-size: 15px;
             gap: 15px;
-            flex-wrap: wrap;
-            align-items: end;
         }
 
-        .campo {
-            display: flex;
+        .libro-mayor-page .cuenta-cabecera {
             flex-direction: column;
         }
-
-        .campo label {
-            margin-bottom: 6px;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        select,
-        input {
-            padding: 9px 10px;
-            border: 1px solid #d0d5dd;
-            border-radius: 6px;
-        }
-
-        .cuenta-select {
-            min-width: 360px;
-        }
-
-        button {
-            padding: 10px 18px;
-            border: none;
-            border-radius: 6px;
-            background: #285f7d;
-            color: white;
-            cursor: pointer;
-        }
-
-        .tarjeta {
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-
-            box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .cuenta-cabecera {
-            background: #eaf1f5;
-            padding: 18px 20px;
-
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-
-            border-bottom:
-                1px solid #dce4ea;
-        }
-
-        .cuenta-nombre {
-            font-size: 20px;
-            font-weight: bold;
-        }
-
-        .cuenta-info {
-            color: #667085;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th {
-            background: #f8fafc;
-            text-align: left;
-            padding: 11px 12px;
-            font-size: 13px;
-            color: #475467;
-
-            border-bottom:
-                1px solid #eaecf0;
-        }
-
-        td {
-            padding: 11px 12px;
-
-            border-bottom:
-                1px solid #f0f2f5;
-        }
-
-        .numero {
-            text-align: right;
-        }
-
-        .totales {
-            font-weight: bold;
-            background: #fafafa;
-        }
-
-        .resumen {
-            margin-top: 20px;
-            background: white;
-            padding: 18px;
-
-            border-radius: 10px;
-
-            display: flex;
-            justify-content: flex-end;
-            gap: 40px;
-
-            font-size: 17px;
-            font-weight: bold;
-
-            box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .vacio {
-            padding: 40px;
-            text-align: center;
-            color: #667085;
-        }
-
-    </style>
-</head>
+    }
+</style>
 
 
-<body>
+<div class="libro-mayor-page">
 
-<div class="contenedor">
+    <div class="contenedor">
 
-    <div class="encabezado">
+        <!-- ========================================== -->
+        <!-- ENCABEZADO -->
+        <!-- ========================================== -->
 
-        <h1>
-            Libro Mayor
-        </h1>
+        <div class="encabezado">
 
-        <p>
-            Óptica IC - Movimientos por cuenta contable
-        </p>
+            <h1>Libro Mayor</h1>
 
-    </div>
+            <p>
+                Óptica IC - Movimientos por cuenta contable
+            </p>
+
+        </div>
 
 
-    <div class="filtros">
+        <!-- ========================================== -->
+        <!-- FILTROS -->
+        <!-- ========================================== -->
 
-        <form method="get">
+        <div class="filtros">
 
-            <div class="campo">
+            <form method="get">
 
-                <label>
-                    Cuenta
-                </label>
+                <!-- CUENTA -->
 
-                <select
-                    name="cuenta"
-                    class="cuenta-select"
-                    required
-                >
+                <div class="campo">
 
-                    <option value="">
-                        Seleccione una cuenta
-                    </option>
+                    <label for="cuenta">
+                        Cuenta
+                    </label>
 
-                    {% for cuenta in cuentas %}
+                    <select
+                        id="cuenta"
+                        name="cuenta"
+                        class="cuenta-select"
+                        required
+                    >
 
-                        <option
-                            value="{{ cuenta.id }}"
-                            {% if cuenta_id == cuenta.id|stringformat:"s" %}
-                                selected
-                            {% endif %}
-                        >
-
-                            {{ cuenta.codigo }} - {{ cuenta.nombre }}
-
+                        <option value="">
+                            Seleccione una cuenta
                         </option>
 
-                    {% endfor %}
+                        {% for cuenta in cuentas %}
 
-                </select>
+                            <option
+                                value="{{ cuenta.id }}"
+                                {% if cuenta_id == cuenta.id|stringformat:"s" %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ cuenta.codigo }} - {{ cuenta.nombre }}
+                            </option>
 
-            </div>
+                        {% endfor %}
+
+                    </select>
+
+                </div>
 
 
-            <div class="campo">
+                <!-- PERIODO -->
 
-                <label>
-                    Periodo
-                </label>
+                <div class="campo">
 
-                <select name="periodo">
+                    <label for="periodo">
+                        Periodo
+                    </label>
 
-                    <option value="">
-                        Todos
-                    </option>
+                    <select
+                        id="periodo"
+                        name="periodo"
+                    >
 
-                    {% for periodo in periodos %}
-
-                        <option
-                            value="{{ periodo.id }}"
-                            {% if periodo_id == periodo.id|stringformat:"s" %}
-                                selected
-                            {% endif %}
-                        >
-
-                            {{ periodo }}
-
+                        <option value="">
+                            Todos
                         </option>
 
-                    {% endfor %}
+                        {% for periodo in periodos %}
 
-                </select>
+                            <option
+                                value="{{ periodo.id }}"
+                                {% if periodo_id == periodo.id|stringformat:"s" %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ periodo }}
+                            </option>
 
-            </div>
+                        {% endfor %}
 
+                    </select>
 
-            <div class="campo">
-
-                <label>
-                    Desde
-                </label>
-
-                <input
-                    type="date"
-                    name="fecha_desde"
-                    value="{{ fecha_desde|default:'' }}"
-                >
-
-            </div>
+                </div>
 
 
-            <div class="campo">
+                <!-- FECHA DESDE -->
 
-                <label>
-                    Hasta
-                </label>
+                <div class="campo">
 
-                <input
-                    type="date"
-                    name="fecha_hasta"
-                    value="{{ fecha_hasta|default:'' }}"
-                >
+                    <label for="fecha_desde">
+                        Desde
+                    </label>
 
-            </div>
+                    <input
+                        type="date"
+                        id="fecha_desde"
+                        name="fecha_desde"
+                        value="{{ fecha_desde|default:'' }}"
+                    >
 
-
-            <button type="submit">
-                Consultar
-            </button>
-
-        </form>
-
-    </div>
+                </div>
 
 
-    {% if cuenta_seleccionada %}
+                <!-- FECHA HASTA -->
 
-        <div class="tarjeta">
+                <div class="campo">
 
-            <div class="cuenta-cabecera">
+                    <label for="fecha_hasta">
+                        Hasta
+                    </label>
 
-                <div>
+                    <input
+                        type="date"
+                        id="fecha_hasta"
+                        name="fecha_hasta"
+                        value="{{ fecha_hasta|default:'' }}"
+                    >
 
-                    <div class="cuenta-nombre">
+                </div>
 
-                        {{ cuenta_seleccionada.codigo }}
-                        -
-                        {{ cuenta_seleccionada.nombre }}
 
-                    </div>
+                <!-- BOTÓN CONSULTAR -->
 
-                    <div class="cuenta-info">
+                <div class="acciones-filtros">
 
-                        Tipo:
-                        {{ cuenta_seleccionada.get_tipo_display }}
+                    <button
+                        type="submit"
+                        class="btn-consultar"
+                    >
+                        Consultar
+                    </button>
 
-                        ·
+                </div>
 
-                        Naturaleza:
-                        {{ cuenta_seleccionada.get_naturaleza_display }}
+            </form>
+
+        </div>
+
+
+        <!-- ========================================== -->
+        <!-- RESULTADOS DEL LIBRO MAYOR -->
+        <!-- ========================================== -->
+
+        {% if cuenta_seleccionada %}
+
+            <div class="tarjeta">
+
+                <!-- CABECERA DE LA CUENTA -->
+
+                <div class="cuenta-cabecera">
+
+                    <div>
+
+                        <div class="cuenta-nombre">
+
+                            {{ cuenta_seleccionada.codigo }}
+                            -
+                            {{ cuenta_seleccionada.nombre }}
+
+                        </div>
+
+                        <div class="cuenta-info">
+
+                            Tipo:
+                            {{ cuenta_seleccionada.get_tipo_display }}
+
+                            ·
+
+                            Naturaleza:
+                            {{ cuenta_seleccionada.get_naturaleza_display }}
+
+                        </div>
 
                     </div>
 
                 </div>
 
+
+                <!-- MOVIMIENTOS CONTABLES -->
+
+                {% if movimientos_con_saldo %}
+
+                    <div class="tabla-responsive">
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>Fecha</th>
+
+                                    <th>Asiento</th>
+
+                                    <th>Glosa / Descripción</th>
+
+                                    <th>Referencia</th>
+
+                                    <th>Categoría</th>
+
+                                    <th>Centro</th>
+
+                                    <th class="numero">
+                                        Debe
+                                    </th>
+
+                                    <th class="numero">
+                                        Haber
+                                    </th>
+
+                                    <th class="numero">
+                                        Saldo
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody>
+
+                                {% for item in movimientos_con_saldo %}
+
+                                    <tr>
+
+                                        <!-- FECHA -->
+
+                                        <td>
+                                            {{ item.movimiento.asiento.fecha|date:"d/m/Y" }}
+                                        </td>
+
+
+                                        <!-- ASIENTO -->
+
+                                        <td>
+                                            {{ item.movimiento.asiento.numero }}
+                                        </td>
+
+
+                                        <!-- GLOSA -->
+
+                                        <td>
+
+                                            {% if item.movimiento.descripcion %}
+
+                                                {{ item.movimiento.descripcion }}
+
+                                            {% else %}
+
+                                                {{ item.movimiento.asiento.glosa }}
+
+                                            {% endif %}
+
+                                        </td>
+
+
+                                        <!-- REFERENCIA -->
+
+                                        <td>
+                                            {{ item.movimiento.referencia|default:"-" }}
+                                        </td>
+
+
+                                        <!-- CATEGORÍA GERENCIAL -->
+
+                                        <td>
+
+                                            {% if item.movimiento.categoria_gerencial %}
+
+                                                {{ item.movimiento.categoria_gerencial.nombre }}
+
+                                            {% else %}
+
+                                                -
+
+                                            {% endif %}
+
+                                        </td>
+
+
+                                        <!-- CENTRO DE COSTO -->
+
+                                        <td>
+
+                                            {% if item.movimiento.centro_costo %}
+
+                                                {{ item.movimiento.centro_costo.nombre }}
+
+                                            {% else %}
+
+                                                -
+
+                                            {% endif %}
+
+                                        </td>
+
+
+                                        <!-- DEBE -->
+
+                                        <td class="numero">
+
+                                            S/
+                                            {{ item.movimiento.debe|floatformat:2 }}
+
+                                        </td>
+
+
+                                        <!-- HABER -->
+
+                                        <td class="numero">
+
+                                            S/
+                                            {{ item.movimiento.haber|floatformat:2 }}
+
+                                        </td>
+
+
+                                        <!-- SALDO -->
+
+                                        <td class="numero">
+
+                                            S/
+                                            {{ item.saldo|floatformat:2 }}
+
+                                        </td>
+
+                                    </tr>
+
+                                {% endfor %}
+
+
+                                <!-- TOTALES -->
+
+                                <tr class="totales">
+
+                                    <td colspan="6">
+                                        Totales
+                                    </td>
+
+                                    <td class="numero">
+                                        S/ {{ total_debe|floatformat:2 }}
+                                    </td>
+
+                                    <td class="numero">
+                                        S/ {{ total_haber|floatformat:2 }}
+                                    </td>
+
+                                    <td class="numero">
+                                        S/ {{ saldo_final|floatformat:2 }}
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                {% else %}
+
+                    <div class="vacio">
+
+                        La cuenta seleccionada no tiene
+                        movimientos contabilizados para
+                        los filtros indicados.
+
+                    </div>
+
+                {% endif %}
+
             </div>
 
 
+            <!-- ========================================== -->
+            <!-- RESUMEN DE TOTALES -->
+            <!-- ========================================== -->
+
             {% if movimientos_con_saldo %}
 
-                <table>
+                <div class="resumen">
 
-                    <thead>
+                    <div>
+                        Debe:
+                        S/ {{ total_debe|floatformat:2 }}
+                    </div>
 
-                        <tr>
+                    <div>
+                        Haber:
+                        S/ {{ total_haber|floatformat:2 }}
+                    </div>
 
-                            <th>
-                                Fecha
-                            </th>
-
-                            <th>
-                                Asiento
-                            </th>
-
-                            <th>
-                                Glosa / Descripción
-                            </th>
-
-                            <th>
-                                Referencia
-                            </th>
-
-                            <th>
-                                Categoría
-                            </th>
-
-                            <th>
-                                Centro
-                            </th>
-
-                            <th class="numero">
-                                Debe
-                            </th>
-
-                            <th class="numero">
-                                Haber
-                            </th>
-
-                            <th class="numero">
-                                Saldo
-                            </th>
-
-                        </tr>
-
-                    </thead>
-
-
-                    <tbody>
-
-                        {% for item in movimientos_con_saldo %}
-
-                            <tr>
-
-                                <td>
-                                    {{ item.movimiento.asiento.fecha|date:"d/m/Y" }}
-                                </td>
-
-                                <td>
-                                    {{ item.movimiento.asiento.numero }}
-                                </td>
-
-                                <td>
-
-                                    {% if item.movimiento.descripcion %}
-
-                                        {{ item.movimiento.descripcion }}
-
-                                    {% else %}
-
-                                        {{ item.movimiento.asiento.glosa }}
-
-                                    {% endif %}
-
-                                </td>
-
-                                <td>
-                                    {{ item.movimiento.referencia|default:"-" }}
-                                </td>
-
-                                <td>
-
-                                    {% if item.movimiento.categoria_gerencial %}
-
-                                        {{ item.movimiento.categoria_gerencial.nombre }}
-
-                                    {% else %}
-
-                                        -
-
-                                    {% endif %}
-
-                                </td>
-
-                                <td>
-
-                                    {% if item.movimiento.centro_costo %}
-
-                                        {{ item.movimiento.centro_costo.nombre }}
-
-                                    {% else %}
-
-                                        -
-
-                                    {% endif %}
-
-                                </td>
-
-                                <td class="numero">
-                                    S/
-                                    {{ item.movimiento.debe|floatformat:2 }}
-                                </td>
-
-                                <td class="numero">
-                                    S/
-                                    {{ item.movimiento.haber|floatformat:2 }}
-                                </td>
-
-                                <td class="numero">
-                                    S/
-                                    {{ item.saldo|floatformat:2 }}
-                                </td>
-
-                            </tr>
-
-                        {% endfor %}
-
-
-                        <tr class="totales">
-
-                            <td colspan="6">
-                                Totales
-                            </td>
-
-                            <td class="numero">
-                                S/ {{ total_debe|floatformat:2 }}
-                            </td>
-
-                            <td class="numero">
-                                S/ {{ total_haber|floatformat:2 }}
-                            </td>
-
-                            <td class="numero">
-                                S/ {{ saldo_final|floatformat:2 }}
-                            </td>
-
-                        </tr>
-
-                    </tbody>
-
-                </table>
-
-            {% else %}
-
-                <div class="vacio">
-
-                    La cuenta seleccionada no tiene
-                    movimientos contabilizados para
-                    los filtros indicados.
+                    <div>
+                        Saldo:
+                        S/ {{ saldo_final|floatformat:2 }}
+                    </div>
 
                 </div>
 
             {% endif %}
 
-        </div>
 
+        {% else %}
 
-        {% if movimientos_con_saldo %}
+            <!-- ========================================== -->
+            <!-- SIN CUENTA SELECCIONADA -->
+            <!-- ========================================== -->
 
-            <div class="resumen">
+            <div class="tarjeta">
 
-                <div>
-                    Debe:
-                    S/ {{ total_debe|floatformat:2 }}
-                </div>
+                <div class="vacio">
 
-                <div>
-                    Haber:
-                    S/ {{ total_haber|floatformat:2 }}
-                </div>
+                    Seleccione una cuenta contable
+                    para consultar su Libro Mayor.
 
-                <div>
-                    Saldo:
-                    S/ {{ saldo_final|floatformat:2 }}
                 </div>
 
             </div>
 
         {% endif %}
 
-
-    {% else %}
-
-        <div class="tarjeta">
-
-            <div class="vacio">
-
-                Seleccione una cuenta contable
-                para consultar su Libro Mayor.
-
-            </div>
-
-        </div>
-
-    {% endif %}
+    </div>
 
 </div>
 
-</body>
-
-</html>
+{% endblock %}

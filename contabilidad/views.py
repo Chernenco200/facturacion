@@ -15,7 +15,7 @@ from .models import (
     PagoOperacionContable,
     NotaCredito,
     DetalleNotaCredito,
-    
+    Tercero,
 )
 
 from .services import generar_cierre_anual
@@ -23,7 +23,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Sum, Q
 from django.db.models.functions import Coalesce
 from django.db.models import DecimalField, Value
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.utils import timezone
 from datetime import date
 from django.contrib import messages
@@ -36,7 +36,10 @@ from .services import contabilizar_pago_operacion_contable
 from .services import contabilizar_nota_credito
 
 from django.urls import reverse
+from django.apps import apps as django_apps
 from .services import contabilizar_operacion_contable
+from .impuestos import liquidacion_mensual, provisionar_renta_rer
+from .igv import leer_igv_formulario
 
 def libro_diario(request):
 
@@ -563,12 +566,18 @@ def estado_resultados(request):
     # IMPUESTO A LA RENTA
     # ========================================================
     #
-    # Por ahora lo dejamos en cero.
-    # Después crearemos una cuenta específica de gasto
-    # por impuesto a la renta.
+    # Cuenta 88: provisión mensual de la cuota del RER
+    # (1.5% de ingresos netos), registrada al cerrar cada mes.
+    # Se excluye el asiento de cierre anual, que la salda.
     #
 
-    impuesto_renta = Decimal("0.00")
+    impuesto_renta = saldo_movimientos(
+        movimientos
+        .filter(cuenta__codigo__startswith="88")
+        .exclude(
+            asiento__tipo=AsientoContable.TipoAsiento.CIERRE
+        )
+    )
 
     utilidad_neta = (
         resultado_antes_impuestos
@@ -1207,6 +1216,16 @@ def registrar_compra_directa(request, detalle_costo_id):
         if costo_unitario is not None:
             compra.costo_unitario = costo_unitario
 
+        compra.igv_credito_fiscal = leer_igv_formulario(
+            request,
+            (
+                Decimal(compra.cantidad) * costo_unitario
+                if costo_unitario is not None
+                else Decimal("0.00")
+            ),
+            errores,
+        )
+
         compra.forma_pago = forma_pago
 
         compra.monto_pagado = (
@@ -1246,9 +1265,17 @@ def registrar_compra_directa(request, detalle_costo_id):
                     # DE LA LÍNEA DE VENTA
                     # ========================================
 
-                    detalle_costo.costo_unitario = (
-                        compra.costo_unitario
-                    )
+                    # Costo sin IGV cuando hay factura: el IGV
+                    # se recupera como crédito fiscal.
+                    if Decimal(detalle_costo.cantidad) > 0:
+                        detalle_costo.costo_unitario = (
+                            compra.costo_sin_igv
+                            / Decimal(detalle_costo.cantidad)
+                        ).quantize(Decimal("0.0001"))
+                    else:
+                        detalle_costo.costo_unitario = (
+                            compra.costo_unitario
+                        )
 
                     detalle_costo.origen_costo = (
                         DetallePropuestaCostoVenta
@@ -1414,6 +1441,25 @@ def registrar_servicio_tercero(request, servicio_id):
         servicio.proveedor_nombre = proveedor_nombre
         servicio.fecha_servicio = fecha_servicio
         servicio.costo = costo
+
+        errores_igv = []
+
+        servicio.igv_credito_fiscal = leer_igv_formulario(
+            request,
+            costo,
+            errores_igv,
+        )
+
+        if errores_igv:
+
+            for error_igv in errores_igv:
+                messages.error(request, error_igv)
+
+            return redirect(
+                "contabilidad:registrar_servicio_tercero",
+                servicio_id=servicio.id,
+            )
+
         servicio.forma_pago = forma_pago
         servicio.cuenta_pago = cuenta_pago
         servicio.cuenta_proveedor = cuenta_proveedor
@@ -3530,6 +3576,24 @@ def cerrar_periodo_contable(request, periodo_id):
     )
 
     # ========================================================
+    # COMPRAS DE MERCADERÍA SIN CONTABILIZAR
+    # ========================================================
+
+    compras_mercaderia_pendientes = (
+        django_apps.get_model("core", "Compra").objects
+        .filter(
+            fecha__gte=periodo.fecha_inicio,
+            fecha__lte=periodo.fecha_fin,
+        )
+        .exclude(
+            condicion_contable__estado="CONTABILIZADA",
+        )
+        .exclude(
+            tipo_comprobante="NC",
+        )
+    )
+
+    # ========================================================
     # VALIDAR SI EL PERIODO PUEDE CERRARSE
     # ========================================================
 
@@ -3543,6 +3607,7 @@ def cerrar_periodo_contable(request, periodo_id):
         and not pagos_operacion_pendientes.exists()
         and not operaciones_borrador.exists()
         and not notas_credito_borrador.exists()
+        and not compras_mercaderia_pendientes.exists()
     )
 
     # ========================================================
@@ -3565,6 +3630,14 @@ def cerrar_periodo_contable(request, periodo_id):
 
         if not puede_cerrar:
 
+            if compras_mercaderia_pendientes.exists():
+                messages.error(
+                    request,
+                    f"Hay {compras_mercaderia_pendientes.count()} compra(s) "
+                    "de mercadería del mes sin contabilizar. "
+                    "Contabilícelas en Compras de mercadería.",
+                )
+
             messages.error(
                 request,
                 "El período no puede cerrarse porque existen "
@@ -3576,21 +3649,52 @@ def cerrar_periodo_contable(request, periodo_id):
                 periodo_id=periodo.id,
             )
 
-        with transaction.atomic():
+        try:
 
-            periodo.estado = (
-                PeriodoContable.Estado.CERRADO
+            with transaction.atomic():
+
+                # --------------------------------------------
+                # PROVISIÓN DE RENTA RER (1.5% DEL MES)
+                # Debe registrarse con el período abierto.
+                # --------------------------------------------
+
+                provision = provisionar_renta_rer(periodo)
+
+                periodo.estado = (
+                    PeriodoContable.Estado.CERRADO
+                )
+
+                periodo.save(
+                    update_fields=[
+                        "estado",
+                    ]
+                )
+
+        except ValidationError as error:
+
+            messages.error(
+                request,
+                "No se pudo cerrar el período: "
+                + " ".join(error.messages),
             )
 
-            periodo.save(
-                update_fields=[
-                    "estado",
-                ]
+            return redirect(
+                "contabilidad:cerrar_periodo_contable",
+                periodo_id=periodo.id,
+            )
+
+        mensaje_renta = ""
+
+        if provision["cuota"] > 0:
+            mensaje_renta = (
+                f" Renta RER del mes: S/ {provision['cuota']:.2f} "
+                f"(1.5% de S/ {provision['base']:.2f})."
             )
 
         messages.success(
             request,
             f"Período {periodo} cerrado correctamente."
+            + mensaje_renta
         )
 
         return redirect(
@@ -3633,6 +3737,9 @@ def cerrar_periodo_contable(request, periodo_id):
 
         "notas_credito_borrador":
             notas_credito_borrador,
+
+        "compras_mercaderia_pendientes":
+            compras_mercaderia_pendientes,
 
         "puede_cerrar":
             puede_cerrar,
@@ -5087,6 +5194,20 @@ def editar_compra_directa(request, compra_id):
             )
 
         # ====================================================
+        # IGV CRÉDITO FISCAL (FACTURA)
+        # ====================================================
+
+        igv_credito_fiscal = leer_igv_formulario(
+            request,
+            (
+                cantidad * costo_unitario
+                if cantidad and costo_unitario
+                else Decimal("0.00")
+            ),
+            errores,
+        )
+
+        # ====================================================
         # MONTO PAGADO
         # ====================================================
 
@@ -5262,6 +5383,8 @@ def editar_compra_directa(request, compra_id):
             compra.cantidad = cantidad
 
             compra.costo_unitario = costo_unitario
+
+            compra.igv_credito_fiscal = igv_credito_fiscal
 
             compra.forma_pago = forma_pago
 
@@ -6201,14 +6324,18 @@ def registrar_gasto_operacion(request):
 
     # ========================================================
     # CUENTAS POR PAGAR
+    #
+    # 41xxx: remuneraciones por pagar a trabajadores
+    # 42xxx: proveedores
     # ========================================================
 
     cuentas_por_pagar = (
         CuentaContable.objects
         .filter(
+            Q(codigo__startswith="41")
+            | Q(codigo__startswith="42"),
             activo=True,
             acepta_movimientos=True,
-            codigo__startswith="42",
         )
         .order_by("codigo")
     )
@@ -6260,6 +6387,8 @@ def registrar_gasto_operacion(request):
         "tipo_documento": "",
         "numero_documento": "",
         "importe_total": "",
+        "con_credito_fiscal": "",
+        "igv_credito_fiscal": "",
         "forma_pago": "",
         "monto_pagado": "",
         "fecha_pago": date.today().isoformat(),
@@ -6352,6 +6481,16 @@ def registrar_gasto_operacion(request):
                 "observacion",
                 "",
             ).strip(),
+
+            "con_credito_fiscal": request.POST.get(
+                "con_credito_fiscal",
+                "",
+            ),
+
+            "igv_credito_fiscal": request.POST.get(
+                "igv_credito_fiscal",
+                "",
+            ).strip(),
         }
 
         # ====================================================
@@ -6415,6 +6554,16 @@ def registrar_gasto_operacion(request):
             errores.append(
                 "El importe total ingresado no es válido."
             )
+
+        # ====================================================
+        # IGV CRÉDITO FISCAL (FACTURA)
+        # ====================================================
+
+        igv_credito_fiscal = leer_igv_formulario(
+            request,
+            importe_total or Decimal("0.00"),
+            errores,
+        )
 
         # ====================================================
         # FORMA DE PAGO
@@ -6617,6 +6766,8 @@ def registrar_gasto_operacion(request):
 
                         importe_total=importe_total,
 
+                        igv_credito_fiscal=igv_credito_fiscal,
+
                         forma_pago=forma_pago,
 
                         monto_pagado=monto_pagado,
@@ -6714,6 +6865,13 @@ def registrar_gasto_operacion(request):
         "formas_pago": OperacionContable.FormaPago.choices,
         "datos": datos_formulario,
         "clasificacion_conceptos": clasificacion_conceptos,
+        "terceros_existentes": (
+            Tercero.objects
+            .filter(activo=True)
+            .order_by("nombre")
+            .values_list("nombre", flat=True)
+            .distinct()
+        ),
     }
 
     return render(
@@ -7625,4 +7783,520 @@ def cambiar_estado_concepto_contable(request, concepto_id):
 
     return redirect(
         "contabilidad:lista_conceptos_contables"
+    )
+
+
+# ============================================================
+# SALDOS POR PAGAR A PROVEEDORES Y TRABAJADORES
+# ============================================================
+
+from django.contrib.auth.decorators import login_required
+
+from .saldos import (
+    documentos_pendientes_tercero,
+    estado_cuenta_tercero,
+    resumen_saldos_por_pagar,
+)
+
+
+def _leer_fecha_corte(request):
+    """
+    Lee ?corte=AAAA-MM-DD. Si no viene o es inválida,
+    usa la fecha de hoy.
+    """
+
+    texto = request.GET.get("corte", "").strip()
+
+    if texto:
+        try:
+            return date.fromisoformat(texto)
+        except ValueError:
+            messages.warning(
+                request,
+                "La fecha de corte no es válida; "
+                "se muestra el saldo a hoy.",
+            )
+
+    return timezone.localdate()
+
+
+@login_required
+def saldos_por_pagar(request):
+
+    fecha_corte = _leer_fecha_corte(request)
+
+    tipo = request.GET.get("tipo", "").strip().upper()
+
+    tipos_validos = {
+        valor for valor, _ in Tercero.Tipo.choices
+    } | {"SIN_IDENTIFICAR"}
+
+    if tipo not in tipos_validos:
+        tipo = ""
+
+    incluir_cancelados = request.GET.get("cancelados") == "1"
+
+    resumen = resumen_saldos_por_pagar(
+        fecha_corte=fecha_corte,
+        tipo=tipo or None,
+        incluir_cancelados=incluir_cancelados,
+    )
+
+    busqueda = request.GET.get("q", "").strip()
+
+    filas = resumen["filas"]
+
+    if busqueda:
+        busqueda_min = busqueda.lower()
+        filas = [
+            fila
+            for fila in filas
+            if busqueda_min in fila["nombre"].lower()
+            or busqueda_min in fila["numero_documento"].lower()
+        ]
+
+    context = {
+        "fecha_corte": fecha_corte,
+        "tipo": tipo,
+        "tipos": Tercero.Tipo.choices,
+        "incluir_cancelados": incluir_cancelados,
+        "busqueda": busqueda,
+        "filas": filas,
+        "sin_identificar": resumen["sin_identificar"],
+        "total_por_pagar": resumen["total_por_pagar"],
+        "total_a_favor": resumen["total_a_favor"],
+        "saldo_neto": resumen["saldo_neto"],
+    }
+
+    return render(
+        request,
+        "contabilidad/saldos_por_pagar.html",
+        context,
+    )
+
+
+@login_required
+def estado_cuenta_tercero_view(request, tercero_id=None):
+    """
+    Estado de cuenta de un proveedor o trabajador.
+    Sin tercero_id muestra las líneas sin identificar.
+    """
+
+    fecha_corte = _leer_fecha_corte(request)
+
+    tercero = None
+
+    if tercero_id is not None:
+        tercero = get_object_or_404(
+            Tercero,
+            id=tercero_id,
+        )
+
+    estado = estado_cuenta_tercero(
+        tercero,
+        fecha_corte=fecha_corte,
+    )
+
+    pendientes = (
+        documentos_pendientes_tercero(tercero)
+        if tercero
+        else []
+    )
+
+    context = {
+        "tercero": tercero,
+        "fecha_corte": fecha_corte,
+        "lineas": estado["lineas"],
+        "total_debe": estado["total_debe"],
+        "total_haber": estado["total_haber"],
+        "saldo": estado["saldo"],
+        "saldo_absoluto": abs(estado["saldo"]),
+        "pendientes": pendientes,
+    }
+
+    return render(
+        request,
+        "contabilidad/estado_cuenta_tercero.html",
+        context,
+    )
+
+
+# ============================================================
+# IMPUESTOS DEL MES (IGV - RENTA RER, FORMULARIO 621)
+# ============================================================
+
+@login_required
+def impuestos_mensuales(request):
+
+    periodos = PeriodoContable.objects.order_by("-anio", "-mes")
+
+    periodo = None
+
+    periodo_id = request.GET.get("periodo") or request.POST.get("periodo")
+
+    if periodo_id:
+        periodo = periodos.filter(id=periodo_id).first()
+
+    if periodo is None:
+        hoy = timezone.localdate()
+        periodo = (
+            periodos.filter(
+                fecha_inicio__lte=hoy,
+                fecha_fin__gte=hoy,
+            ).first()
+            or periodos.first()
+        )
+
+    if request.method == "POST" and periodo:
+
+        try:
+            resultado = provisionar_renta_rer(periodo)
+
+        except ValidationError as error:
+            messages.error(request, " ".join(error.messages))
+
+        else:
+            textos = {
+                "creada": "Provisión de renta registrada",
+                "actualizada": "Provisión de renta actualizada",
+                "sin_cambios": "La provisión ya estaba al día",
+                "sin_ingresos": "El mes no tiene ingresos; no hay renta que provisionar",
+            }
+
+            texto = textos[resultado["accion"]]
+
+            if resultado["cuota"] > 0:
+                texto += f": S/ {resultado['cuota']:.2f}"
+
+            messages.success(request, texto + ".")
+
+        return redirect(
+            f"{reverse('contabilidad:impuestos_mensuales')}?periodo={periodo.id}"
+        )
+
+    context = {
+        "periodos": periodos,
+        "periodo": periodo,
+        "liquidacion": (
+            liquidacion_mensual(periodo)
+            if periodo
+            else None
+        ),
+    }
+
+    return render(
+        request,
+        "contabilidad/impuestos_mensuales.html",
+        context,
+    )
+
+
+# ============================================================
+# COMPRAS DE MERCADERÍA (core.Compra) -> CONTABILIDAD
+# ============================================================
+
+from .compras_mercaderia import (
+    calcular_importes,
+    cuenta_inventario_producto,
+    cuentas_caja_banco,
+    cuentas_proveedores,
+    leer_datos_condicion,
+    preparar_condicion_compra,
+    contabilizar_compra_mercaderia,
+    nombre_proveedor,
+    registrar_pago_tercero,
+    saldo_tercero_en_cuenta,
+)
+from .models import CompraMercaderia
+
+
+def _modelo_compra_core():
+    return django_apps.get_model("core", "Compra")
+
+
+def _cuentas_caja_banco():
+    return (
+        CuentaContable.objects
+        .filter(
+            activo=True,
+            acepta_movimientos=True,
+            codigo__in=["10101", "10401", "10402"],
+        )
+        .order_by("codigo")
+    )
+
+
+def _cuentas_por_pagar(prefijos=("42",)):
+    filtro = Q()
+    for prefijo in prefijos:
+        filtro |= Q(codigo__startswith=prefijo)
+    return (
+        CuentaContable.objects
+        .filter(filtro, activo=True, acepta_movimientos=True)
+        .order_by("codigo")
+    )
+
+
+def _errores_de(error):
+    if hasattr(error, "message_dict"):
+        return [
+            mensaje
+            for mensajes in error.message_dict.values()
+            for mensaje in mensajes
+        ]
+    return list(error.messages)
+
+
+@login_required
+def compras_por_contabilizar(request):
+
+    Compra = _modelo_compra_core()
+
+    compras = (
+        Compra.objects
+        .exclude(
+            condicion_contable__estado=CompraMercaderia.Estado.CONTABILIZADA,
+        )
+        .select_related("proveedor")
+        .order_by("fecha", "id")
+    )
+
+    filas = [
+        {
+            "compra": compra,
+            "proveedor": nombre_proveedor(compra.proveedor),
+        }
+        for compra in compras
+    ]
+
+    return render(
+        request,
+        "contabilidad/compras_por_contabilizar.html",
+        {"filas": filas},
+    )
+
+
+@login_required
+def contabilizar_compra_mercaderia_view(request, compra_id):
+    """
+    Para compras registradas sin condición de pago (las antiguas
+    o aquellas cuya contabilización falló al guardarlas).
+    """
+
+    Compra = _modelo_compra_core()
+
+    compra = get_object_or_404(
+        Compra.objects.select_related("proveedor"),
+        id=compra_id,
+    )
+
+    condicion = CompraMercaderia.objects.filter(compra=compra).first()
+
+    if condicion and condicion.estado == CompraMercaderia.Estado.CONTABILIZADA:
+        messages.info(request, "Esta compra ya está contabilizada.")
+        return redirect("contabilidad:compras_por_contabilizar")
+
+    es_factura = compra.tipo_comprobante == "FA"
+
+    opciones = {
+        "con_igv": calcular_importes(compra, True, True),
+        "sin_igv": calcular_importes(compra, True, False),
+        "sin_credito": calcular_importes(compra, False, True),
+    }
+
+    if condicion:
+        datos = {
+            "forma_pago": condicion.forma_pago,
+            "usa_credito_fiscal": "1" if condicion.usa_credito_fiscal else "",
+            "precios_incluyen_igv": "1" if condicion.precios_incluyen_igv else "",
+            "monto_pagado": str(condicion.monto_pagado or ""),
+            "fecha_pago": condicion.fecha_pago.isoformat() if condicion.fecha_pago else compra.fecha.isoformat(),
+            "cuenta_pago": str(condicion.cuenta_pago_id or ""),
+            "cuenta_proveedor": str(condicion.cuenta_proveedor_id or ""),
+            "fecha_vencimiento": condicion.fecha_vencimiento.isoformat() if condicion.fecha_vencimiento else "",
+            "observacion": condicion.observacion,
+        }
+    else:
+        datos = {
+            "forma_pago": "EFECTIVO",
+            "usa_credito_fiscal": "1" if es_factura else "",
+            "precios_incluyen_igv": "1",
+            "monto_pagado": "",
+            "fecha_pago": compra.fecha.isoformat(),
+            "cuenta_pago": "",
+            "cuenta_proveedor": "",
+            "fecha_vencimiento": "",
+            "observacion": "",
+        }
+
+    Producto = django_apps.get_model("core", "Producto")
+    tipos_validos = {valor for valor, _ in Producto.TIPO_CHOICES}
+
+    if request.method == "POST":
+
+        datos = leer_datos_condicion(request.POST)
+
+        condicion, errores = preparar_condicion_compra(compra, datos)
+
+        # Tipos elegidos aquí para productos que no lo tenían.
+        tipos_nuevos = {}
+
+        for detalle in compra.detalles.select_related("producto"):
+            producto = detalle.producto
+            tipo = request.POST.get(f"tipo_producto_{producto.id}", "").strip()
+            if tipo:
+                if tipo in tipos_validos:
+                    tipos_nuevos[producto.id] = tipo
+                else:
+                    errores.append(f"El tipo elegido para {producto.cod} no es válido.")
+
+        if not errores:
+            try:
+                with transaction.atomic():
+                    for producto_id, tipo in tipos_nuevos.items():
+                        Producto.objects.filter(id=producto_id).update(tipo=tipo)
+
+                    condicion.save()
+                    asiento = contabilizar_compra_mercaderia(condicion)
+
+            except ValidationError as error:
+                errores.extend(_errores_de(error))
+
+            else:
+                messages.success(
+                    request,
+                    f"Compra {compra} contabilizada. Asiento N.° "
+                    f"{asiento.numero} del período {asiento.periodo}.",
+                )
+                return redirect("contabilidad:compras_por_contabilizar")
+
+        for error in errores:
+            messages.error(request, error)
+
+    context = {
+        "compra": compra,
+        "proveedor": nombre_proveedor(compra.proveedor),
+        "detalles": [
+            {
+                "detalle": detalle,
+                "cuenta": cuenta_inventario_producto(detalle.producto),
+            }
+            for detalle in compra.detalles.select_related("producto").order_by("id")
+        ],
+        "total_difiere": (
+            abs(Decimal(compra.total or 0) - opciones["sin_credito"][2])
+            > Decimal("0.01")
+        ),
+        "es_factura": es_factura,
+        "opciones": opciones,
+        "datos": datos,
+        "formas_pago": CompraMercaderia.FormaPago.choices,
+        "cuentas_pago": cuentas_caja_banco(),
+        "cuentas_proveedor": cuentas_proveedores(),
+        "tipos_producto": Producto.TIPO_CHOICES,
+    }
+
+    return render(
+        request,
+        "contabilidad/contabilizar_compra_mercaderia.html",
+        context,
+    )
+
+
+@login_required
+def registrar_pago_tercero_view(request, tercero_id):
+
+    tercero = get_object_or_404(Tercero, id=tercero_id)
+
+    # Cuentas 41/42 en las que el tercero tiene saldo.
+    cuentas_con_saldo = []
+
+    for cuenta in _cuentas_por_pagar(("41", "42")):
+        saldo = saldo_tercero_en_cuenta(tercero, cuenta)
+        if saldo > 0:
+            cuentas_con_saldo.append({"cuenta": cuenta, "saldo": saldo})
+
+    datos = {
+        "cuenta_por_pagar": (
+            str(cuentas_con_saldo[0]["cuenta"].id)
+            if len(cuentas_con_saldo) == 1
+            else ""
+        ),
+        "cuenta_pago": "",
+        "fecha_pago": timezone.localdate().isoformat(),
+        "monto": "",
+        "referencia": "",
+        "observacion": "",
+    }
+
+    if request.method == "POST":
+
+        for clave in datos:
+            datos[clave] = request.POST.get(clave, "").strip()
+
+        errores = []
+
+        cuenta_por_pagar = next(
+            (
+                item["cuenta"]
+                for item in cuentas_con_saldo
+                if str(item["cuenta"].id) == datos["cuenta_por_pagar"]
+            ),
+            None,
+        )
+        if cuenta_por_pagar is None:
+            errores.append("Seleccione la deuda que va a pagar.")
+
+        cuenta_pago = _cuentas_caja_banco().filter(id=datos["cuenta_pago"] or 0).first()
+        if cuenta_pago is None:
+            errores.append("Seleccione desde qué cuenta paga.")
+
+        try:
+            fecha_pago = date.fromisoformat(datos["fecha_pago"])
+        except ValueError:
+            fecha_pago = None
+            errores.append("La fecha de pago no es válida.")
+
+        try:
+            monto = Decimal(datos["monto"].replace(",", "."))
+        except (InvalidOperation, ValueError):
+            monto = None
+            errores.append("El monto no es válido.")
+
+        if not errores:
+            try:
+                pago = registrar_pago_tercero(
+                    tercero=tercero,
+                    cuenta_por_pagar=cuenta_por_pagar,
+                    cuenta_pago=cuenta_pago,
+                    fecha_pago=fecha_pago,
+                    monto=monto,
+                    referencia=datos["referencia"],
+                    observacion=datos["observacion"],
+                )
+            except ValidationError as error:
+                errores.extend(_errores_de(error))
+            else:
+                messages.success(
+                    request,
+                    f"Pago de S/ {pago.monto:.2f} a {tercero.nombre} registrado. "
+                    f"Asiento N.° {pago.asiento.numero}.",
+                )
+                return redirect(
+                    "contabilidad:estado_cuenta_tercero",
+                    tercero_id=tercero.id,
+                )
+
+        for error in errores:
+            messages.error(request, error)
+
+    return render(
+        request,
+        "contabilidad/registrar_pago_tercero.html",
+        {
+            "tercero": tercero,
+            "cuentas_con_saldo": cuentas_con_saldo,
+            "cuentas_pago": _cuentas_caja_banco(),
+            "datos": datos,
+        },
     )

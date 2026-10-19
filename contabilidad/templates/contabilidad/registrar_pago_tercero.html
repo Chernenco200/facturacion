@@ -1,0 +1,101 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Pago a {{ tercero.nombre }}{% endblock %}
+
+{% block content %}
+<style>
+    .pago-tercero-page { background: #f5f6f8; color: #17324d; padding: 22px 12px 36px; border-radius: 10px; }
+    .pago-tercero-page .contenedor { max-width: 720px; margin: auto; }
+    .pago-tercero-page .card { border: 0; box-shadow: 0 1px 5px rgba(0, 0, 0, .08); }
+    .pago-tercero-page .subtitulo { color: #667085; font-size: .95rem; }
+</style>
+
+<div class="pago-tercero-page">
+<div class="contenedor">
+
+    {% include "contabilidad/_mensajes.html" %}
+
+    <div class="mb-3">
+        <a href="{% url 'contabilidad:estado_cuenta_tercero' tercero.id %}" class="text-decoration-none">
+            ‹ Estado de cuenta de {{ tercero.nombre }}
+        </a>
+    </div>
+
+    <div class="mb-4">
+        <h2 class="mb-1">Registrar pago a {{ tercero.nombre }}</h2>
+        <div class="subtitulo">
+            El pago reduce lo que se le debe en la cuenta que elijas.
+        </div>
+    </div>
+
+    {% if not cuentas_con_saldo %}
+        <div class="alert alert-info">
+            No se le debe nada a {{ tercero.nombre }} en este momento.
+        </div>
+    {% else %}
+        <form method="post" class="card">
+            {% csrf_token %}
+            <div class="card-body">
+                <div class="row g-3">
+
+                    <div class="col-12">
+                        <label for="cuenta_por_pagar" class="form-label">Deuda que paga</label>
+                        <select id="cuenta_por_pagar" name="cuenta_por_pagar" class="form-select" required>
+                            <option value="">Seleccione</option>
+                            {% for item in cuentas_con_saldo %}
+                                <option value="{{ item.cuenta.id }}" {% if datos.cuenta_por_pagar == item.cuenta.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ item.cuenta.codigo }} - {{ item.cuenta.nombre }}: se debe S/ {{ item.saldo|floatformat:2 }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="monto" class="form-label">Monto</label>
+                        <div class="input-group">
+                            <span class="input-group-text">S/</span>
+                            <input type="number" id="monto" name="monto" class="form-control"
+                                   min="0.01" step="0.01" required value="{{ datos.monto }}">
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="fecha_pago" class="form-label">Fecha de pago</label>
+                        <input type="date" id="fecha_pago" name="fecha_pago" class="form-control"
+                               required value="{{ datos.fecha_pago }}">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="cuenta_pago" class="form-label">Pagado desde</label>
+                        <select id="cuenta_pago" name="cuenta_pago" class="form-select" required>
+                            <option value="">Seleccione</option>
+                            {% for cuenta in cuentas_pago %}
+                                <option value="{{ cuenta.id }}" {% if datos.cuenta_pago == cuenta.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ cuenta.codigo }} - {{ cuenta.nombre }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="referencia" class="form-label">Factura que cancela (opcional)</label>
+                        <input type="text" id="referencia" name="referencia" class="form-control"
+                               maxlength="100" placeholder="Ej.: F001-000123" value="{{ datos.referencia }}">
+                    </div>
+
+                    <div class="col-12">
+                        <label for="observacion" class="form-label">Observación</label>
+                        <textarea id="observacion" name="observacion" class="form-control" rows="2">{{ datos.observacion }}</textarea>
+                    </div>
+
+                </div>
+            </div>
+            <div class="card-footer bg-white text-end">
+                <button type="submit" class="btn btn-primary">Registrar pago</button>
+            </div>
+        </form>
+    {% endif %}
+
+</div>
+</div>
+{% endblock %}

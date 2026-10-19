@@ -1,0 +1,260 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Impuestos del mes{% endblock %}
+
+{% block content %}
+<style>
+    .impuestos-page {
+        background: #f5f6f8;
+        color: #17324d;
+        padding: 22px 12px 36px;
+        border-radius: 10px;
+    }
+
+    .impuestos-page .contenedor {
+        max-width: 980px;
+        margin: auto;
+    }
+
+    .impuestos-page .card {
+        border: 0;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, .08);
+    }
+
+    .impuestos-page .subtitulo {
+        color: #667085;
+        font-size: .95rem;
+    }
+
+    .impuestos-page .seccion-titulo {
+        font-weight: 600;
+        font-size: 1.05rem;
+    }
+
+    .impuestos-page .linea {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 9px 0;
+        border-bottom: 1px solid #eef0f3;
+    }
+
+    .impuestos-page .linea:last-child {
+        border-bottom: 0;
+    }
+
+    .impuestos-page .linea .importe {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    .impuestos-page .linea-resultado {
+        font-weight: 600;
+        font-size: 1.1rem;
+        padding-top: 12px;
+    }
+
+    .impuestos-page .a-pagar {
+        color: #b42318;
+    }
+
+    .impuestos-page .a-favor {
+        color: #027a48;
+    }
+
+    .impuestos-page .ayuda {
+        font-size: .85rem;
+        color: #667085;
+    }
+
+    .impuestos-page .barra-limite {
+        height: 10px;
+        border-radius: 5px;
+        background: #e4e7ec;
+        overflow: hidden;
+    }
+
+    .impuestos-page .barra-limite > div {
+        height: 100%;
+        background: #2e90fa;
+    }
+
+    .impuestos-page .barra-limite.alerta > div {
+        background: #f79009;
+    }
+</style>
+
+<div class="impuestos-page">
+<div class="contenedor">
+
+    {% include "contabilidad/_mensajes.html" %}
+
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Impuestos del mes</h2>
+            <div class="subtitulo">
+                IGV y renta del Régimen Especial (Formulario 621), calculados
+                con lo contabilizado en el período.
+            </div>
+        </div>
+
+        <form method="get" class="d-flex align-items-end gap-2">
+            <div>
+                <label for="periodo" class="form-label mb-1">Período</label>
+                <select id="periodo" name="periodo" class="form-select" onchange="this.form.submit()">
+                    {% for p in periodos %}
+                        <option value="{{ p.id }}" {% if periodo and p.id == periodo.id %}selected{% endif %}>
+                            {{ p }}{% if p.estado == "CERRADO" %} (cerrado){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <noscript><button type="submit" class="btn btn-primary">Ver</button></noscript>
+        </form>
+    </div>
+
+    {% if not liquidacion %}
+        <div class="alert alert-info">
+            Aún no hay períodos contables. Crea el período del mes para ver sus impuestos.
+        </div>
+    {% else %}
+
+        <div class="row g-4">
+
+            <!-- IGV -->
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="seccion-titulo mb-2">IGV ({{ liquidacion.periodo }})</div>
+
+                        <div class="linea">
+                            <span>IGV de ventas (débito fiscal)</span>
+                            <span class="importe">S/ {{ liquidacion.igv_debito|floatformat:2 }}</span>
+                        </div>
+                        <div class="linea">
+                            <span>IGV de compras con factura (crédito fiscal)</span>
+                            <span class="importe">− S/ {{ liquidacion.igv_credito|floatformat:2 }}</span>
+                        </div>
+                        {% if liquidacion.saldo_favor_anterior %}
+                            <div class="linea">
+                                <span>Saldo a favor de meses anteriores</span>
+                                <span class="importe">− S/ {{ liquidacion.saldo_favor_anterior|floatformat:2 }}</span>
+                            </div>
+                        {% endif %}
+
+                        {% if liquidacion.igv_a_pagar > 0 %}
+                            <div class="linea linea-resultado a-pagar">
+                                <span>IGV a pagar</span>
+                                <span class="importe">S/ {{ liquidacion.igv_a_pagar_redondeado|floatformat:0 }}</span>
+                            </div>
+                            <div class="ayuda">
+                                Exacto: S/ {{ liquidacion.igv_a_pagar|floatformat:2 }}.
+                                El 621 se declara en soles enteros.
+                            </div>
+                        {% else %}
+                            <div class="linea linea-resultado a-favor">
+                                <span>Saldo a favor para el próximo mes</span>
+                                <span class="importe">S/ {{ liquidacion.igv_saldo_a_favor|floatformat:2 }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- RENTA -->
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="seccion-titulo mb-2">Renta RER</div>
+
+                        <div class="linea">
+                            <span>Ingresos netos del mes (sin IGV)</span>
+                            <span class="importe">S/ {{ liquidacion.ventas_netas|floatformat:2 }}</span>
+                        </div>
+                        <div class="linea">
+                            <span>Tasa</span>
+                            <span class="importe">{{ liquidacion.tasa_renta|floatformat:1 }}%</span>
+                        </div>
+                        <div class="linea linea-resultado a-pagar">
+                            <span>Renta a pagar</span>
+                            <span class="importe">S/ {{ liquidacion.renta_cuota|floatformat:0 }}</span>
+                        </div>
+
+                        <div class="mt-3">
+                            {% if liquidacion.provision and not liquidacion.provision_desfasada %}
+                                <div class="ayuda mb-2">
+                                    Registrada en el asiento N.° {{ liquidacion.provision.numero }}
+                                    (88101 contra 40171).
+                                </div>
+                            {% elif liquidacion.provision_desfasada %}
+                                <div class="alert alert-warning py-2 mb-2">
+                                    La provisión registrada (S/ {{ liquidacion.provision.total_debe|floatformat:2 }})
+                                    ya no coincide con los ingresos del mes. Actualízala.
+                                </div>
+                            {% else %}
+                                <div class="ayuda mb-2">
+                                    Aún no está registrada; se registra sola al cerrar el período.
+                                </div>
+                            {% endif %}
+
+                            {% if periodo.estado == "ABIERTO" %}
+                                {% if not liquidacion.provision or liquidacion.provision_desfasada %}
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="periodo" value="{{ periodo.id }}">
+                                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                                            {% if liquidacion.provision %}Actualizar provisión{% else %}Registrar provisión ahora{% endif %}
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LÍMITE RER -->
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between flex-wrap gap-2 mb-2">
+                            <span class="seccion-titulo">Ingresos del año para el límite del RER</span>
+                            <span class="importe">
+                                S/ {{ liquidacion.ingresos_anio|floatformat:2 }}
+                                de S/ {{ liquidacion.limite_rer|floatformat:0 }}
+                                ({{ liquidacion.porcentaje_limite }}%)
+                            </span>
+                        </div>
+                        <div class="barra-limite{% if liquidacion.cerca_del_limite %} alerta{% endif %}"
+                             role="progressbar"
+                             aria-valuenow="{{ liquidacion.porcentaje_limite|stringformat:'s' }}"
+                             aria-valuemin="0" aria-valuemax="100"
+                             aria-label="Ingresos del año respecto al límite del RER">
+                            <div style="width: {% if liquidacion.porcentaje_limite > 100 %}100{% else %}{{ liquidacion.porcentaje_limite|stringformat:'s' }}{% endif %}%;"></div>
+                        </div>
+                        {% if liquidacion.cerca_del_limite %}
+                            <div class="ayuda mt-2">
+                                Te acercas al límite anual de ingresos del RER. Si lo superas,
+                                pasas al Régimen MYPE Tributario o al General desde ese mes;
+                                conviene revisarlo con tu contador.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="ayuda mt-4">
+            No se consideran percepciones ni retenciones de IGV, ni detracciones.
+            Si las tienes, réstalas al declarar. Para registrar el pago a SUNAT, usa
+            “Registrar gasto / operación” con un concepto cuya cuenta sea 40111 (IGV)
+            o 40171 (renta). El saldo de la cuenta 40111 al cierre del mes es
+            S/ {{ liquidacion.saldo_igv_cuenta|floatformat:2 }}.
+        </div>
+
+    {% endif %}
+
+</div>
+</div>
+{% endblock %}

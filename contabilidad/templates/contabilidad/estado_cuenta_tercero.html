@@ -1,0 +1,318 @@
+{% extends 'core/base.html' %}
+
+{% block title %}{% if tercero %}{{ tercero.nombre }}{% else %}Líneas sin asignar{% endif %} · Saldos por pagar{% endblock %}
+
+{% block content %}
+<style>
+    .estado-cuenta-page {
+        background: #f5f6f8;
+        color: #17324d;
+        padding: 22px 12px 36px;
+        border-radius: 10px;
+    }
+
+    .estado-cuenta-page .contenedor {
+        max-width: 1200px;
+        margin: auto;
+    }
+
+    .estado-cuenta-page .card {
+        border: 0;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, .08);
+    }
+
+    .estado-cuenta-page .subtitulo {
+        color: #667085;
+        font-size: .95rem;
+    }
+
+    .estado-cuenta-page .saldo-caja {
+        background: #fff;
+        border-radius: .5rem;
+        padding: 14px 20px;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, .08);
+        text-align: right;
+        min-width: 220px;
+    }
+
+    .estado-cuenta-page .saldo-etiqueta {
+        font-size: .85rem;
+        color: #667085;
+    }
+
+    .estado-cuenta-page .saldo-valor {
+        font-size: 1.6rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .estado-cuenta-page .por-pagar {
+        color: #b42318;
+    }
+
+    .estado-cuenta-page .a-favor {
+        color: #027a48;
+    }
+
+    .estado-cuenta-page .importe {
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .estado-cuenta-page .vencido {
+        color: #b42318;
+        font-weight: 600;
+    }
+
+    .estado-cuenta-page .seccion-titulo {
+        font-weight: 600;
+        font-size: 1rem;
+    }
+
+    .estado-cuenta-page .table-responsive {
+        overflow-x: auto;
+    }
+
+    .estado-cuenta-page .tabla-movimientos {
+        min-width: 900px;
+    }
+
+    .estado-cuenta-page .tabla-pendientes {
+        min-width: 760px;
+    }
+</style>
+
+<div class="estado-cuenta-page">
+<div class="contenedor">
+
+    {% include "contabilidad/_mensajes.html" %}
+
+    <div class="mb-3">
+        <a
+            href="{% url 'contabilidad:saldos_por_pagar' %}?corte={{ fecha_corte|date:'Y-m-d' }}"
+            class="text-decoration-none"
+        >
+            ‹ Saldos por pagar
+        </a>
+    </div>
+
+    <!-- ENCABEZADO -->
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            {% if tercero %}
+                <h2 class="mb-1">{{ tercero.nombre }}</h2>
+                <div class="subtitulo">
+                    {{ tercero.get_tipo_display }}
+                    {% if tercero.numero_documento %}
+                        · {{ tercero.numero_documento }}
+                    {% endif %}
+                    · movimientos al {{ fecha_corte|date:"d/m/Y" }}
+                </div>
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    {% if saldo > 0 %}
+                        <a
+                            href="{% url 'contabilidad:registrar_pago_tercero' tercero.id %}"
+                            class="btn btn-sm btn-primary"
+                        >
+                            Registrar pago
+                        </a>
+                    {% endif %}
+                    {% if user.is_staff %}
+                        <a
+                            href="{% url 'admin:contabilidad_tercero_change' tercero.id %}"
+                            class="btn btn-sm btn-outline-secondary"
+                        >
+                            Editar datos
+                        </a>
+                    {% endif %}
+                </div>
+            {% else %}
+                <h2 class="mb-1">Líneas sin proveedor ni trabajador</h2>
+                <div class="subtitulo">
+                    Movimientos de las cuentas 41 y 42 que no tienen
+                    a quién se le debe. Asígnalos con
+                    <code>python manage.py asignar_terceros</code>
+                    o desde el admin del asiento.
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="saldo-caja">
+            {% if saldo > 0 %}
+                <div class="saldo-etiqueta">Le debemos</div>
+                <div class="saldo-valor por-pagar">S/ {{ saldo|floatformat:2 }}</div>
+            {% elif saldo < 0 %}
+                <div class="saldo-etiqueta">Pagado de más (a favor nuestro)</div>
+                <div class="saldo-valor a-favor">S/ {{ saldo_absoluto|floatformat:2 }}</div>
+            {% else %}
+                <div class="saldo-etiqueta">Saldo</div>
+                <div class="saldo-valor">S/ 0.00</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- FILTRO -->
+    <form method="get" class="d-flex flex-wrap align-items-end gap-2 mb-4">
+        <div>
+            <label for="corte" class="form-label mb-1">Ver saldo al</label>
+            <input
+                type="date"
+                id="corte"
+                name="corte"
+                class="form-control"
+                value="{{ fecha_corte|date:'Y-m-d' }}"
+            >
+        </div>
+        <button type="submit" class="btn btn-primary">Actualizar</button>
+    </form>
+
+    <!-- DOCUMENTOS PENDIENTES -->
+    {% if tercero %}
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <span class="seccion-titulo">Documentos con saldo pendiente</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0 tabla-pendientes">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Detalle</th>
+                            <th>Comprobante</th>
+                            <th>Vence</th>
+                            <th class="importe">Importe</th>
+                            <th class="importe">Saldo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in pendientes %}
+                            <tr>
+                                <td>{{ doc.fecha|date:"d/m/Y"|default:"—" }}</td>
+                                <td>
+                                    {{ doc.descripcion }}
+                                    <div class="small text-muted">
+                                        {{ doc.cuenta.codigo }} - {{ doc.cuenta.nombre }}
+                                    </div>
+                                </td>
+                                <td>{{ doc.documento|default:"—" }}</td>
+                                <td>
+                                    {% if doc.vencimiento %}
+                                        {% if doc.vencimiento < fecha_corte %}
+                                            <span class="vencido">{{ doc.vencimiento|date:"d/m/Y" }}</span>
+                                        {% else %}
+                                            {{ doc.vencimiento|date:"d/m/Y" }}
+                                        {% endif %}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td class="importe">S/ {{ doc.importe|floatformat:2 }}</td>
+                                <td class="importe fw-semibold">S/ {{ doc.saldo|floatformat:2 }}</td>
+                                <td class="text-end">
+                                    {% if doc.tipo == "operacion" %}
+                                        <a
+                                            href="{% url 'contabilidad:registrar_pago_operacion' doc.objeto_id %}"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            Registrar pago
+                                        </a>
+                                    {% elif doc.tipo == "compra" %}
+                                        <a
+                                            href="{% url 'contabilidad:registrar_pago_proveedor' doc.objeto_id %}"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            Registrar pago
+                                        </a>
+                                    {% else %}
+                                        <a
+                                            href="{% url 'contabilidad:registrar_pago_tercero' tercero.id %}"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            Pago a cuenta
+                                        </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    No hay documentos pendientes de pago.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer bg-white small text-muted">
+                Los documentos muestran su saldo a hoy. Los pagos a cuenta no se
+                asignan a un documento en particular, así que el saldo que manda es
+                el de arriba, que sale del libro mayor a la fecha elegida.
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- MOVIMIENTOS -->
+    <div class="card">
+        <div class="card-header bg-white">
+            <span class="seccion-titulo">Movimientos</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 tabla-movimientos">
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Asiento</th>
+                        <th>Glosa</th>
+                        <th>Cuenta</th>
+                        <th>Referencia</th>
+                        <th class="importe">Pagado (Debe)</th>
+                        <th class="importe">Deuda (Haber)</th>
+                        <th class="importe">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for linea in lineas %}
+                        <tr>
+                            <td>{{ linea.detalle.asiento.fecha|date:"d/m/Y" }}</td>
+                            <td>
+                                {{ linea.detalle.asiento.numero }}
+                                <span class="small text-muted">({{ linea.detalle.asiento.periodo }})</span>
+                            </td>
+                            <td>{{ linea.detalle.asiento.glosa }}</td>
+                            <td>{{ linea.detalle.cuenta.codigo }}</td>
+                            <td>{{ linea.detalle.referencia|default:"—" }}</td>
+                            <td class="importe">
+                                {% if linea.detalle.debe %}S/ {{ linea.detalle.debe|floatformat:2 }}{% endif %}
+                            </td>
+                            <td class="importe">
+                                {% if linea.detalle.haber %}S/ {{ linea.detalle.haber|floatformat:2 }}{% endif %}
+                            </td>
+                            <td class="importe fw-semibold">S/ {{ linea.saldo|floatformat:2 }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                No hay movimientos hasta el {{ fecha_corte|date:"d/m/Y" }}.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                {% if lineas %}
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="5" class="text-end">Totales</th>
+                            <th class="importe">S/ {{ total_debe|floatformat:2 }}</th>
+                            <th class="importe">S/ {{ total_haber|floatformat:2 }}</th>
+                            <th class="importe">S/ {{ saldo|floatformat:2 }}</th>
+                        </tr>
+                    </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+</div>
+</div>
+{% endblock %}

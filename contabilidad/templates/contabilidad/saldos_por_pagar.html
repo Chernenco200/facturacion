@@ -1,0 +1,297 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Saldos por pagar{% endblock %}
+
+{% block content %}
+<style>
+    .saldos-page {
+        background: #f5f6f8;
+        color: #17324d;
+        padding: 22px 12px 36px;
+        border-radius: 10px;
+    }
+
+    .saldos-page .contenedor {
+        max-width: 1200px;
+        margin: auto;
+    }
+
+    .saldos-page .card {
+        border: 0;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, .08);
+    }
+
+    .saldos-page .subtitulo {
+        color: #667085;
+        font-size: .95rem;
+    }
+
+    .saldos-page .totales {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+    }
+
+    .saldos-page .total {
+        background: #fff;
+        border-radius: .5rem;
+        padding: 14px 18px;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, .08);
+    }
+
+    .saldos-page .total-etiqueta {
+        font-size: .85rem;
+        color: #667085;
+    }
+
+    .saldos-page .total-valor {
+        font-size: 1.45rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .saldos-page .total-principal {
+        border-left: 4px solid #b42318;
+    }
+
+    .saldos-page .total-principal .total-valor {
+        color: #b42318;
+    }
+
+    .saldos-page .importe {
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .saldos-page .por-pagar {
+        color: #b42318;
+        font-weight: 600;
+    }
+
+    .saldos-page .a-favor {
+        color: #027a48;
+        font-weight: 600;
+    }
+
+    .saldos-page .cancelado {
+        color: #667085;
+    }
+
+    .saldos-page .tipo {
+        display: inline-block;
+        padding: .2rem .55rem;
+        border-radius: .35rem;
+        font-size: .78rem;
+        font-weight: 600;
+        background: #eef2f6;
+        color: #344054;
+    }
+
+    .saldos-page .tipo-TRABAJADOR {
+        background: #e0eaff;
+        color: #2d3282;
+    }
+
+    .saldos-page .tipo-PROVEEDOR {
+        background: #fdf2e9;
+        color: #7a2e0e;
+    }
+
+    .saldos-page tbody tr {
+        cursor: pointer;
+    }
+
+    .saldos-page tbody tr:focus-within {
+        outline: 2px solid #2e90fa;
+        outline-offset: -2px;
+    }
+
+    .saldos-page .table-responsive {
+        overflow-x: auto;
+    }
+
+    .saldos-page .table {
+        min-width: 720px;
+    }
+</style>
+
+<div class="saldos-page">
+<div class="contenedor">
+
+    {% include "contabilidad/_mensajes.html" %}
+
+    <div class="mb-4">
+        <h2 class="mb-1">Saldos por pagar</h2>
+        <div class="subtitulo">
+            Lo que se debe a cada proveedor y trabajador al
+            {{ fecha_corte|date:"d/m/Y" }}, según el libro mayor
+            (cuentas 41 y 42).
+        </div>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+
+                <div class="col-sm-6 col-md-3">
+                    <label for="corte" class="form-label">Saldo al</label>
+                    <input
+                        type="date"
+                        id="corte"
+                        name="corte"
+                        class="form-control"
+                        value="{{ fecha_corte|date:'Y-m-d' }}"
+                    >
+                </div>
+
+                <div class="col-sm-6 col-md-3">
+                    <label for="tipo" class="form-label">Mostrar</label>
+                    <select id="tipo" name="tipo" class="form-select">
+                        <option value="" {% if not tipo %}selected{% endif %}>
+                            Proveedores y trabajadores
+                        </option>
+                        <option value="PROVEEDOR" {% if tipo == "PROVEEDOR" %}selected{% endif %}>
+                            Solo proveedores
+                        </option>
+                        <option value="TRABAJADOR" {% if tipo == "TRABAJADOR" %}selected{% endif %}>
+                            Solo trabajadores
+                        </option>
+                        <option value="OTRO" {% if tipo == "OTRO" %}selected{% endif %}>
+                            Solo otros acreedores
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="q" class="form-label">Buscar</label>
+                    <input
+                        type="search"
+                        id="q"
+                        name="q"
+                        class="form-control"
+                        placeholder="Nombre, RUC o DNI"
+                        value="{{ busqueda }}"
+                    >
+                </div>
+
+                <div class="col-md-3">
+                    <div class="form-check mb-2">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            value="1"
+                            id="cancelados"
+                            name="cancelados"
+                            {% if incluir_cancelados %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="cancelados">
+                            Incluir saldos en cero
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        Ver saldos
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <!-- TOTALES -->
+    <div class="totales mb-4">
+        <div class="total total-principal">
+            <div class="total-etiqueta">Total por pagar</div>
+            <div class="total-valor">S/ {{ total_por_pagar|floatformat:2 }}</div>
+        </div>
+        <div class="total">
+            <div class="total-etiqueta">Pagado de más / a favor nuestro</div>
+            <div class="total-valor">S/ {{ total_a_favor|floatformat:2 }}</div>
+        </div>
+        <div class="total">
+            <div class="total-etiqueta">
+                Saldo neto{% if not tipo %} (igual al mayor 41 + 42){% endif %}
+            </div>
+            <div class="total-valor">S/ {{ saldo_neto|floatformat:2 }}</div>
+        </div>
+    </div>
+
+    {% if sin_identificar and sin_identificar.saldo != 0 %}
+        <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+                Hay S/ {{ sin_identificar.saldo_absoluto|floatformat:2 }}
+                {% if sin_identificar.saldo > 0 %}por pagar{% else %}a favor{% endif %}
+                en {{ sin_identificar.movimientos }} línea{{ sin_identificar.movimientos|pluralize }}
+                de asiento sin proveedor ni trabajador asignado.
+                Asígnalos para que el saldo de cada persona sea exacto.
+            </div>
+            <a
+                href="{% url 'contabilidad:estado_cuenta_sin_identificar' %}?corte={{ fecha_corte|date:'Y-m-d' }}"
+                class="btn btn-sm btn-outline-dark"
+            >
+                Ver líneas sin asignar
+            </a>
+        </div>
+    {% endif %}
+
+    <!-- TABLA -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Proveedor / trabajador</th>
+                        <th>Tipo</th>
+                        <th>RUC / DNI</th>
+                        <th>Último movimiento</th>
+                        <th class="importe">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fila in filas %}
+                        <tr onclick="window.location='{% url 'contabilidad:estado_cuenta_tercero' fila.tercero_id %}?corte={{ fecha_corte|date:'Y-m-d' }}'">
+                            <td>
+                                <a
+                                    href="{% url 'contabilidad:estado_cuenta_tercero' fila.tercero_id %}?corte={{ fecha_corte|date:'Y-m-d' }}"
+                                    class="text-reset text-decoration-none fw-semibold"
+                                >
+                                    {{ fila.nombre }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="tipo tipo-{{ fila.tipo }}">{{ fila.tipo_display }}</span>
+                            </td>
+                            <td>{{ fila.numero_documento|default:"—" }}</td>
+                            <td>{{ fila.ultimo_movimiento|date:"d/m/Y" }}</td>
+                            <td class="importe">
+                                {% if fila.saldo > 0 %}
+                                    <span class="por-pagar">S/ {{ fila.saldo|floatformat:2 }}</span>
+                                {% elif fila.saldo < 0 %}
+                                    <span class="a-favor">S/ {{ fila.saldo_absoluto|floatformat:2 }} a favor</span>
+                                {% else %}
+                                    <span class="cancelado">Cancelado</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-5">
+                                {% if busqueda %}
+                                    Nadie coincide con “{{ busqueda }}”. Prueba con otro nombre o documento.
+                                {% else %}
+                                    No hay deudas pendientes al {{ fecha_corte|date:"d/m/Y" }}.
+                                    Las compras, servicios y gastos registrados al crédito
+                                    aparecerán aquí al contabilizarse.
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+</div>
+{% endblock %}

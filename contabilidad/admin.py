@@ -11,6 +11,7 @@ from .models import (
     PeriodoContable,
     AsientoContable,
     DetalleAsiento,
+    Tercero,
 )
 
 
@@ -194,6 +195,7 @@ class DetalleAsientoInline(admin.TabularInline):
         "cuenta",
         "categoria_gerencial",
         "centro_costo",
+        "tercero",
     )
 
     fields = (
@@ -202,6 +204,7 @@ class DetalleAsientoInline(admin.TabularInline):
         "descripcion",
         "debe",
         "haber",
+        "tercero",
         "categoria_gerencial",
         "centro_costo",
         "referencia",
@@ -337,12 +340,14 @@ class DetalleAsientoAdmin(admin.ModelAdmin):
         "cuenta",
         "debe",
         "haber",
+        "tercero",
         "categoria_gerencial",
         "centro_costo",
     )
 
     list_filter = (
         "cuenta",
+        "tercero__tipo",
         "categoria_gerencial",
         "centro_costo",
     )
@@ -352,6 +357,7 @@ class DetalleAsientoAdmin(admin.ModelAdmin):
         "referencia",
         "cuenta__codigo",
         "cuenta__nombre",
+        "tercero__nombre",
     )
 
     autocomplete_fields = (
@@ -359,4 +365,202 @@ class DetalleAsientoAdmin(admin.ModelAdmin):
         "cuenta",
         "categoria_gerencial",
         "centro_costo",
+        "tercero",
     )
+
+
+# ============================================================
+# TERCEROS (PROVEEDORES / TRABAJADORES)
+# ============================================================
+
+@admin.register(Tercero)
+class TerceroAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "nombre",
+        "tipo",
+        "numero_documento",
+        "activo",
+        "creado_en",
+    )
+
+    list_filter = (
+        "tipo",
+        "activo",
+    )
+
+    search_fields = (
+        "nombre",
+        "nombre_normalizado",
+        "numero_documento",
+    )
+
+    ordering = (
+        "tipo",
+        "nombre",
+    )
+
+    readonly_fields = (
+        "creado_en",
+    )
+
+    actions = [
+        "fusionar_terceros",
+    ]
+
+    @admin.action(
+        description=(
+            "Fusionar seleccionados en el más antiguo "
+            "(nombres duplicados)"
+        )
+    )
+    def fusionar_terceros(self, request, queryset):
+        """
+        Une terceros duplicados (p. ej. "Juan Pérez" y
+        "J. Perez"). Todos los movimientos y documentos pasan
+        al tercero creado primero; los demás se eliminan.
+        """
+
+        from django.db import transaction
+
+        from .models import (
+            CompraDirectaVenta,
+            OperacionContable,
+            ServicioTerceroVenta,
+        )
+
+        terceros = list(queryset.order_by("creado_en", "id"))
+
+        if len(terceros) < 2:
+            self.message_user(
+                request,
+                "Seleccione al menos dos terceros para fusionar.",
+                level=messages.WARNING,
+            )
+            return
+
+        destino = terceros[0]
+        origenes = [tercero.id for tercero in terceros[1:]]
+
+        with transaction.atomic():
+
+            for modelo in (
+                DetalleAsiento,
+                CompraDirectaVenta,
+                ServicioTerceroVenta,
+                OperacionContable,
+            ):
+                modelo.objects.filter(
+                    tercero_id__in=origenes,
+                ).update(tercero=destino)
+
+            Tercero.objects.filter(id__in=origenes).delete()
+
+        self.message_user(
+            request,
+            (
+                f"{len(origenes)} tercero(s) fusionado(s) "
+                f"en «{destino.nombre}»."
+            ),
+            level=messages.SUCCESS,
+        )
+
+
+# ============================================================
+# COMPRAS DE MERCADERÍA Y PAGOS A TERCEROS
+# ============================================================
+
+from .models import CompraMercaderia, PagoTercero
+
+
+@admin.register(CompraMercaderia)
+class CompraMercaderiaAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "compra",
+        "forma_pago",
+        "total_comprobante",
+        "igv_credito_fiscal",
+        "tercero",
+        "estado",
+        "asiento",
+    )
+
+    list_filter = (
+        "estado",
+        "forma_pago",
+    )
+
+    search_fields = (
+        "compra__serie",
+        "compra__numero",
+        "tercero__nombre",
+    )
+
+    readonly_fields = (
+        "asiento",
+        "creado_en",
+        "contabilizado_en",
+    )
+
+
+@admin.register(PagoTercero)
+class PagoTerceroAdmin(admin.ModelAdmin):
+
+    list_display = (
+        "fecha_pago",
+        "tercero",
+        "cuenta_por_pagar",
+        "monto",
+        "cuenta_pago",
+        "estado",
+        "asiento",
+    )
+
+    list_filter = (
+        "estado",
+        "cuenta_por_pagar",
+    )
+
+    search_fields = (
+        "tercero__nombre",
+        "referencia",
+    )
+
+    readonly_fields = (
+        "asiento",
+        "creado_en",
+    )
+
+
+from .models import VentaAnulada
+
+
+@admin.register(VentaAnulada)
+class VentaAnuladaAdmin(admin.ModelAdmin):
+    """Solo lectura: es el historial de anulaciones."""
+
+    list_display = (
+        "numero_recibo",
+        "fecha_venta",
+        "cliente",
+        "total",
+        "usuario",
+        "anulado_en",
+    )
+
+    search_fields = (
+        "numero_recibo",
+        "cliente",
+        "motivo",
+    )
+
+    readonly_fields = [
+        campo.name for campo in VentaAnulada._meta.fields
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

@@ -211,112 +211,387 @@
 <!-- Bootstrap NO se carga aquí. Ya viene de base.html -->
 <!-- ===================================================== -->
 
-<script>
 
+<script>
 document.addEventListener('DOMContentLoaded', function () {
 
-    const modalElement =
-        document.getElementById('historialModal');
+    const modalElement = document.getElementById('historialModal');
+    const modalBody = document.getElementById('historialModalBody');
+    const modalTitle = document.getElementById('historialModalLabel');
 
-    const modalBody =
-        document.getElementById('historialModalBody');
-
-    const modalTitle =
-        document.getElementById('historialModalLabel');
-
-
-    /*
-    -------------------------------------------------------
-    Crear modal Bootstrap
-    -------------------------------------------------------
-    */
+    if (!modalElement || !modalBody || !modalTitle) {
+        console.error('No se encontraron los elementos del modal.');
+        return;
+    }
 
     const historialModal =
-        new bootstrap.Modal(modalElement);
+        bootstrap.Modal.getOrCreateInstance(modalElement);
 
+    let clienteActual = null;
+    let nombreActual = '';
 
-    /*
-    -------------------------------------------------------
-    Botones historial
-    -------------------------------------------------------
-    */
+    // ==========================================
+    // OBTENER COOKIE CSRF
+    // ==========================================
 
-    document
-        .querySelectorAll('.btn-historial')
+    function obtenerCookie(nombre) {
+        const cookies = document.cookie.split(';');
+
+        for (const cookie of cookies) {
+            const valor = cookie.trim();
+
+            if (valor.startsWith(nombre + '=')) {
+                return decodeURIComponent(
+                    valor.substring(nombre.length + 1)
+                );
+            }
+        }
+
+        return '';
+    }
+
+    // ==========================================
+    // CARGAR HISTORIAL
+    // ==========================================
+
+    async function cargarHistorial(clienteId) {
+
+        modalBody.innerHTML = '<p>Cargando historial...</p>';
+
+        try {
+            const response = await fetch(
+                `/clientes/${clienteId}/historial/`,
+                {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error('Error HTTP ' + response.status);
+            }
+
+            modalBody.innerHTML = await response.text();
+
+        } catch (error) {
+            console.error('Error cargando historial:', error);
+
+            modalBody.innerHTML =
+                '<div class="alert alert-danger">' +
+                'No se pudo cargar el historial.' +
+                '</div>';
+        }
+    }
+
+    // ==========================================
+    // ABRIR FORMULARIO DE EDICIÓN
+    // ==========================================
+
+    async function abrirFormularioEdicion(url) {
+
+        modalBody.innerHTML = '<p>Cargando formulario...</p>';
+
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Error HTTP ' + response.status);
+            }
+
+            modalBody.innerHTML = await response.text();
+
+            modalTitle.textContent =
+                'Editar medida de vista - ' + nombreActual;
+
+        } catch (error) {
+            console.error('Error cargando formulario:', error);
+
+            modalBody.innerHTML =
+                '<div class="alert alert-danger">' +
+                'No se pudo cargar el formulario.' +
+                '</div>';
+        }
+    }
+
+    // ==========================================
+    // BOTONES PARA ABRIR HISTORIAL
+    // ==========================================
+
+    document.querySelectorAll('.btn-historial')
         .forEach(function (btn) {
 
             btn.addEventListener('click', function () {
 
-                const clienteId =
+                clienteActual =
                     this.getAttribute('data-cliente-id');
 
-                const clienteNombre =
+                nombreActual =
                     this.getAttribute('data-cliente-nombre');
 
-
                 modalTitle.textContent =
-                    'Historial de ' + clienteNombre;
+                    'Historial de ' + nombreActual;
 
-
-                modalBody.innerHTML =
-                    '<p>Cargando...</p>';
-
-
-                /*
-                -------------------------------------------
-                Obtener historial
-                -------------------------------------------
-                */
-
-                fetch(`/clientes/${clienteId}/historial/`)
-
-                    .then(function (response) {
-
-                        if (!response.ok) {
-                            throw new Error(
-                                'Error HTTP: ' + response.status
-                            );
-                        }
-
-                        return response.text();
-
-                    })
-
-                    .then(function (html) {
-
-                        modalBody.innerHTML = html;
-
-                    })
-
-                    .catch(function (err) {
-
-                        console.error(
-                            'Error cargando historial:',
-                            err
-                        );
-
-                        modalBody.innerHTML =
-                            '<p class="text-danger">' +
-                            'Error al cargar el historial.' +
-                            '</p>';
-
-                    });
-
-
-                /*
-                -------------------------------------------
-                Mostrar modal
-                -------------------------------------------
-                */
+                cargarHistorial(clienteActual);
 
                 historialModal.show();
+            });
+        });
+
+    // ==========================================
+    // EVENTOS CLICK DENTRO DEL MODAL
+    // ==========================================
+
+    modalBody.addEventListener('click', function (event) {
+
+        // --------------------------------------
+        // EDITAR MEDIDA
+        // --------------------------------------
+
+        const botonEditar = event.target.closest(
+            'a[href*="/medida/"][href$="/editar/"]'
+        );
+
+        if (botonEditar) {
+            event.preventDefault();
+            abrirFormularioEdicion(botonEditar.href);
+            return;
+        }
+
+        // --------------------------------------
+        // CANCELAR EDICIÓN
+        // --------------------------------------
+
+        const botonCancelar = event.target.closest(
+            '[data-volver-historial]'
+        );
+
+        if (botonCancelar) {
+            event.preventDefault();
+
+            modalTitle.textContent =
+                'Historial de ' + nombreActual;
+
+            cargarHistorial(clienteActual);
+            return;
+        }
+
+        // ======================================
+        // COPIAR VISIÓN DE LEJOS A CERCA
+        // ======================================
+
+        const botonCopiar = event.target.closest(
+            '#btn-copiar-lejos-cerca'
+        );
+
+        if (botonCopiar) {
+
+            event.preventDefault();
+
+            function obtenerValor(nombre) {
+
+                const campo = modalBody.querySelector(
+                    `[name="${nombre}"]`
+                );
+
+                if (!campo) {
+                    console.warn('Campo no encontrado:', nombre);
+                    return null;
+                }
+
+                const valor = parseFloat(
+                    campo.value.replace(',', '.')
+                );
+
+                return Number.isFinite(valor) ? valor : null;
+            }
+
+            function asignarValor(nombre, valor, decimales = 2) {
+
+                const campo = modalBody.querySelector(
+                    `[name="${nombre}"]`
+                );
+
+                if (!campo || valor === null) {
+                    return;
+                }
+
+                campo.value = valor.toFixed(decimales);
+
+                campo.dispatchEvent(
+                    new Event('input', { bubbles: true })
+                );
+
+                campo.dispatchEvent(
+                    new Event('change', { bubbles: true })
+                );
+            }
+
+            ['OD', 'OI'].forEach(function (ojo) {
+
+                const esfera = obtenerValor(
+                    `esf_lejos_${ojo}`
+                );
+
+                const cilindro = obtenerValor(
+                    `cil_lejos_${ojo}`
+                );
+
+                const eje = obtenerValor(
+                    `eje_lejos_${ojo}`
+                );
+
+                const adicion = obtenerValor(
+                    `Add_lejos_${ojo}`
+                );
+
+                const dip = obtenerValor(
+                    `DIP_lejos_${ojo}`
+                );
+
+                // Esfera cerca = Esfera lejos + Add
+                if (esfera !== null && adicion !== null) {
+                    asignarValor(
+                        `esf_cerca_${ojo}`,
+                        esfera + adicion
+                    );
+                }
+
+                // Cilindro cerca = Cilindro lejos
+                asignarValor(
+                    `cil_cerca_${ojo}`,
+                    cilindro
+                );
+
+                // Eje cerca = Eje lejos
+                asignarValor(
+                    `eje_cerca_${ojo}`,
+                    eje,
+                    0
+                );
+
+                // DIP cerca = DIP lejos - 2 mm
+                if (dip !== null) {
+                    asignarValor(
+                        `DIP_cerca_${ojo}`,
+                        dip - 2,
+                        0
+                    );
+                }
 
             });
 
-        });
+            return;
+        }
+
+    });
+
+    // ==========================================
+    // GUARDAR EDICIÓN O ELIMINAR MEDIDA
+    // ==========================================
+
+    modalBody.addEventListener('submit', async function (event) {
+
+        const formulario = event.target;
+
+        if (!formulario.matches(
+            'form[action*="/medida/"]'
+        )) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const esEliminacion =
+            formulario.action.includes('/eliminar/');
+
+        if (esEliminacion) {
+            if (!confirm(
+                '¿Está seguro de eliminar esta medida de vista?'
+            )) {
+                return;
+            }
+        }
+
+        const boton =
+            formulario.querySelector('[type="submit"]');
+
+        if (boton) {
+            boton.disabled = true;
+        }
+
+        try {
+
+            const response = await fetch(formulario.action, {
+
+                method: 'POST',
+
+                body: new FormData(formulario),
+
+                headers: {
+                    'X-CSRFToken': obtenerCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+
+            });
+
+            if (!response.ok) {
+                throw new Error('Error HTTP ' + response.status);
+            }
+
+            const tipo =
+                response.headers.get('content-type') || '';
+
+            if (!tipo.includes('application/json')) {
+                throw new Error(
+                    'El servidor no devolvió una respuesta JSON.'
+                );
+            }
+
+            const resultado = await response.json();
+
+            if (resultado.ok) {
+
+                modalTitle.textContent =
+                    'Historial de ' + nombreActual;
+
+                await cargarHistorial(clienteActual);
+
+            } else if (resultado.html) {
+
+                modalBody.innerHTML = resultado.html;
+
+            } else {
+
+                alert(
+                    resultado.error ||
+                    'No se pudo guardar la operación.'
+                );
+            }
+
+        } catch (error) {
+
+            console.error('Error al procesar:', error);
+
+            alert(
+                'Ocurrió un error al procesar la solicitud.'
+            );
+
+        } finally {
+
+            if (boton && boton.isConnected) {
+                boton.disabled = false;
+            }
+        }
+
+    });
 
 });
-
 </script>
+
 
 {% endblock %}

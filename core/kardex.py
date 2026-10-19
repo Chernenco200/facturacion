@@ -2,6 +2,7 @@ from decimal import Decimal
 from datetime import datetime, time
 
 from django.apps import apps
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -18,6 +19,23 @@ from .models import (
 # FECHAS DE LOS EVENTOS
 # ============================================================
 
+def _con_zona(fecha_dt):
+    """
+    Con USE_TZ=True Django espera fechas con zona horaria.
+    Además, mezclar fechas con y sin zona al ordenar los eventos
+    produce TypeError (por ejemplo, si una compra no tiene fecha
+    y se usa timezone.now()).
+    """
+
+    if settings.USE_TZ and timezone.is_naive(fecha_dt):
+        return timezone.make_aware(fecha_dt)
+
+    if not settings.USE_TZ and timezone.is_aware(fecha_dt):
+        return timezone.make_naive(fecha_dt)
+
+    return fecha_dt
+
+
 def _compra_dt(compra):
     """
     Compra.fecha es DateField.
@@ -28,10 +46,10 @@ def _compra_dt(compra):
 
     if getattr(compra, "fecha", None):
 
-        return datetime.combine(
+        return _con_zona(datetime.combine(
             compra.fecha,
             time(0, 0),
-        )
+        ))
 
     return timezone.now()
 
@@ -56,17 +74,17 @@ def _ticket_dt(ticket):
 
     if fecha and hora:
 
-        return datetime.combine(
+        return _con_zona(datetime.combine(
             fecha,
             hora,
-        )
+        ))
 
     if fecha:
 
-        return datetime.combine(
+        return _con_zona(datetime.combine(
             fecha,
             time(12, 0),
-        )
+        ))
 
     return timezone.now()
 
@@ -88,10 +106,10 @@ def _nota_credito_dt(nota):
 
     if fecha:
 
-        return datetime.combine(
+        return _con_zona(datetime.combine(
             fecha,
             time(23, 59, 59),
-        )
+        ))
 
     return timezone.now()
 
@@ -122,13 +140,22 @@ def recalcular_kardex_producto(
     # 2. ENTRADAS POR COMPRAS
     # ========================================================
 
+    # Import diferido: evita dependencia circular core <-> contabilidad.
+    from contabilidad.compras_mercaderia import costo_unitario_sin_igv
+
     compras = (
         DetalleCompra.objects
         .filter(
             producto=producto
         )
+        # Las notas de crédito de proveedor NO son ingresos de
+        # mercadería; antes se sumaban al stock por error.
+        .exclude(
+            compra__tipo_comprobante="NC"
+        )
         .select_related(
-            "compra"
+            "compra",
+            "compra__condicion_contable",
         )
     )
 
@@ -141,11 +168,9 @@ def recalcular_kardex_producto(
             )
         )
 
-        costo_in = Decimal(
-            str(
-                detalle_compra.precio_compra
-                or 0
-            )
+        # Con factura y crédito fiscal, el costo va sin IGV.
+        costo_in = costo_unitario_sin_igv(
+            detalle_compra
         )
 
         fecha_dt = _compra_dt(
@@ -314,22 +339,30 @@ def recalcular_kardex_producto(
                 + cantidad
             )
 
-            nuevo_costo_prom = (
-                (
+            if stock <= Decimal("0"):
+
+                # Sin stock previo (o negativo por ventas sin
+                # compra registrada): promediar con unidades que
+                # no existen distorsiona el costo. Se toma el
+                # costo de esta compra.
+                nuevo_costo_prom = costo_in
+
+            else:
+
+                nuevo_costo_prom = (
                     (
-                        stock
-                        * costo_prom
+                        (
+                            stock
+                            * costo_prom
+                        )
+                        +
+                        (
+                            cantidad
+                            * costo_in
+                        )
                     )
-                    +
-                    (
-                        cantidad
-                        * costo_in
-                    )
+                    / nuevo_stock
                 )
-                / nuevo_stock
-                if nuevo_stock > 0
-                else Decimal("0")
-            )
 
             KardexMovimiento.objects.create(
                 producto=producto,
@@ -545,10 +578,21 @@ def recalcular_kardex_producto(
         stock
     )
 
+    campos = ["stock"]
+
+    # Contabilidad usa producto.costo_promedio como respaldo
+    # cuando no encuentra el Kardex de una venta; aquí se
+    # mantiene al día si es un campo de la tabla.
+    if any(
+        campo.name == "costo_promedio"
+        and getattr(campo, "concrete", False)
+        for campo in producto._meta.get_fields()
+    ):
+        producto.costo_promedio = costo_prom
+        campos.append("costo_promedio")
+
     producto.save(
-        update_fields=[
-            "stock",
-        ]
+        update_fields=campos,
     )
 
 
@@ -562,4 +606,4 @@ def recalcular_kardex_todo():
 
         recalcular_kardex_producto(
             producto
-        )
+        )

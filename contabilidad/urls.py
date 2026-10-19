@@ -198,6 +198,93 @@ urlpatterns = [
         name="cambiar_estado_concepto_contable",
     ),
 
+    # ========================================================
+    # SALDOS POR PAGAR (PROVEEDORES Y TRABAJADORES)
+    # ========================================================
 
-    
+    path(
+        "saldos-por-pagar/",
+        views.saldos_por_pagar,
+        name="saldos_por_pagar",
+    ),
+
+    path(
+        "saldos-por-pagar/sin-identificar/",
+        views.estado_cuenta_tercero_view,
+        name="estado_cuenta_sin_identificar",
+    ),
+
+    path(
+        "saldos-por-pagar/<int:tercero_id>/",
+        views.estado_cuenta_tercero_view,
+        name="estado_cuenta_tercero",
+    ),
+
+    # ========================================================
+    # IMPUESTOS DEL MES (IGV - RENTA RER)
+    # ========================================================
+
+    path(
+        "impuestos-mensuales/",
+        views.impuestos_mensuales,
+        name="impuestos_mensuales",
+    ),
+
+    # ========================================================
+    # COMPRAS DE MERCADERÍA Y PAGOS A TERCEROS
+    # ========================================================
+
+    path(
+        "compras-mercaderia/",
+        views.compras_por_contabilizar,
+        name="compras_por_contabilizar",
+    ),
+
+    path(
+        "compras-mercaderia/<int:compra_id>/contabilizar/",
+        views.contabilizar_compra_mercaderia_view,
+        name="contabilizar_compra_mercaderia",
+    ),
+
+    path(
+        "saldos-por-pagar/<int:tercero_id>/pagar/",
+        views.registrar_pago_tercero_view,
+        name="registrar_pago_tercero",
+    ),
 ]
+
+
+# ============================================================
+# CONTROL DE ACCESO
+#
+# Toda la contabilidad queda restringida al superusuario, igual
+# que el menú. Antes las vistas no tenían ningún control: se podía
+# entrar escribiendo la dirección, incluso sin iniciar sesión.
+# ============================================================
+
+from functools import wraps
+
+from django.contrib.auth.views import redirect_to_login
+from django.http import HttpResponseForbidden
+
+
+def _solo_administrador_contable(vista):
+
+    @wraps(vista)
+    def envoltura(request, *args, **kwargs):
+
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+
+        if not request.user.is_superuser:
+            return HttpResponseForbidden(
+                "No tienes permisos para acceder a la contabilidad."
+            )
+
+        return vista(request, *args, **kwargs)
+
+    return envoltura
+
+
+for _patron in urlpatterns:
+    _patron.callback = _solo_administrador_contable(_patron.callback)

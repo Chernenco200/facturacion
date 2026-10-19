@@ -440,6 +440,20 @@
 
                             <li>
                                 <a class="dropdown-item"
+                                href="{% url 'contabilidad:compras_por_contabilizar' %}">
+                                    Compras de mercadería por contabilizar
+                                </a>
+                            </li>
+
+                            <li>
+                                <a class="dropdown-item"
+                                href="{% url 'contabilidad:saldos_por_pagar' %}">
+                                    Saldos por pagar (proveedores y trabajadores)
+                                </a>
+                            </li>
+
+                            <li>
+                                <a class="dropdown-item"
                                 href="{% url 'contabilidad:lista_notas_credito' %}">
                                     Notas de crédito
                                 </a>
@@ -569,6 +583,15 @@
                                     href="{% url 'contabilidad:pendientes_contables' %}"
                                 >
                                     Revisar pendientes y cerrar mes
+                                </a>
+                            </li>
+
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    href="{% url 'contabilidad:impuestos_mensuales' %}"
+                                >
+                                    Impuestos del mes (IGV y renta)
                                 </a>
                             </li>
 

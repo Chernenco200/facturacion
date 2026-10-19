@@ -1,143 +1,375 @@
 {% extends 'core/base.html' %}
 
-{% load static %}
-
-{% block title %}Registro de Compras{% endblock %}
+{% block title %}Registrar compra{% endblock %}
 
 {% block content %}
+<style>
+    .registro-compra-page { background: #f5f6f8; color: #17324d; padding: 22px 12px 36px; border-radius: 10px; }
+    .registro-compra-page .contenedor { max-width: 1200px; margin: auto; }
+    .registro-compra-page .card { border: 0; box-shadow: 0 1px 5px rgba(0, 0, 0, .08); }
+    .registro-compra-page .seccion-titulo { font-weight: 600; font-size: 1.05rem; }
+    .registro-compra-page .ayuda { font-size: .85rem; color: #667085; }
+    .registro-compra-page .importe { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .registro-compra-page .tabla-detalle { min-width: 980px; }
+    .registro-compra-page .tabla-detalle td { vertical-align: middle; }
+    .registro-compra-page .resumen { background: #f8f9fb; border-radius: .5rem; padding: 12px 16px; }
+    .registro-compra-page .resumen .fila { display: flex; justify-content: space-between; gap: 16px; padding: 3px 0; }
+    .registro-compra-page .resumen .total { font-weight: 600; font-size: 1.1rem; border-top: 1px solid #e4e7ec; margin-top: 4px; padding-top: 6px; }
+    .registro-compra-page .table-responsive { overflow-x: auto; }
+</style>
 
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Registrar Compra</title>
-    <link rel="stylesheet" href="{% static 'core/css/style.css' %}">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-<div class="container mt-4">
-    <h3>Registro de Compras</h3>
+<div class="registro-compra-page">
+<div class="contenedor">
 
-    <form method="post">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+        <div>
+            <h2 class="mb-1">Registrar compra</h2>
+            <div class="ayuda">
+                Al guardar, la mercadería entra al almacén y la compra queda contabilizada.
+            </div>
+        </div>
+        <a href="{% url 'lista_compras' %}" class="btn btn-outline-secondary btn-sm">Ver compras</a>
+    </div>
+
+    {% include "contabilidad/_mensajes.html" %}
+
+    <form method="post" id="form-compra" novalidate>
         {% csrf_token %}
-        <fieldset class="border p-3 mb-3">
-            <legend class="w-auto">Datos de la Compra</legend>
-            {{ compra_form.as_p }}
-            <a href="{% url 'crear_proveedor' %}" class="btn btn-secondary btn-sm">Nuevo proveedor</a>
-        </fieldset>
 
-        <fieldset class="border p-3 mb-3">
-            <legend class="w-auto">Detalle de Productos</legend>
+        <!-- COMPROBANTE -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="seccion-titulo">Comprobante</span>
+                    <a href="{% url 'crear_proveedor' %}" class="btn btn-outline-secondary btn-sm">Nuevo proveedor</a>
+                </div>
 
-            <table class="table table-bordered" id="tabla-detalle">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Descripción</th>
-                        <th>Precio Compra</th>
-                        <th>Precio Venta</th>
-                        <th>Cantidad</th>
-                        <th>Subtotal</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><input name="cod[]" class="form-control codigo-producto" list="lista-productos">
-                        <datalist id="lista-productos"></datalist>
-                        <td><input name="descripcion[]" class="form-control"></td>
-                        <td><input name="precio_compra[]" type="number" step="0.01" class="form-control"></td>
-                        <td><input name="precio_venta[]" type="number" step="0.01" class="form-control"></td>
-                        <td><input name="cantidad[]" type="number" step="0.01" class="form-control"></td>
-                        <td><input name="subtotal[]" type="number" step="0.01" class="form-control" readonly></td>
-                        <td><button type="button" class="btn btn-danger btn-sm" onclick="eliminarFila(this)">X</button></td>
-                    </tr>
-                </tbody>
-            </table>
+                {% if compra_form.non_field_errors %}
+                    <div class="alert alert-danger py-2">{{ compra_form.non_field_errors }}</div>
+                {% endif %}
 
-            <button type="button" class="btn btn-primary btn-sm" onclick="agregarFila()">Agregar fila</button>
-        </fieldset>
-
-        <div class="text-end mb-3">
-            <label>Total: </label>
-            <input id="total" name="total" type="number" step="0.01" class="form-control d-inline-block" style="width:150px;" readonly>
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label" for="{{ compra_form.proveedor.id_for_label }}">Proveedor</label>
+                        {{ compra_form.proveedor }}
+                        {% for error in compra_form.proveedor.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="{{ compra_form.fecha.id_for_label }}">Fecha</label>
+                        {{ compra_form.fecha }}
+                        {% for error in compra_form.fecha.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="{{ compra_form.tipo_comprobante.id_for_label }}">Tipo de comprobante</label>
+                        {{ compra_form.tipo_comprobante }}
+                        {% for error in compra_form.tipo_comprobante.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="{{ compra_form.serie.id_for_label }}">Serie</label>
+                        {{ compra_form.serie }}
+                        {% for error in compra_form.serie.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="{{ compra_form.numero.id_for_label }}">Número</label>
+                        {{ compra_form.numero }}
+                        {% for error in compra_form.numero.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <button type="submit" class="btn btn-success">Guardar Compra</button>
+        <!-- PRODUCTOS -->
+        <div class="card mb-4">
+            <div class="card-body pb-2">
+                <span class="seccion-titulo">Productos</span>
+                <div class="ayuda">
+                    Escribe el código para buscar un producto existente. Los precios van tal como
+                    figuran en el comprobante.
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table mb-0 tabla-detalle" id="tabla-detalle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 13%;">Código</th>
+                            <th>Descripción</th>
+                            <th style="width: 17%;">Tipo</th>
+                            <th style="width: 11%;">Precio compra</th>
+                            <th style="width: 11%;">Precio venta</th>
+                            <th style="width: 9%;">Cantidad</th>
+                            <th style="width: 11%;" class="importe">Subtotal</th>
+                            <th style="width: 4%;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fila in filas %}
+                            <tr>
+                                <td><input name="cod[]" class="form-control form-control-sm codigo-producto" list="lista-productos" autocomplete="off" value="{{ fila.cod|default:'' }}" aria-label="Código"></td>
+                                <td><input name="descripcion[]" class="form-control form-control-sm" value="{{ fila.descripcion|default:'' }}" aria-label="Descripción"></td>
+                                <td>
+                                    <select name="tipo[]" class="form-select form-select-sm" aria-label="Tipo">
+                                        <option value="">Seleccione</option>
+                                        {% for valor, etiqueta in tipos_producto %}
+                                            <option value="{{ valor }}" {% if fila.tipo == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td><input name="precio_compra[]" type="number" step="0.01" min="0" class="form-control form-control-sm" value="{{ fila.precio_compra|default:'' }}" aria-label="Precio de compra"></td>
+                                <td><input name="precio_venta[]" type="number" step="0.01" min="0" class="form-control form-control-sm" value="{{ fila.precio_venta|default:'' }}" aria-label="Precio de venta"></td>
+                                <td><input name="cantidad[]" type="number" step="0.01" min="0" class="form-control form-control-sm" value="{{ fila.cantidad|default:'' }}" aria-label="Cantidad"></td>
+                                <td class="importe subtotal-fila">S/ 0.00</td>
+                                <td><button type="button" class="btn btn-outline-danger btn-sm boton-quitar" aria-label="Quitar fila">×</button></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <datalist id="lista-productos"></datalist>
+            </div>
+            <div class="card-body pt-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="boton-agregar">Agregar producto</button>
+            </div>
+        </div>
+
+        <!-- PAGO E IGV -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-7">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="seccion-titulo mb-3">Pago</div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="forma_pago" class="form-label">Forma de pago</label>
+                                <select id="forma_pago" name="forma_pago" class="form-select">
+                                    {% for valor, etiqueta in formas_pago %}
+                                        <option value="{{ valor }}" {% if datos.forma_pago == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-md-6 bloque-parcial">
+                                <label for="monto_pagado" class="form-label">Monto pagado ahora</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">S/</span>
+                                    <input type="number" id="monto_pagado" name="monto_pagado" class="form-control" min="0.01" step="0.01" value="{{ datos.monto_pagado }}">
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 bloque-pago">
+                                <label for="cuenta_pago" class="form-label">Pagado desde</label>
+                                <select id="cuenta_pago" name="cuenta_pago" class="form-select">
+                                    <option value="">Seleccione</option>
+                                    {% for cuenta in cuentas_pago %}
+                                        <option value="{{ cuenta.id }}" {% if datos.cuenta_pago == cuenta.id|stringformat:"s" %}selected{% endif %}>{{ cuenta.codigo }} - {{ cuenta.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-md-6 bloque-pago">
+                                <label for="fecha_pago" class="form-label">Fecha de pago</label>
+                                <input type="date" id="fecha_pago" name="fecha_pago" class="form-control" value="{{ datos.fecha_pago }}">
+                                <div class="ayuda">Si la dejas vacía, se usa la fecha de la compra.</div>
+                            </div>
+
+                            <div class="col-md-6 bloque-credito">
+                                <label for="cuenta_proveedor" class="form-label">Cuenta por pagar</label>
+                                <select id="cuenta_proveedor" name="cuenta_proveedor" class="form-select">
+                                    <option value="">Seleccione</option>
+                                    {% for cuenta in cuentas_proveedor %}
+                                        <option value="{{ cuenta.id }}" {% if datos.cuenta_proveedor == cuenta.id|stringformat:"s" %}selected{% endif %}>{{ cuenta.codigo }} - {{ cuenta.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="col-md-6 bloque-credito">
+                                <label for="fecha_vencimiento" class="form-label">Vence</label>
+                                <input type="date" id="fecha_vencimiento" name="fecha_vencimiento" class="form-control" value="{{ datos.fecha_vencimiento }}">
+                            </div>
+
+                            <div class="col-12">
+                                <label for="observacion" class="form-label">Observación</label>
+                                <textarea id="observacion" name="observacion" class="form-control" rows="2">{{ datos.observacion }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="seccion-titulo mb-3">IGV y total</div>
+
+                        <div id="bloque-igv">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" value="1" id="usa_credito_fiscal" name="usa_credito_fiscal" {% if datos.usa_credito_fiscal == "1" %}checked{% endif %}>
+                                <label class="form-check-label" for="usa_credito_fiscal">Usar el IGV como crédito fiscal</label>
+                            </div>
+                            <div class="form-check mb-3 ms-4" id="bloque-incluye">
+                                <input class="form-check-input" type="checkbox" value="1" id="precios_incluyen_igv" name="precios_incluyen_igv" {% if datos.precios_incluyen_igv == "1" %}checked{% endif %}>
+                                <label class="form-check-label" for="precios_incluyen_igv">Los precios ingresados incluyen IGV</label>
+                            </div>
+                        </div>
+                        <p class="ayuda mb-3" id="aviso-sin-igv" hidden>
+                            Con boleta el IGV no se recupera: forma parte del costo de la mercadería.
+                        </p>
+                        <p class="ayuda mb-3" id="aviso-nc" hidden>
+                            Las notas de crédito de proveedor se guardan sin asiento; regístralo
+                            manualmente en contabilidad.
+                        </p>
+
+                        <div class="resumen">
+                            <div class="fila"><span>Valor de la mercadería</span><span class="importe" id="res-base">S/ 0.00</span></div>
+                            <div class="fila"><span>IGV crédito fiscal</span><span class="importe" id="res-igv">S/ 0.00</span></div>
+                            <div class="fila total"><span>Total del comprobante</span><span class="importe" id="res-total">S/ 0.00</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-end">
+            <button type="submit" class="btn btn-success px-4">Guardar compra</button>
+        </div>
     </form>
+
+</div>
 </div>
 
 <script>
-function agregarFila() {
-    const tbody = document.querySelector('#tabla-detalle tbody');
-    const fila = tbody.rows[0].cloneNode(true);
-    fila.querySelectorAll('input').forEach(input => input.value = '');
-    tbody.appendChild(fila);
-}
+(function () {
+    const TASA_IGV = 0.18;
+    const tabla = document.querySelector("#tabla-detalle tbody");
+    const tipoComprobante = document.getElementById("{{ compra_form.tipo_comprobante.id_for_label }}");
+    const usaCf = document.getElementById("usa_credito_fiscal");
+    const incluye = document.getElementById("precios_incluyen_igv");
+    const formaPago = document.getElementById("forma_pago");
 
-function eliminarFila(boton) {
-    const tbody = document.querySelector('#tabla-detalle tbody');
-    if (tbody.rows.length > 1) {
-        boton.closest('tr').remove();
-        calcularTotal();
+    function numero(valor) { const n = parseFloat(valor); return isNaN(n) ? 0 : n; }
+    function redondear(valor) { return Math.round(valor * 100) / 100; }
+    function soles(valor) { return "S/ " + valor.toFixed(2); }
+
+    // ---------------- Filas ----------------
+
+    function limpiarFila(fila) {
+        fila.querySelectorAll("input").forEach(function (input) { input.value = ""; });
+        fila.querySelectorAll("select").forEach(function (select) { select.value = ""; });
+        fila.querySelector(".subtotal-fila").textContent = soles(0);
     }
-}
 
-document.addEventListener('input', function(e){
-    if (e.target.name === 'precio_compra[]' || e.target.name === 'cantidad[]') {
-        const fila = e.target.closest('tr');
-        const pc = parseFloat(fila.querySelector('input[name="precio_compra[]"]').value) || 0;
-        const cant = parseFloat(fila.querySelector('input[name="cantidad[]"]').value) || 0;
-        const subtotal = pc * cant;
-        fila.querySelector('input[name="subtotal[]"]').value = subtotal.toFixed(2);
-        calcularTotal();
-    }
-});
-
-function calcularTotal() {
-    let total = 0;
-    document.querySelectorAll('input[name="subtotal[]"]').forEach(input => {
-        total += parseFloat(input.value) || 0;
+    document.getElementById("boton-agregar").addEventListener("click", function () {
+        const fila = tabla.rows[0].cloneNode(true);
+        limpiarFila(fila);
+        tabla.appendChild(fila);
+        fila.querySelector("input[name='cod[]']").focus();
     });
-    document.getElementById('total').value = total.toFixed(2);
-}
-</script>
 
+    tabla.addEventListener("click", function (evento) {
+        const boton = evento.target.closest(".boton-quitar");
+        if (!boton) { return; }
+        const fila = boton.closest("tr");
+        if (tabla.rows.length > 1) { fila.remove(); } else { limpiarFila(fila); }
+        recalcular();
+    });
 
-<script>
-document.addEventListener("input", function(e) {
-    if (e.target.classList.contains("codigo-producto")) {
-        const inputCodigo = e.target;
-        const fila = inputCodigo.closest("tr");
-        const q = inputCodigo.value;
+    // ---------------- Totales ----------------
 
-        if (q.length < 2) return;
-
-        fetch(`/productos/buscar-codigo/?q=${q}`)
-            .then(response => response.json())
-            .then(data => {
-                const lista = document.getElementById("lista-productos");
-                lista.innerHTML = "";
-
-                data.forEach(p => {
-                    const option = document.createElement("option");
-                    option.value = p.cod;
-                    option.textContent = `${p.cod} - ${p.descripcion}`;
-                    lista.appendChild(option);
-                });
-
-                const producto = data.find(p => p.cod === q);
-
-                if (producto) {
-                    fila.querySelector('input[name="descripcion[]"]').value = producto.descripcion;
-                    fila.querySelector('input[name="precio_compra[]"]').value = producto.precio_compra;
-                    fila.querySelector('input[name="precio_venta[]"]').value = producto.precio_venta;
-                }
-            });
+    function sumaDetalle() {
+        let total = 0;
+        Array.from(tabla.rows).forEach(function (fila) {
+            const pc = numero(fila.querySelector("input[name='precio_compra[]']").value);
+            const cant = numero(fila.querySelector("input[name='cantidad[]']").value);
+            const subtotal = redondear(pc * cant);
+            fila.querySelector(".subtotal-fila").textContent = soles(subtotal);
+            total += subtotal;
+        });
+        return redondear(total);
     }
-});
+
+    function recalcular() {
+        const suma = sumaDetalle();
+        const tipo = tipoComprobante ? tipoComprobante.value : "";
+        const esFactura = tipo === "FA";
+
+        document.getElementById("bloque-igv").hidden = !esFactura;
+        document.getElementById("aviso-sin-igv").hidden = tipo !== "BO";
+        document.getElementById("aviso-nc").hidden = tipo !== "NC";
+        document.getElementById("bloque-incluye").hidden = !(esFactura && usaCf.checked);
+
+        let base = suma, igv = 0, total = suma;
+
+        if (esFactura && usaCf.checked) {
+            if (incluye.checked) {
+                base = redondear(suma / (1 + TASA_IGV));
+                igv = redondear(suma - base);
+            } else {
+                igv = redondear(suma * TASA_IGV);
+                total = redondear(suma + igv);
+            }
+        }
+
+        document.getElementById("res-base").textContent = soles(base);
+        document.getElementById("res-igv").textContent = soles(igv);
+        document.getElementById("res-total").textContent = soles(total);
+    }
+
+    function mostrar(selector, visible) {
+        document.querySelectorAll(selector).forEach(function (el) { el.hidden = !visible; });
+    }
+
+    function actualizarPago() {
+        const forma = formaPago.value;
+        mostrar(".bloque-pago", forma !== "CREDITO");
+        mostrar(".bloque-credito", forma === "CREDITO" || forma === "PARCIAL");
+        mostrar(".bloque-parcial", forma === "PARCIAL");
+    }
+
+    document.getElementById("form-compra").addEventListener("input", recalcular);
+    document.getElementById("form-compra").addEventListener("change", recalcular);
+    formaPago.addEventListener("change", actualizarPago);
+
+    // ---------------- Búsqueda de productos ----------------
+
+    let temporizador = null;
+
+    tabla.addEventListener("input", function (evento) {
+        const campo = evento.target;
+        if (!campo.classList.contains("codigo-producto")) { return; }
+
+        const fila = campo.closest("tr");
+        const q = campo.value.trim();
+        if (q.length < 2) { return; }
+
+        clearTimeout(temporizador);
+        temporizador = setTimeout(function () {
+            fetch("{% url 'buscar_producto_codigo' %}?q=" + encodeURIComponent(q))
+                .then(function (respuesta) { return respuesta.json(); })
+                .then(function (productos) {
+                    const lista = document.getElementById("lista-productos");
+                    lista.innerHTML = "";
+                    productos.forEach(function (p) {
+                        const opcion = document.createElement("option");
+                        opcion.value = p.cod;
+                        opcion.textContent = p.cod + " - " + (p.descripcion || "");
+                        lista.appendChild(opcion);
+                    });
+
+                    const producto = productos.find(function (p) { return p.cod === q; });
+                    if (!producto) { return; }
+
+                    fila.querySelector("input[name='descripcion[]']").value = producto.descripcion || "";
+                    fila.querySelector("input[name='precio_compra[]']").value = producto.precio_compra || "";
+                    fila.querySelector("input[name='precio_venta[]']").value = producto.precio_venta || "";
+                    if (producto.tipo) {
+                        fila.querySelector("select[name='tipo[]']").value = producto.tipo;
+                    }
+                    recalcular();
+                })
+                .catch(function () { /* sin conexión: se completa a mano */ });
+        }, 250);
+    });
+
+    actualizarPago();
+    recalcular();
+})();
 </script>
-
-
-</body>
-</html>
 {% endblock %}

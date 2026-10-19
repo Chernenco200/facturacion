@@ -1,45 +1,40 @@
-<!DOCTYPE html>
-<html lang="es">
+{% extends "core/base.html" %}
 
-<head>
-    <meta charset="UTF-8">
+{% block title %}Cierre de período contable - Óptica IC{% endblock %}
 
-    <title>
-        Cierre de período contable
-    </title>
+{% block content %}
+<style>
 
-    <style>
 
-        * {
+        .cierre-periodo-page * {
             box-sizing: border-box;
         }
 
-        body {
-            margin: 0;
+        .cierre-periodo-page {
             font-family: Arial, Helvetica, sans-serif;
             background: #f4f7fa;
             color: #17324d;
         }
 
-        .contenedor {
+        .cierre-periodo-page .contenedor {
             max-width: 1100px;
             margin: 30px auto;
             padding: 0 20px 40px;
         }
 
-        .titulo {
+        .cierre-periodo-page .titulo {
             margin: 0;
             font-size: 34px;
             font-weight: 700;
         }
 
-        .subtitulo {
+        .cierre-periodo-page .subtitulo {
             margin-top: 5px;
             color: #667085;
             font-size: 16px;
         }
 
-        .periodo {
+        .cierre-periodo-page .periodo {
             margin-top: 8px;
             margin-bottom: 24px;
             font-size: 18px;
@@ -47,32 +42,32 @@
             color: #344054;
         }
 
-        .mensaje {
+        .cierre-periodo-page .mensaje {
             padding: 13px 16px;
             margin-bottom: 16px;
             border-radius: 8px;
             font-size: 15px;
         }
 
-        .mensaje.success {
+        .cierre-periodo-page .mensaje.success {
             background: #ecfdf3;
             color: #067647;
             border: 1px solid #abefc6;
         }
 
-        .mensaje.error {
+        .cierre-periodo-page .mensaje.error {
             background: #fef3f2;
             color: #b42318;
             border: 1px solid #fecdca;
         }
 
-        .mensaje.warning {
+        .cierre-periodo-page .mensaje.warning {
             background: #fffaeb;
             color: #b54708;
             border: 1px solid #fedf89;
         }
 
-        .tarjeta {
+        .cierre-periodo-page .tarjeta {
             background: white;
             border-radius: 12px;
             margin-bottom: 20px;
@@ -80,30 +75,30 @@
             box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
         }
 
-        .seccion {
+        .cierre-periodo-page .seccion {
             background: #e8f0f5;
             padding: 15px 20px;
             font-size: 17px;
             font-weight: 700;
         }
 
-        .contenido {
+        .cierre-periodo-page .contenido {
             padding: 20px;
         }
 
-        .estado-periodo {
+        .cierre-periodo-page .estado-periodo {
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 20px;
         }
 
-        .estado-etiqueta {
+        .cierre-periodo-page .estado-etiqueta {
             font-weight: 700;
             color: #475467;
         }
 
-        .badge {
+        .cierre-periodo-page .badge {
             display: inline-block;
             padding: 7px 12px;
             border-radius: 20px;
@@ -111,22 +106,22 @@
             font-size: 13px;
         }
 
-        .badge-abierto {
+        .cierre-periodo-page .badge-abierto {
             background: #ecfdf3;
             color: #067647;
         }
 
-        .badge-cerrado {
+        .cierre-periodo-page .badge-cerrado {
             background: #f2f4f7;
             color: #475467;
         }
 
-        .checklist {
+        .cierre-periodo-page .checklist {
             width: 100%;
             border-collapse: collapse;
         }
 
-        .checklist th {
+        .cierre-periodo-page .checklist th {
             background: #f8fafc;
             text-align: left;
             padding: 12px 14px;
@@ -135,39 +130,39 @@
             font-size: 14px;
         }
 
-        .checklist td {
+        .cierre-periodo-page .checklist td {
             padding: 14px;
             border-bottom: 1px solid #eaecf0;
             vertical-align: middle;
         }
 
-        .checklist td.numero {
+        .cierre-periodo-page .checklist td.numero {
             text-align: right;
             width: 120px;
             font-weight: 700;
         }
 
-        .checklist td.estado {
+        .cierre-periodo-page .checklist td.estado {
             text-align: center;
             width: 110px;
         }
 
-        .ok {
+        .cierre-periodo-page .ok {
             color: #067647;
             font-weight: 700;
         }
 
-        .error {
+        .cierre-periodo-page .error {
             color: #b42318;
             font-weight: 700;
         }
 
-        .tabla-detalle {
+        .cierre-periodo-page .tabla-detalle {
             width: 100%;
             border-collapse: collapse;
         }
 
-        .tabla-detalle th {
+        .cierre-periodo-page .tabla-detalle th {
             background: #f8fafc;
             text-align: left;
             padding: 11px 12px;
@@ -176,13 +171,13 @@
             color: #475467;
         }
 
-        .tabla-detalle td {
+        .cierre-periodo-page .tabla-detalle td {
             padding: 11px 12px;
             border-bottom: 1px solid #eaecf0;
             font-size: 14px;
         }
 
-        .resumen-cierre {
+        .cierre-periodo-page .resumen-cierre {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -190,24 +185,24 @@
             flex-wrap: wrap;
         }
 
-        .puede-cerrar {
+        .cierre-periodo-page .puede-cerrar {
             color: #067647;
             font-weight: 700;
         }
 
-        .no-puede-cerrar {
+        .cierre-periodo-page .no-puede-cerrar {
             color: #b42318;
             font-weight: 700;
         }
 
-        .acciones {
+        .cierre-periodo-page .acciones {
             display: flex;
             justify-content: flex-end;
             gap: 12px;
             margin-top: 18px;
         }
 
-        .boton {
+        .cierre-periodo-page .boton {
             padding: 11px 20px;
             border-radius: 7px;
             border: none;
@@ -217,22 +212,22 @@
             font-size: 14px;
         }
 
-        .boton-principal {
+        .cierre-periodo-page .boton-principal {
             background: #28627f;
             color: white;
         }
 
-        .boton-principal:hover {
+        .cierre-periodo-page .boton-principal:hover {
             background: #204f67;
         }
 
-        .boton-deshabilitado {
+        .cierre-periodo-page .boton-deshabilitado {
             background: #d0d5dd;
             color: #667085;
             cursor: not-allowed;
         }
 
-        .advertencia {
+        .cierre-periodo-page .advertencia {
             background: #fffaeb;
             border: 1px solid #fedf89;
             color: #7a2e0e;
@@ -242,12 +237,19 @@
             margin-top: 18px;
         }
 
-    </style>
+    
+        .cierre-periodo-page .tabla-scroll { overflow-x: auto; width: 100%; }
+        .cierre-periodo-page .checklist,
+        .cierre-periodo-page .tabla-detalle { min-width: 650px; }
+        .cierre-periodo-page .badge { line-height: 1.4; }
+        @media (max-width: 700px) {
+            .cierre-periodo-page .contenedor { padding: 0 0 25px; margin: 10px auto; }
+            .cierre-periodo-page .titulo { font-size: 26px; }
+            .cierre-periodo-page .estado-periodo { flex-wrap: wrap; }
+        }
+</style>
 
-</head>
-
-<body>
-
+<div class="cierre-periodo-page">
 <div class="contenedor">
 
     <h1 class="titulo">
@@ -338,7 +340,8 @@
             VALIDACIONES PREVIAS AL CIERRE
         </div>
 
-        <table class="checklist">
+        <div class="tabla-scroll">
+<table class="checklist">
 
             <thead>
 
@@ -518,6 +521,7 @@
             </tbody>
 
         </table>
+</div>
 
     </div>
 
@@ -534,7 +538,8 @@
                 ASIENTOS EN BORRADOR
             </div>
 
-            <table class="tabla-detalle">
+            <div class="tabla-scroll">
+<table class="tabla-detalle">
 
                 <thead>
                     <tr>
@@ -561,6 +566,7 @@
                 </tbody>
 
             </table>
+</div>
 
         </div>
 
@@ -579,7 +585,8 @@
                 ASIENTOS DESCUADRADOS
             </div>
 
-            <table class="tabla-detalle">
+            <div class="tabla-scroll">
+<table class="tabla-detalle">
 
                 <thead>
                     <tr>
@@ -608,6 +615,7 @@
                 </tbody>
 
             </table>
+</div>
 
         </div>
 
@@ -626,7 +634,8 @@
                 PROPUESTAS DE COSTO PENDIENTES
             </div>
 
-            <table class="tabla-detalle">
+            <div class="tabla-scroll">
+<table class="tabla-detalle">
 
                 <thead>
                     <tr>
@@ -655,6 +664,7 @@
                 </tbody>
 
             </table>
+</div>
 
         </div>
 
@@ -673,7 +683,8 @@
                 PAGOS DE OPERACIONES PENDIENTES DE CONTABILIZAR
             </div>
 
-            <table class="tabla-detalle">
+            <div class="tabla-scroll">
+<table class="tabla-detalle">
 
                 <thead>
                     <tr>
@@ -725,6 +736,7 @@
                 </tbody>
 
             </table>
+</div>
 
         </div>
 
@@ -743,7 +755,8 @@
                 OPERACIONES CONTABLES PENDIENTES
             </div>
 
-            <table class="tabla-detalle">
+            <div class="tabla-scroll">
+<table class="tabla-detalle">
 
                 <thead>
                     <tr>
@@ -793,6 +806,7 @@
                 </tbody>
 
             </table>
+</div>
 
         </div>
 
@@ -955,7 +969,5 @@
     </div>
 
 </div>
-
-</body>
-
-</html>
+</div>
+{% endblock %}

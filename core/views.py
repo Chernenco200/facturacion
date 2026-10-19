@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib.staticfiles import finders
 from django.urls import reverse
 
@@ -18,7 +19,7 @@ from reportlab.lib.styles import ParagraphStyle
 from django.shortcuts import render, redirect
 from .models import Venta, Producto, Gasto, MedidaVista, Cliente, TipoLunas, ReciboCorrelativo, TicketVenta, DetalleTicketVenta, Compra, DetalleCompra, Proveedor, KardexMovimiento, PagoTicket, MovimientoCaja, OrdenTrabajo, ReactivacionWhatsApp
 
-from .forms import ClienteForm, MedidaVistaForm, TipoLunasForm, ProductoForm, CompraForm, ProveedorForm, DetalleCompraForm
+from .forms import ClienteForm, MedidaVistaForm, TipoLunasForm, ProductoForm, CompraForm, ProveedorForm, DetalleCompraForm, DetalleTicketVentaForm, DescripcionVentaForm
 from django.shortcuts import get_object_or_404
 
 from django.http import JsonResponse
@@ -48,6 +49,7 @@ from reportlab.lib.units import mm
 from django.conf import settings
 
 from django.db import transaction
+from django.core.exceptions import ValidationError
 
 
 from decimal import Decimal
@@ -312,11 +314,42 @@ def editar_producto(request, pk):
         form = ProductoForm(instance=producto)
     return render(request, 'core/compras.html', {'form': form})
 
+@role_required("ADMIN", "SUPERVISOR")
 def eliminar_producto(request, pk):
+    """
+    Elimina un producto solo si nunca se compró ni se vendió.
+    Si tiene historial, lo desactiva: borrarlo dejaría compras,
+    ventas y costos sin su producto.
+    """
+
+    from contabilidad.models import DetallePropuestaCostoVenta
+
     producto = get_object_or_404(Producto, pk=pk)
+
     if request.method == 'POST':
-        producto.delete()
+
+        tiene_historial = (
+            DetalleCompra.objects.filter(producto=producto).exists()
+            or DetalleTicketVenta.objects.filter(producto=producto).exists()
+            or DetallePropuestaCostoVenta.objects.filter(producto=producto).exists()
+        )
+
+        if tiene_historial:
+            if producto.activo:
+                producto.activo = False
+                producto.save(update_fields=["activo"])
+            messages.warning(
+                request,
+                f"El producto {producto.cod} tiene compras o ventas registradas, "
+                "así que no se eliminó: se marcó como inactivo.",
+            )
+        else:
+            codigo = producto.cod
+            producto.delete()
+            messages.success(request, f"Producto {codigo} eliminado.")
+
         return redirect('lista_compras')
+
     return render(request, 'core/confirmar_eliminar.html', {'producto': producto})
 
 
@@ -1516,88 +1549,293 @@ def consulta_dni(request):
 
 
 
-@transaction.atomic
+# ============================================================
+# COMPRAS DE MERCADERÍA
+#
+# Al guardar una compra:
+#   1. se registran los productos y el detalle,
+#   2. se recalcula el Kardex,
+#   3. se genera el asiento contable con la forma de pago e IGV.
+# Si algo falla, no se guarda nada (la compra y su asiento
+# siempre van juntos).
+# ============================================================
+
+TIPOS_PRODUCTO_VALIDOS = {valor for valor, _ in Producto.TIPO_CHOICES}
+
+
+class _CompraNoValida(Exception):
+    def __init__(self, errores):
+        super().__init__("compra no válida")
+        self.errores = errores
+
+
+def _decimal_formulario(texto):
+    try:
+        return Decimal(str(texto or "0").replace(",", ".").strip() or "0")
+    except Exception:
+        return None
+
+
+def _leer_filas_compra(post):
+    """
+    Lee las filas del detalle. Devuelve (filas_validas,
+    filas_para_formulario, errores).
+    """
+
+    columnas = {
+        "cod": post.getlist("cod[]"),
+        "descripcion": post.getlist("descripcion[]"),
+        "tipo": post.getlist("tipo[]"),
+        "precio_compra": post.getlist("precio_compra[]"),
+        "precio_venta": post.getlist("precio_venta[]"),
+        "cantidad": post.getlist("cantidad[]"),
+    }
+
+    total_filas = max((len(valores) for valores in columnas.values()), default=0)
+
+    def valor(nombre, indice):
+        valores = columnas[nombre]
+        return valores[indice].strip() if indice < len(valores) else ""
+
+    filas = []
+    filas_formulario = []
+    errores = []
+
+    for indice in range(total_filas):
+
+        crudo = {nombre: valor(nombre, indice) for nombre in columnas}
+
+        if not crudo["cod"]:
+            continue
+
+        filas_formulario.append(crudo)
+
+        etiqueta = f"Fila {len(filas_formulario)} ({crudo['cod']})"
+
+        pc = _decimal_formulario(crudo["precio_compra"])
+        pv = _decimal_formulario(crudo["precio_venta"])
+        cant = _decimal_formulario(crudo["cantidad"])
+
+        if pc is None or pv is None or cant is None:
+            errores.append(f"{etiqueta}: hay un número mal escrito.")
+            continue
+
+        if cant <= 0:
+            errores.append(f"{etiqueta}: la cantidad debe ser mayor que cero.")
+            continue
+
+        if pc <= 0:
+            errores.append(f"{etiqueta}: el precio de compra debe ser mayor que cero.")
+            continue
+
+        tipo = crudo["tipo"]
+
+        if tipo and tipo not in TIPOS_PRODUCTO_VALIDOS:
+            errores.append(f"{etiqueta}: el tipo «{tipo}» no es válido.")
+            continue
+
+        if not tipo:
+            existente = Producto.objects.filter(cod=crudo["cod"]).first()
+            if not existente or not existente.tipo:
+                errores.append(
+                    f"{etiqueta}: indique el tipo de producto; "
+                    "contabilidad lo necesita para saber la cuenta de inventario."
+                )
+                continue
+
+        filas.append({
+            "cod": crudo["cod"],
+            "descripcion": crudo["descripcion"],
+            "tipo": tipo,
+            "pc": pc.quantize(Decimal("0.01")),
+            "pv": pv.quantize(Decimal("0.01")),
+            "cant": cant.quantize(Decimal("0.01")),
+            # Se calcula aquí; no se confía en el navegador.
+            "sub": (cant * pc).quantize(Decimal("0.01")),
+        })
+
+    if not filas_formulario:
+        errores.append("Agregue al menos un producto.")
+
+    return filas, filas_formulario, errores
+
+
+def _contexto_registro_compra(compra_form, filas_formulario, datos_condicion):
+    from contabilidad.compras_mercaderia import (
+        cuentas_caja_banco,
+        cuentas_proveedores,
+    )
+    from contabilidad.models import CompraMercaderia
+
+    return {
+        "compra_form": compra_form,
+        "filas": filas_formulario or [{}],
+        "tipos_producto": Producto.TIPO_CHOICES,
+        "datos": datos_condicion,
+        "formas_pago": CompraMercaderia.FormaPago.choices,
+        "cuentas_pago": cuentas_caja_banco(),
+        "cuentas_proveedor": cuentas_proveedores(),
+    }
+
+
 @role_required("ADMIN", "SUPERVISOR")
 def registrar_compra(request):
+
+    from contabilidad.compras_mercaderia import (
+        contabilizar_compra_mercaderia,
+        leer_datos_condicion,
+        preparar_condicion_compra,
+    )
+
+    datos_condicion = {
+        "forma_pago": "EFECTIVO",
+        "usa_credito_fiscal": "1",
+        "precios_incluyen_igv": "1",
+        "monto_pagado": "",
+        "fecha_pago": "",
+        "cuenta_pago": "",
+        "cuenta_proveedor": "",
+        "fecha_vencimiento": "",
+        "observacion": "",
+    }
+
+    filas_formulario = []
+
     if request.method == 'POST':
+
         compra_form = CompraForm(request.POST)
-        if compra_form.is_valid():
-            compra = compra_form.save(commit=False)
-            compra.total = float(request.POST.get("total") or 0)
-            compra.save()
+        datos_condicion = leer_datos_condicion(request.POST)
+        filas, filas_formulario, errores = _leer_filas_compra(request.POST)
 
-            cods            = request.POST.getlist('cod[]')
-            descripciones   = request.POST.getlist('descripcion[]')
-            tipos           = request.POST.getlist('tipo[]')
-            precios_compra  = request.POST.getlist('precio_compra[]')
-            precios_venta   = request.POST.getlist('precio_venta[]')
-            cantidades      = request.POST.getlist('cantidad[]')
-            subtotales      = request.POST.getlist('subtotal[]')
-            
-            productos_afectados = set()
+        if compra_form.is_valid() and not errores:
 
-            for i in range(len(cods)):
-                cod = cods[i].strip()
-                if not cod:
-                    continue  # fila vacía
+            datos_compra = compra_form.cleaned_data
 
-                descripcion = descripciones[i].strip()
-                pc = float(precios_compra[i] or 0)
-                pv = float(precios_venta[i] or 0)
-                cant = float(cantidades[i] or 0)
-                sub = float(subtotales[i] or 0)
+            if not datos_condicion["fecha_pago"]:
+                datos_condicion["fecha_pago"] = datos_compra["fecha"].isoformat()
 
-                # 🔹 1. Buscar o crear producto por código
-                producto, creado = Producto.objects.get_or_create(
-                    cod=cod,
-                    defaults={
-                        'descripcion': descripcion,
-                        'precio_compra': pc,
-                        'precio_venta': pv,
-                        'stock': cant,
-                    }
+            duplicada = Compra.objects.filter(
+                proveedor=datos_compra["proveedor"],
+                tipo_comprobante=datos_compra["tipo_comprobante"],
+                serie__iexact=datos_compra["serie"],
+                numero=datos_compra["numero"],
+            ).exists()
+
+            if duplicada:
+                errores.append(
+                    "Ese comprobante de ese proveedor ya está registrado."
                 )
 
-                # 🔹 2. Si ya existía, ACTUALIZAR datos y aumentar stock
-                if not creado:
-                    producto.descripcion = descripcion or producto.descripcion
-                    producto.precio_compra = pc
-                    producto.precio_venta = pv
-                    producto.save(update_fields=["descripcion", "precio_compra", "precio_venta"])
+        if compra_form.is_valid() and not errores:
+
+            asiento = None
+
+            try:
+                with transaction.atomic():
+
+                    compra = compra_form.save(commit=False)
+                    compra.total = sum(
+                        (fila["sub"] for fila in filas),
+                        Decimal("0.00"),
+                    )
+                    compra.save()
+
+                    productos_afectados = set()
+
+                    for fila in filas:
+
+                        producto, creado = Producto.objects.get_or_create(
+                            cod=fila["cod"],
+                            defaults={
+                                'descripcion': fila["descripcion"],
+                                'tipo': fila["tipo"] or None,
+                                'precio_compra': fila["pc"],
+                                'precio_venta': fila["pv"],
+                                # El stock lo calcula el Kardex.
+                                'stock': 0,
+                            }
+                        )
+
+                        if not creado:
+                            producto.descripcion = fila["descripcion"] or producto.descripcion
+                            producto.precio_compra = fila["pc"]
+                            producto.precio_venta = fila["pv"]
+                            campos = ["descripcion", "precio_compra", "precio_venta"]
+                            if fila["tipo"]:
+                                producto.tipo = fila["tipo"]
+                                campos.append("tipo")
+                            producto.save(update_fields=campos)
+
+                        productos_afectados.add(producto.id)
+
+                        DetalleCompra.objects.create(
+                            compra=compra,
+                            producto=producto,
+                            cantidad=fila["cant"],
+                            precio_compra=fila["pc"],
+                            precio_venta=fila["pv"],
+                            subtotal=fila["sub"],
+                        )
+
+                    if compra.tipo_comprobante == "NC":
+                        # Las NC de proveedor no se contabilizan aquí
+                        # (requieren asiento manual) y no suman stock.
+                        for producto in Producto.objects.filter(id__in=productos_afectados):
+                            recalcular_kardex_producto(producto)
+
+                    else:
+                        condicion, errores_condicion = preparar_condicion_compra(
+                            compra,
+                            datos_condicion,
+                        )
+
+                        if errores_condicion:
+                            raise _CompraNoValida(errores_condicion)
+
+                        condicion.save()
+
+                        # Genera el asiento y recalcula el Kardex
+                        # (con el costo sin IGV si corresponde).
+                        asiento = contabilizar_compra_mercaderia(condicion)
+
+            except _CompraNoValida as error:
+                errores.extend(error.errores)
+
+            except ValidationError as error:
+                if hasattr(error, "message_dict"):
+                    for mensajes in error.message_dict.values():
+                        errores.extend(mensajes)
                 else:
-                    # si es nuevo, ya se guardó con el stock inicial
-                    producto.save()
-                
-                productos_afectados.add(producto.id)
+                    errores.extend(error.messages)
 
-                # 🔹 3. Crear el detalle de compra
-                DetalleCompra.objects.create(
-                    compra=compra,
-                    producto=producto,
-                    cantidad=cant,
-                    precio_compra=pc,
-                    precio_venta=pv,
-                    subtotal=sub
-                )
+            else:
+                if asiento:
+                    messages.success(
+                        request,
+                        f"Compra {compra} registrada y contabilizada "
+                        f"(asiento N.° {asiento.numero} de {asiento.periodo}).",
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        f"Nota de crédito {compra} registrada. Su asiento "
+                        "contable debe registrarse manualmente.",
+                    )
 
-#                total_compra += sub
+                return redirect('lista_compras')
 
-#            # 🔹 4. Actualizar total de la compra
-#            compra.total = total_compra
-#            compra.save()
-
-            for pid in productos_afectados:
-                producto = Producto.objects.get(id=pid)
-                #recalcular_kardex_producto(producto)
-
-            return redirect('lista_compras')  # o donde quieras
+        for error in errores:
+            messages.error(request, error)
 
     else:
-        compra_form = CompraForm()
+        compra_form = CompraForm(initial={"fecha": timezone.localdate()})
 
-    return render(request, 'core/registro_compra.html', {
-        'compra_form': compra_form,
-    })
+    return render(
+        request,
+        'core/registro_compra.html',
+        _contexto_registro_compra(compra_form, filas_formulario, datos_condicion),
+    )
+
 
 @role_required("ADMIN", "SUPERVISOR")
 def crear_proveedor(request):
@@ -1616,19 +1854,43 @@ def crear_proveedor(request):
 
 @role_required("ADMIN", "SUPERVISOR")
 def lista_compras(request):
-    compras = Compra.objects.select_related('proveedor').order_by('-fecha', '-id')
+    compras = Compra.objects.select_related('proveedor', 'condicion_contable').order_by('-fecha', '-id')
     return render(request, 'core/lista_compras.html', {
         'compras': compras
     })
+
+def _compra_contabilizada(compra):
+    from contabilidad.models import CompraMercaderia
+
+    return CompraMercaderia.objects.filter(
+        compra=compra,
+        estado=CompraMercaderia.Estado.CONTABILIZADA,
+    ).exists()
+
+
+MENSAJE_COMPRA_CONTABILIZADA = (
+    "Esta compra ya está contabilizada y no se puede modificar ni "
+    "eliminar desde aquí. Si hay un error, anule su asiento en "
+    "contabilidad y regístrela de nuevo."
+)
+
 
 @role_required("ADMIN", "SUPERVISOR")
 def editar_compra(request, compra_id):
     compra = get_object_or_404(Compra, id=compra_id)
 
+    if _compra_contabilizada(compra):
+        messages.error(request, MENSAJE_COMPRA_CONTABILIZADA)
+        return redirect('lista_compras')
+
     if request.method == 'POST':
         form = CompraForm(request.POST, instance=compra)
         if form.is_valid():
-            form.save()
+            with transaction.atomic():
+                form.save()
+                # La fecha puede haber cambiado: reordenar el Kardex.
+                for detalle in compra.detalles.select_related("producto"):
+                    recalcular_kardex_producto(detalle.producto)
             messages.success(request, 'Compra actualizada correctamente.')
             return redirect('lista_compras')
     else:
@@ -1639,30 +1901,37 @@ def editar_compra(request, compra_id):
         'compra': compra,
     })
 
-@transaction.atomic
+
 @role_required("ADMIN", "SUPERVISOR")
 def eliminar_compra(request, compra_id):
     compra = get_object_or_404(Compra, id=compra_id)
 
-    if request.method == 'POST':
-        # 1. Ajustar stock de productos
-        for det in compra.detalles.all():  # gracias al related_name='detalles'
-            producto = det.producto
-            # restamos la cantidad de la compra al stock
-            if producto.stock is not None:
-                producto.stock = (producto.stock or 0) - (det.cantidad or 0)
-                if producto.stock < 0:
-                    producto.stock = 0  # por si acaso
-                producto.save()
+    if _compra_contabilizada(compra):
+        messages.error(request, MENSAJE_COMPRA_CONTABILIZADA)
+        return redirect('lista_compras')
 
-        # 2. Eliminar la compra (y sus DetalleCompra por CASCADE)
-        compra.delete()
+    if request.method == 'POST':
+        from contabilidad.models import CompraMercaderia
+
+        with transaction.atomic():
+            productos = [detalle.producto for detalle in compra.detalles.select_related("producto")]
+
+            # Condición contable en borrador (sin asiento), si existe.
+            CompraMercaderia.objects.filter(compra=compra).delete()
+
+            compra.delete()
+
+            # El stock sale del Kardex, no de restas manuales.
+            for producto in set(productos):
+                recalcular_kardex_producto(producto)
+
         messages.success(request, 'Compra eliminada correctamente.')
         return redirect('lista_compras')
 
     return render(request, 'core/confirmar_eliminar_compra.html', {
         'compra': compra
     })
+
 
 @role_required("ADMIN", "SUPERVISOR")
 def lista_detalles_compra(request):
@@ -1672,59 +1941,40 @@ def lista_detalles_compra(request):
     })
 
 
-@transaction.atomic
+def _actualizar_total_compra(compra):
+    compra.total = (
+        compra.detalles.aggregate(total=Sum("subtotal"))["total"]
+        or Decimal("0.00")
+    )
+    compra.save(update_fields=["total"])
+
+
 @role_required("ADMIN", "SUPERVISOR")
 def editar_detalle_compra(request, detalle_id):
     detalle = get_object_or_404(DetalleCompra, id=detalle_id)
     compra = detalle.compra
 
-    # guardamos valores anteriores
+    if _compra_contabilizada(compra):
+        messages.error(request, MENSAJE_COMPRA_CONTABILIZADA)
+        return redirect('lista_detalles_compra')
+
     producto_anterior = detalle.producto
-    cantidad_anterior = float(detalle.cantidad or 0)
 
     if request.method == 'POST':
         form = DetalleCompraForm(request.POST, instance=detalle)
         if form.is_valid():
-            detalle_modificado = form.save(commit=False)
+            with transaction.atomic():
+                detalle_modificado = form.save(commit=False)
+                detalle_modificado.subtotal = (
+                    Decimal(detalle_modificado.cantidad or 0)
+                    * Decimal(detalle_modificado.precio_compra or 0)
+                ).quantize(Decimal("0.01"))
+                detalle_modificado.save()
 
-            producto_nuevo = detalle_modificado.producto
-            cantidad_nueva = float(detalle_modificado.cantidad or 0)
-            precio_compra = float(detalle_modificado.precio_compra or 0)
+                _actualizar_total_compra(compra)
 
-            # 1. Ajustar stock según cambios
-            if producto_nuevo == producto_anterior:
-                # mismo producto: ajustamos solo la diferencia de cantidad
-                diferencia = cantidad_nueva - cantidad_anterior
-                producto_nuevo.stock = (producto_nuevo.stock or 0) + diferencia
-                if producto_nuevo.stock < 0:
-                    producto_nuevo.stock = 0
-                producto_nuevo.save()
-            else:
-                # producto cambiado:
-                #   - devolvemos cantidad al producto anterior
-                producto_anterior.stock = (producto_anterior.stock or 0) - cantidad_anterior
-                if producto_anterior.stock < 0:
-                    producto_anterior.stock = 0
-                producto_anterior.save()
-
-                #   - sumamos cantidad al nuevo producto
-                producto_nuevo.stock = (producto_nuevo.stock or 0) + cantidad_nueva
-                if producto_nuevo.stock < 0:
-                    producto_nuevo.stock = 0
-                producto_nuevo.save()
-
-            # 2. Recalcular subtotal
-            detalle_modificado.subtotal = precio_compra * cantidad_nueva
-
-            # 3. Guardar detalle
-            detalle_modificado.save()
-
-            # 4. Recalcular total de la compra
-            total_compra = 0
-            for d in compra.detalles.all():
-                total_compra += float(d.subtotal or 0)
-            compra.total = total_compra
-            compra.save()
+                for producto in {producto_anterior, detalle_modificado.producto}:
+                    recalcular_kardex_producto(producto)
 
             messages.success(request, 'Detalle de compra actualizado correctamente.')
             return redirect('lista_detalles_compra')
@@ -1737,30 +1987,23 @@ def editar_detalle_compra(request, detalle_id):
         'compra': compra,
     })
 
-@transaction.atomic
+
 @role_required("ADMIN", "SUPERVISOR")
 def eliminar_detalle_compra(request, detalle_id):
     detalle = get_object_or_404(DetalleCompra, id=detalle_id)
     compra = detalle.compra
+
+    if _compra_contabilizada(compra):
+        messages.error(request, MENSAJE_COMPRA_CONTABILIZADA)
+        return redirect('lista_detalles_compra')
+
     producto = detalle.producto
-    cantidad = float(detalle.cantidad or 0)
 
     if request.method == 'POST':
-        # 1. Ajustar stock
-        producto.stock = (producto.stock or 0) - cantidad
-        if producto.stock < 0:
-            producto.stock = 0
-        producto.save()
-
-        # 2. Eliminar detalle
-        detalle.delete()
-
-        # 3. Recalcular total de la compra
-        total_compra = 0
-        for d in compra.detalles.all():
-            total_compra += float(d.subtotal or 0)
-        compra.total = total_compra
-        compra.save()
+        with transaction.atomic():
+            detalle.delete()
+            _actualizar_total_compra(compra)
+            recalcular_kardex_producto(producto)
 
         messages.success(request, 'Detalle de compra eliminado correctamente.')
         return redirect('lista_detalles_compra')
@@ -1892,6 +2135,184 @@ def cliente_historial(request, cliente_id):
         'ticket_ventas': ticket_ventas,
         'ventas': ventas,
     })
+
+class EditarMedidaVistaForm(forms.ModelForm):
+
+    class Meta:
+        model = MedidaVista
+
+        fields = [
+            'fecha_registro',
+            'Optometra',
+
+            'esf_lejos_OD',
+            'cil_lejos_OD',
+            'eje_lejos_OD',
+            'DIP_lejos_OD',
+            'Add_lejos_OD',
+            'AV_lejos_OD',
+
+            'esf_lejos_OI',
+            'cil_lejos_OI',
+            'eje_lejos_OI',
+            'DIP_lejos_OI',
+            'Add_lejos_OI',
+            'AV_lejos_OI',
+
+            'esf_cerca_OD',
+            'cil_cerca_OD',
+            'eje_cerca_OD',
+            'DIP_cerca_OD',
+            'AV_cerca_OD',
+
+            'esf_cerca_OI',
+            'cil_cerca_OI',
+            'eje_cerca_OI',
+            'DIP_cerca_OI',
+            'AV_cerca_OI',
+
+            'descripcion',
+        ]
+
+        widgets = {
+            'fecha_registro': forms.DateInput(
+                format='%Y-%m-%d',
+                attrs={
+                    'type': 'date',
+                    'class': 'form-control'
+                }
+            ),
+            'Optometra': forms.TextInput(
+                attrs={'class': 'form-control'}
+            ),
+            'descripcion': forms.Textarea(
+                attrs={
+                    'class': 'form-control',
+                    'rows': 2
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['fecha_registro'].input_formats = [
+            '%Y-%m-%d'
+        ]
+
+        for nombre, campo in self.fields.items():
+            if nombre not in [
+                'fecha_registro',
+                'Optometra',
+                'descripcion'
+            ]:
+                campo.widget.attrs.update({
+                    'class': 'form-control form-control-sm text-center'
+                })
+
+
+def editar_medida_vista(request, cliente_id, medida_id):
+
+    cliente = get_object_or_404(Cliente, pk=cliente_id)
+
+    medida = get_object_or_404(
+        MedidaVista,
+        pk=medida_id,
+        cliente=cliente
+    )
+
+    es_ajax = (
+        request.headers.get('X-Requested-With')
+        == 'XMLHttpRequest'
+    )
+
+    if request.method == 'POST':
+
+        formulario = EditarMedidaVistaForm(
+            request.POST,
+            instance=medida
+        )
+
+        if formulario.is_valid():
+
+            formulario.save()
+
+            if es_ajax:
+                return JsonResponse({'ok': True})
+
+            messages.success(
+                request,
+                'Medida de vista actualizada correctamente.'
+            )
+
+            return redirect(
+                'cliente_historial',
+                cliente_id=cliente.id
+            )
+
+    else:
+        formulario = EditarMedidaVistaForm(
+            instance=medida
+        )
+
+    contexto = {
+        'cliente': cliente,
+        'medida': medida,
+        'formulario': formulario,
+    }
+
+    if es_ajax:
+
+        html = render_to_string(
+            'core/editar_medida_vista_modal.html',
+            contexto,
+            request=request
+        )
+
+        if request.method == 'POST':
+            return JsonResponse({
+                'ok': False,
+                'html': html
+            }, status=200)
+
+        return HttpResponse(html)
+
+    return render(
+        request,
+        'core/editar_medida_vista.html',
+        contexto
+    )
+
+
+@require_POST
+def eliminar_medida_vista(request, cliente_id, medida_id):
+
+    cliente = get_object_or_404(Cliente, pk=cliente_id)
+
+    medida = get_object_or_404(
+        MedidaVista,
+        pk=medida_id,
+        cliente=cliente
+    )
+
+    medida.delete()
+
+    if (
+        request.headers.get('X-Requested-With')
+        == 'XMLHttpRequest'
+    ):
+        return JsonResponse({'ok': True})
+
+    messages.success(
+        request,
+        'Medida de vista eliminada correctamente.'
+    )
+
+    return redirect(
+        'cliente_historial',
+        cliente_id=cliente.id
+    )
+
 
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR")
 def consulta_dni(request):
@@ -3339,16 +3760,177 @@ def lista_ventas(request):
         "ventas": ventas
     })
 
+# ============================================================
+# VENTAS: EDITAR / ELIMINAR CON CONTROL CONTABLE
+# ============================================================
+
+def _motivos_bloqueo_venta(ticket):
+    """
+    Razones por las que una venta ya no puede modificarse ni
+    eliminarse directamente (lista vacía = se puede).
+    Si ya tiene efectos contables, debe anularse con una
+    nota de crédito.
+    """
+
+    from contabilidad.models import (
+        AsientoContable,
+        CompraDirectaVenta,
+        NotaCredito,
+        PropuestaCostoVenta,
+    )
+
+    motivos = []
+
+    pagos_ids = list(ticket.pagos.values_list("id", flat=True))
+
+    asientos = (
+        AsientoContable.objects
+        .exclude(estado=AsientoContable.Estado.ANULADO)
+        .filter(
+            Q(origen__in=["VENTA", "COSTO_VENTA"], origen_id=ticket.id)
+            | Q(origen="COBRO_TICKET", origen_id__in=pagos_ids)
+        )
+    )
+
+    if asientos.exists():
+        motivos.append("ya tiene asientos contables (venta, costo o cobro)")
+
+    if NotaCredito.objects.filter(ticket=ticket).exists():
+        motivos.append("tiene notas de crédito")
+
+    propuesta = PropuestaCostoVenta.objects.filter(ticket=ticket).first()
+
+    if propuesta:
+
+        if propuesta.estado == PropuestaCostoVenta.Estado.CONTABILIZADA:
+            motivos.append("su costo de venta ya está contabilizado")
+
+        if CompraDirectaVenta.objects.filter(
+            detalle_costo__propuesta=propuesta,
+        ).filter(
+            Q(estado=CompraDirectaVenta.Estado.CONTABILIZADA)
+            | Q(pagos_proveedor__isnull=False)
+        ).exists():
+            motivos.append("tiene compras a proveedores contabilizadas o pagadas")
+
+    if MovimientoCaja.objects.filter(ticket=ticket, caja__cerrada=True).exists():
+        motivos.append("sus cobros están en una caja ya cerrada")
+
+    return motivos
+
+
+def _mensaje_bloqueo(ticket, motivos, accion):
+    return (
+        f"No se puede {accion} del recibo {ticket.numero:06d} porque "
+        + "; ".join(motivos)
+        + ". Puedes corregir la descripción con «Editar». Si el error está "
+        "en cantidades o precios, usa «Eliminar recibo» para anular la venta "
+        "y registrarla de nuevo (si el mes ya cerró, corresponde una nota de crédito)."
+    )
+
+
+def _borrar_costo_pendiente_detalle(detalle):
+    """
+    Si el producto tiene un costo de venta pendiente (sin
+    contabilizar), lo elimina junto con su compra directa.
+    """
+
+    from contabilidad.models import CompraDirectaVenta, DetallePropuestaCostoVenta
+
+    costo = DetallePropuestaCostoVenta.objects.filter(detalle_ticket=detalle).first()
+
+    if costo:
+        CompraDirectaVenta.objects.filter(detalle_costo=costo).delete()
+        costo.delete()
+
+
+def _actualizar_totales_ticket(ticket, diferencia):
+    """
+    Ajusta el total del recibo en `diferencia` (negativa si baja)
+    y recalcula el saldo con lo ya pagado. Se ajusta por diferencia
+    para respetar descuentos aplicados al registrar la venta.
+    """
+
+    ticket.total = Decimal(ticket.total or 0) + diferencia
+
+    pagado = ticket.pagos.aggregate(s=Sum("monto"))["s"] or Decimal("0.00")
+
+    ticket.a_cuenta = pagado
+    ticket.saldo = max(ticket.total - pagado, Decimal("0.00"))
+
+    ticket.save(update_fields=["total", "a_cuenta", "saldo"])
+
+
+def _importe_detalle(detalle):
+    return Decimal(detalle.cantidad or 0) * Decimal(detalle.precio or 0)
+
+
 @require_http_methods(["GET", "POST"])
+@role_required("ADMIN", "SUPERVISOR")
 def editar_venta(request, pk):
-    detalle = get_object_or_404(DetalleTicketVenta, pk=pk)
+    detalle = get_object_or_404(
+        DetalleTicketVenta.objects.select_related("ticket_numero", "producto"),
+        pk=pk,
+    )
+    ticket = detalle.ticket_numero
+
+    motivos = _motivos_bloqueo_venta(ticket)
+
+    # --------------------------------------------------------
+    # Venta ya contabilizada: solo se corrige el texto, que no
+    # afecta ningún importe ni asiento.
+    # --------------------------------------------------------
+
+    if motivos:
+
+        if request.method == "POST":
+            form = DescripcionVentaForm(request.POST, instance=detalle)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Descripción corregida.")
+                return redirect("lista_ventas")
+        else:
+            form = DescripcionVentaForm(instance=detalle)
+
+        return render(request, "core/editar_venta.html", {
+            "form": form,
+            "detalle": detalle,
+            "solo_descripcion": True,
+        })
+
+    importe_anterior = _importe_detalle(detalle)
+    producto_anterior = detalle.producto
 
     if request.method == "POST":
         form = DetalleTicketVentaForm(request.POST, instance=detalle)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Producto vendido actualizado.")
-            return redirect("lista_ventas")
+            detalle_nuevo = form.save(commit=False)
+            diferencia = _importe_detalle(detalle_nuevo) - importe_anterior
+
+            pagado = ticket.pagos.aggregate(s=Sum("monto"))["s"] or Decimal("0.00")
+
+            if Decimal(ticket.total or 0) + diferencia < pagado:
+                messages.error(
+                    request,
+                    "Con este cambio el total quedaría por debajo de lo que el "
+                    f"cliente ya pagó (S/ {pagado:.2f}). Corrige primero los pagos.",
+                )
+            else:
+                with transaction.atomic():
+                    # El costo pendiente quedó desactualizado: se recalcula
+                    # cuando se valide el costo de venta del recibo.
+                    _borrar_costo_pendiente_detalle(detalle)
+                    detalle_nuevo.save()
+
+                    if diferencia:
+                        _actualizar_totales_ticket(ticket, diferencia)
+
+                    for producto in {producto_anterior, detalle_nuevo.producto}:
+                        if producto:
+                            recalcular_kardex_producto(producto)
+
+                messages.success(request, "Producto vendido actualizado.")
+                return redirect("lista_ventas")
     else:
         form = DetalleTicketVentaForm(instance=detalle)
 
@@ -3357,18 +3939,123 @@ def editar_venta(request, pk):
         "detalle": detalle
     })
 
-@require_http_methods(["POST"])
-def eliminar_venta(request, pk):
-    detalle = get_object_or_404(DetalleTicketVenta, pk=pk)
-    detalle.delete()
-    messages.success(request, "Producto eliminado.")
-    return redirect("lista_ventas")
 
 @require_http_methods(["POST"])
+@role_required("ADMIN", "SUPERVISOR")
+def eliminar_venta(request, pk):
+    """Elimina un producto de un recibo (no el recibo completo)."""
+
+    detalle = get_object_or_404(
+        DetalleTicketVenta.objects.select_related("ticket_numero", "producto"),
+        pk=pk,
+    )
+    ticket = detalle.ticket_numero
+
+    motivos = _motivos_bloqueo_venta(ticket)
+
+    if motivos:
+        messages.error(request, _mensaje_bloqueo(ticket, motivos, "eliminar productos"))
+        return redirect("lista_ventas")
+
+    if ticket.detalles.count() == 1:
+        messages.error(
+            request,
+            f"Es el único producto del recibo {ticket.numero:06d}. "
+            "Para quitarlo, elimina el recibo completo.",
+        )
+        return redirect("lista_ventas")
+
+    importe = _importe_detalle(detalle)
+    pagado = ticket.pagos.aggregate(s=Sum("monto"))["s"] or Decimal("0.00")
+
+    if Decimal(ticket.total or 0) - importe < pagado:
+        messages.error(
+            request,
+            "Sin este producto el total quedaría por debajo de lo que el "
+            f"cliente ya pagó (S/ {pagado:.2f}). Corrige primero los pagos.",
+        )
+        return redirect("lista_ventas")
+
+    producto = detalle.producto
+
+    with transaction.atomic():
+        _borrar_costo_pendiente_detalle(detalle)
+        detalle.delete()
+        _actualizar_totales_ticket(ticket, -importe)
+
+        # Devuelve el producto al stock.
+        if producto:
+            recalcular_kardex_producto(producto)
+
+    messages.success(
+        request,
+        f"Producto eliminado del recibo {ticket.numero:06d}. "
+        f"Nuevo total: S/ {ticket.total:.2f}.",
+    )
+    return redirect("lista_ventas")
+
+
+@require_http_methods(["POST"])
+@role_required("ADMIN", "SUPERVISOR")
 def eliminar_recibo(request, ticket_id):
+    """
+    Elimina un recibo ingresado por error, solo si todavía no
+    tiene efectos contables.
+    """
+
+    from contabilidad.models import (
+        CompraDirectaVenta,
+        PropuestaCostoVenta,
+        ServicioTerceroVenta,
+    )
+
     ticket = get_object_or_404(TicketVenta, pk=ticket_id)
-    ticket.delete()  # <-- BORRA EN CASCADA
-    messages.success(request, "Recibo eliminado junto con todos sus productos.")
+
+    motivos = _motivos_bloqueo_venta(ticket)
+
+    if motivos:
+        # Ya está contabilizada: no se borra, se anula.
+        messages.info(
+            request,
+            f"El recibo {ticket.numero:06d} ya está contabilizado, así que no "
+            "se puede borrar directamente. Revisa aquí si puede anularse.",
+        )
+        return redirect("anular_venta", ticket_id=ticket.id)
+
+    productos = {
+        detalle.producto
+        for detalle in ticket.detalles.select_related("producto")
+        if detalle.producto_id
+    }
+
+    numero = ticket.numero
+
+    with transaction.atomic():
+
+        # Cobros registrados en la caja (abierta) por este recibo.
+        MovimientoCaja.objects.filter(ticket=ticket).delete()
+
+        propuesta = PropuestaCostoVenta.objects.filter(ticket=ticket).first()
+
+        if propuesta:
+            # Las compras directas protegen al detalle del costo.
+            CompraDirectaVenta.objects.filter(detalle_costo__propuesta=propuesta).delete()
+            ServicioTerceroVenta.objects.filter(propuesta=propuesta).delete()
+            # Borra también sus detalles (CASCADE).
+            propuesta.delete()
+
+        # Borra detalles, pagos y orden de trabajo (CASCADE).
+        ticket.delete()
+
+        # Devuelve al stock los productos que salieron con esta venta.
+        for producto in productos:
+            recalcular_kardex_producto(producto)
+
+    messages.success(
+        request,
+        f"Recibo {numero:06d} eliminado junto con sus productos, pagos "
+        "y costo de venta pendiente.",
+    )
     return redirect("lista_ventas")
 
 
@@ -3394,6 +4081,7 @@ def buscar_producto_codigo(request):
             "descripcion": p.descripcion,
             "precio_compra": float(p.precio_compra or 0),
             "precio_venta": float(p.precio_venta or 0),
+            "tipo": p.tipo or "",
         }
         for p in productos
     ]
@@ -3780,3 +4468,56 @@ def enviar_reactivacion_whatsapp(request, cliente_id):
         )
 
         return redirect("seguimiento_whatsapp")
+
+
+@require_http_methods(["GET", "POST"])
+@role_required("ADMIN", "SUPERVISOR")
+def anular_venta(request, ticket_id):
+    """
+    Anula una venta ya contabilizada, solo si su mes contable y su
+    caja siguen abiertos. Sus asientos quedan anulados (visibles en
+    el historial) y el recibo se elimina.
+    """
+
+    from contabilidad.anulaciones import anular_venta as servicio_anular
+    from contabilidad.anulaciones import revisar_anulacion
+
+    ticket = get_object_or_404(
+        TicketVenta.objects.select_related("cliente"),
+        pk=ticket_id,
+    )
+
+    revision = revisar_anulacion(ticket)
+    motivo = ""
+
+    if request.method == "POST" and not revision["bloqueos"]:
+
+        motivo = request.POST.get("motivo", "").strip()
+
+        try:
+            registro = servicio_anular(
+                ticket,
+                motivo=motivo,
+                usuario=request.user,
+                anular_compras=request.POST.get("anular_compras") == "1",
+            )
+
+        except ValidationError as error:
+            for mensaje in error.messages:
+                messages.error(request, mensaje)
+
+        else:
+            messages.success(
+                request,
+                f"Venta {registro.numero_recibo:06d} anulada. Sus asientos quedaron "
+                "anulados y los productos volvieron al stock. Ya puedes "
+                "registrarla de nuevo correctamente.",
+            )
+            return redirect("lista_ventas")
+
+    return render(request, "core/anular_venta.html", {
+        "ticket": ticket,
+        "detalles": ticket.detalles.select_related("producto"),
+        "revision": revision,
+        "motivo": motivo,
+    })

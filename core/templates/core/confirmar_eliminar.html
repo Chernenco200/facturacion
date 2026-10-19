@@ -1,0 +1,25 @@
+{% extends 'core/base.html' %}
+{% block title %}Eliminar producto{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 640px;">
+    <h3>¿Eliminar el producto {{ producto.cod }}?</h3>
+
+    <p>
+        <strong>{{ producto.descripcion|default:"Sin descripción" }}</strong><br>
+        Tipo: {{ producto.get_tipo_display|default:"Sin tipo" }}<br>
+        Stock actual: {{ producto.stock }}
+    </p>
+
+    <p class="text-muted">
+        Si el producto ya tiene compras o ventas registradas, no se eliminará:
+        quedará marcado como inactivo para conservar el historial.
+    </p>
+
+    <form method="post" class="d-flex gap-2">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <a href="{% url 'lista_compras' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+</div>
+{% endblock %}

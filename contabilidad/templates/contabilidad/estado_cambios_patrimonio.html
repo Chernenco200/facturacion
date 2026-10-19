@@ -1,28 +1,22 @@
-<!DOCTYPE html>
-<html lang="es">
-
-<head>
-    <meta charset="UTF-8">
-
-    <title>
-        Estado de Cambios en el Patrimonio
-    </title>
+{% extends 'core/base.html' %}
+{% block title %}Estado de Cambios en el Patrimonio - Óptica IC{% endblock %}
+{% block content %}
 
     <style>
-        * {
+        .estado-patrimonio-page, .estado-patrimonio-page * {
             box-sizing: border-box;
         }
 
-        body {
+        .estado-patrimonio-page {
             margin: 0;
             font-family: Arial, Helvetica, sans-serif;
             background: #f4f7fa;
             color: #17324d;
         }
 
-        .contenedor {
+        .estado-patrimonio-page .contenedor {
             max-width: 1300px;
-            margin: 30px auto;
+            margin: 20px auto;
             padding: 0 20px 40px;
         }
 
@@ -30,21 +24,21 @@
            ENCABEZADO
            ===================================================== */
 
-        .titulo {
+        .estado-patrimonio-page .titulo {
             margin: 0;
             font-size: 34px;
             font-weight: 700;
             color: #17324d;
         }
 
-        .subtitulo {
+        .estado-patrimonio-page .subtitulo {
             margin-top: 6px;
             margin-bottom: 4px;
             font-size: 17px;
             color: #667085;
         }
 
-        .periodo-reporte {
+        .estado-patrimonio-page .periodo-reporte {
             margin-bottom: 24px;
             font-size: 15px;
             color: #667085;
@@ -54,7 +48,7 @@
            FILTRO
            ===================================================== */
 
-        .filtros {
+        .estado-patrimonio-page .filtros {
             background: #ffffff;
             border-radius: 12px;
             padding: 18px 22px;
@@ -62,21 +56,21 @@
             box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
         }
 
-        .filtros form {
+        .estado-patrimonio-page .filtros form {
             display: flex;
             align-items: end;
             gap: 14px;
             flex-wrap: wrap;
         }
 
-        .campo label {
+        .estado-patrimonio-page .campo label {
             display: block;
             font-weight: 700;
             margin-bottom: 7px;
             color: #344054;
         }
 
-        .campo input {
+        .estado-patrimonio-page .campo input {
             width: 150px;
             padding: 9px 11px;
             border: 1px solid #d0d5dd;
@@ -84,7 +78,7 @@
             font-size: 15px;
         }
 
-        .boton {
+        .estado-patrimonio-page .boton {
             padding: 10px 20px;
             border: none;
             border-radius: 6px;
@@ -94,7 +88,7 @@
             cursor: pointer;
         }
 
-        .boton:hover {
+        .estado-patrimonio-page .boton:hover {
             opacity: 0.92;
         }
 
@@ -102,14 +96,14 @@
            TARJETA
            ===================================================== */
 
-        .tarjeta {
+        .estado-patrimonio-page .tarjeta {
             background: #ffffff;
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06);
         }
 
-        .encabezado-seccion {
+        .estado-patrimonio-page .encabezado-seccion {
             background: #e8f0f5;
             padding: 15px 22px;
             font-weight: 700;
@@ -121,18 +115,18 @@
            TABLA
            ===================================================== */
 
-        .tabla-contenedor {
+        .estado-patrimonio-page .tabla-contenedor {
             width: 100%;
             overflow-x: auto;
         }
 
-        table {
+        .estado-patrimonio-page table {
             width: 100%;
             border-collapse: collapse;
             min-width: 900px;
         }
 
-        thead th {
+        .estado-patrimonio-page thead th {
             background: #f4f7fa;
             color: #344054;
             font-size: 14px;
@@ -142,44 +136,44 @@
             text-align: right;
         }
 
-        thead th:first-child {
+        .estado-patrimonio-page thead th:first-child {
             text-align: left;
             width: 30%;
         }
 
-        tbody td {
+        .estado-patrimonio-page tbody td {
             padding: 14px 16px;
             border-bottom: 1px solid #eaecf0;
             font-size: 15px;
             vertical-align: middle;
         }
 
-        tbody td:first-child {
+        .estado-patrimonio-page tbody td:first-child {
             text-align: left;
         }
 
-        tbody td:not(:first-child) {
+        .estado-patrimonio-page tbody td:not(:first-child) {
             text-align: right;
             white-space: nowrap;
         }
 
-        .fila-movimiento:hover {
+        .estado-patrimonio-page .fila-movimiento:hover {
             background: #fafcfd;
         }
 
-        .concepto {
+        .estado-patrimonio-page .concepto {
             color: #243b53;
         }
 
-        .importe {
+        .estado-patrimonio-page .importe {
             color: #243b53;
         }
 
-        .cero {
+        .estado-patrimonio-page .cero {
             color: #98a2b3;
         }
 
-        .negativo {
+        .estado-patrimonio-page .negativo {
             color: #475467;
         }
 
@@ -187,7 +181,7 @@
            SALDO FINAL
            ===================================================== */
 
-        .saldo-final td {
+        .estado-patrimonio-page .saldo-final td {
             background: #dceaf2;
             color: #17324d;
             font-weight: 700;
@@ -200,7 +194,7 @@
            PIE
            ===================================================== */
 
-        .nota {
+        .estado-patrimonio-page .nota {
             padding: 14px 20px;
             background: #f8fafc;
             color: #667085;
@@ -209,19 +203,16 @@
         }
 
         @media (max-width: 700px) {
-            .titulo {
+            .estado-patrimonio-page .titulo {
                 font-size: 27px;
             }
 
-            .contenedor {
+            .estado-patrimonio-page .contenedor {
                 padding: 0 10px 25px;
             }
         }
     </style>
-</head>
-
-
-<body>
+<div class="estado-patrimonio-page">
 
 <div class="contenedor">
 
@@ -667,7 +658,4 @@
     </div>
 
 </div>
-
-</body>
-
-</html>
+{% endblock %}

@@ -1,354 +1,539 @@
-<!DOCTYPE html>
-<html lang="es">
 
-<head>
+{% extends 'core/base.html' %}
 
-    <meta charset="UTF-8">
+{% block title %}Balance de Comprobación - Óptica IC{% endblock %}
 
-    <title>
-        Balance de Comprobación - Óptica IC
-    </title>
+{% block content %}
 
-    <style>
+<style>
+    /* ==========================================
+       ESTILOS EXCLUSIVOS BALANCE DE COMPROBACIÓN
+       ========================================== */
 
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f7fa;
-            margin: 0;
-            color: #243447;
+    .balance-comprobacion-page {
+        width: 100%;
+        font-family: Arial, sans-serif;
+        color: #243447;
+    }
+
+    .balance-comprobacion-page .contenedor {
+        width: 100%;
+        max-width: 1400px;
+        margin: 20px auto;
+        padding: 0;
+    }
+
+    /* ENCABEZADO */
+
+    .balance-comprobacion-page .encabezado {
+        margin-bottom: 24px;
+    }
+
+    .balance-comprobacion-page .encabezado h1 {
+        font-size: 30px;
+        font-weight: 600;
+        margin: 0 0 8px;
+    }
+
+    .balance-comprobacion-page .subtitulo {
+        margin: 0;
+        color: #667085;
+        font-size: 15px;
+    }
+
+    /* FILTROS */
+
+    .balance-comprobacion-page .filtros {
+        background: #ffffff;
+        padding: 24px;
+        margin-bottom: 24px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .balance-comprobacion-page .filtros form {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        align-items: end;
+    }
+
+    .balance-comprobacion-page .campo {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .balance-comprobacion-page .campo label {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0;
+        color: #344054;
+    }
+
+    .balance-comprobacion-page .campo select,
+    .balance-comprobacion-page .campo input {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 10px 12px;
+        border: 1px solid #d0d5dd;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #243447;
+        font-size: 14px;
+    }
+
+    .balance-comprobacion-page .campo select:focus,
+    .balance-comprobacion-page .campo input:focus {
+        border-color: #285f7d;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(40, 95, 125, 0.12);
+    }
+
+    .balance-comprobacion-page .acciones-filtros {
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: flex-start;
+    }
+
+    .balance-comprobacion-page .btn-consultar {
+        padding: 11px 24px;
+        background: #285f7d;
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        min-width: 140px;
+    }
+
+    .balance-comprobacion-page .btn-consultar:hover {
+        background: #1d4961;
+    }
+
+    /* TARJETA Y TABLA */
+
+    .balance-comprobacion-page .tarjeta {
+        background: #ffffff;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .balance-comprobacion-page .tabla-responsive {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .balance-comprobacion-page table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 0;
+    }
+
+    .balance-comprobacion-page th {
+        background: #eaf1f5;
+        text-align: left;
+        padding: 13px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #344054;
+        border-bottom: 1px solid #dce4ea;
+        white-space: nowrap;
+    }
+
+    .balance-comprobacion-page td {
+        padding: 12px;
+        border-bottom: 1px solid #eaecf0;
+        font-size: 14px;
+        vertical-align: middle;
+    }
+
+    .balance-comprobacion-page tbody tr:hover:not(.total) {
+        background: #f8fafc;
+    }
+
+    .balance-comprobacion-page .numero {
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .balance-comprobacion-page .total {
+        font-weight: bold;
+        background: #f1f5f9;
+    }
+
+    .balance-comprobacion-page .total td {
+        border-top: 2px solid #d0d5dd;
+    }
+
+    /* ESTADO DE CUADRE */
+
+    .balance-comprobacion-page .estado {
+        margin-top: 20px;
+        padding: 18px 20px;
+        background: #ffffff;
+        border-radius: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .balance-comprobacion-page .correcto {
+        font-weight: bold;
+        color: #16794b;
+    }
+
+    .balance-comprobacion-page .error {
+        font-weight: bold;
+        color: #b42318;
+    }
+
+    .balance-comprobacion-page .vacio {
+        padding: 40px 20px;
+        text-align: center;
+        color: #667085;
+    }
+
+    /* RESPONSIVE */
+
+    @media (max-width: 768px) {
+        .balance-comprobacion-page .filtros {
+            padding: 16px;
         }
 
-        .contenedor {
-            max-width: 1400px;
-            margin: 30px auto;
-            padding: 0 20px;
+        .balance-comprobacion-page .filtros form {
+            grid-template-columns: 1fr;
         }
 
-        h1 {
-            margin-bottom: 5px;
+        .balance-comprobacion-page .encabezado h1 {
+            font-size: 26px;
         }
 
-        .subtitulo {
-            margin-top: 0;
-            color: #667085;
-        }
-
-        .filtros {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 25px;
-            margin-bottom: 20px;
-
-            box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .filtros form {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            align-items: end;
-        }
-
-        .campo {
-            display: flex;
+        .balance-comprobacion-page .estado {
             flex-direction: column;
+            align-items: flex-start;
         }
-
-        .campo label {
-            margin-bottom: 6px;
-            font-weight: bold;
-        }
-
-        select,
-        input {
-            padding: 10px;
-            border: 1px solid #d0d5dd;
-            border-radius: 6px;
-        }
-
-        button {
-            padding: 10px 18px;
-            border: none;
-            border-radius: 6px;
-            background: #285f7d;
-            color: white;
-            cursor: pointer;
-        }
-
-        .tarjeta {
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-
-            box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th {
-            background: #eaf1f5;
-            text-align: left;
-            padding: 13px 12px;
-            color: #344054;
-        }
-
-        td {
-            padding: 12px;
-            border-bottom: 1px solid #eaecf0;
-        }
-
-        .numero {
-            text-align: right;
-        }
-
-        .total {
-            font-weight: bold;
-            background: #f8fafc;
-        }
-
-        .estado {
-            margin-top: 20px;
-            padding: 18px 20px;
-            background: white;
-            border-radius: 10px;
-
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-
-            box-shadow:
-                0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-
-        .correcto {
-            font-weight: bold;
-            color: #16794b;
-        }
-
-        .error {
-            font-weight: bold;
-            color: #b42318;
-        }
-
-        .vacio {
-            padding: 40px;
-            text-align: center;
-            color: #667085;
-        }
-
-    </style>
-
-</head>
+    }
+</style>
 
 
-<body>
+<div class="balance-comprobacion-page">
 
-<div class="contenedor">
+    <div class="contenedor">
 
-    <h1>
-        Balance de Comprobación
-    </h1>
+        <!-- ========================================== -->
+        <!-- ENCABEZADO -->
+        <!-- ========================================== -->
 
-    <p class="subtitulo">
-        Óptica IC - Sumas y saldos de las cuentas contables
-    </p>
+        <div class="encabezado">
+
+            <h1>Balance de Comprobación</h1>
+
+            <p class="subtitulo">
+                Óptica IC - Sumas y saldos de las cuentas contables
+            </p>
+
+        </div>
 
 
-    <div class="filtros">
+        <!-- ========================================== -->
+        <!-- FILTROS -->
+        <!-- ========================================== -->
 
-        <form method="get">
+        <div class="filtros">
 
-            <div class="campo">
+            <form method="get">
 
-                <label>
-                    Periodo
-                </label>
+                <!-- PERIODO -->
 
-                <select name="periodo">
+                <div class="campo">
 
-                    <option value="">
-                        Todos
-                    </option>
+                    <label for="periodo">
+                        Periodo
+                    </label>
 
-                    {% for periodo in periodos %}
+                    <select id="periodo" name="periodo">
 
-                        <option
-                            value="{{ periodo.id }}"
-                            {% if periodo_id == periodo.id|stringformat:"s" %}
-                                selected
-                            {% endif %}
-                        >
-                            {{ periodo }}
+                        <option value="">
+                            Todos
                         </option>
 
-                    {% endfor %}
+                        {% for periodo in periodos %}
 
-                </select>
+                            <option
+                                value="{{ periodo.id }}"
+                                {% if periodo_id == periodo.id|stringformat:"s" %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ periodo }}
+                            </option>
 
-            </div>
+                        {% endfor %}
 
+                    </select>
 
-            <div class="campo">
-
-                <label>
-                    Desde
-                </label>
-
-                <input
-                    type="date"
-                    name="fecha_desde"
-                    value="{{ fecha_desde|default:'' }}"
-                >
-
-            </div>
+                </div>
 
 
-            <div class="campo">
+                <!-- FECHA DESDE -->
 
-                <label>
-                    Hasta
-                </label>
+                <div class="campo">
 
-                <input
-                    type="date"
-                    name="fecha_hasta"
-                    value="{{ fecha_hasta|default:'' }}"
-                >
+                    <label for="fecha_desde">
+                        Desde
+                    </label>
 
-            </div>
+                    <input
+                        type="date"
+                        id="fecha_desde"
+                        name="fecha_desde"
+                        value="{{ fecha_desde|default:'' }}"
+                    >
 
-
-            <button type="submit">
-                Consultar
-            </button>
-
-        </form>
-
-    </div>
+                </div>
 
 
-    <div class="tarjeta">
+                <!-- FECHA HASTA -->
+
+                <div class="campo">
+
+                    <label for="fecha_hasta">
+                        Hasta
+                    </label>
+
+                    <input
+                        type="date"
+                        id="fecha_hasta"
+                        name="fecha_hasta"
+                        value="{{ fecha_hasta|default:'' }}"
+                    >
+
+                </div>
+
+
+                <!-- BOTÓN CONSULTAR -->
+
+                <div class="acciones-filtros">
+
+                    <button
+                        type="submit"
+                        class="btn-consultar"
+                    >
+                        Consultar
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+
+        <!-- ========================================== -->
+        <!-- RESULTADOS DEL BALANCE -->
+        <!-- ========================================== -->
+
+        <div class="tarjeta">
+
+            {% if filas %}
+
+                <div class="tabla-responsive">
+
+                    <table>
+
+                        <thead>
+
+                            <tr>
+
+                                <th>Código</th>
+
+                                <th>Cuenta</th>
+
+                                <th>Tipo</th>
+
+                                <th class="numero">
+                                    Sumas Debe
+                                </th>
+
+                                <th class="numero">
+                                    Sumas Haber
+                                </th>
+
+                                <th class="numero">
+                                    Saldo Deudor
+                                </th>
+
+                                <th class="numero">
+                                    Saldo Acreedor
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            {% for fila in filas %}
+
+                                <tr>
+
+                                    <!-- CÓDIGO -->
+
+                                    <td>
+                                        {{ fila.codigo }}
+                                    </td>
+
+
+                                    <!-- CUENTA -->
+
+                                    <td>
+                                        {{ fila.nombre }}
+                                    </td>
+
+
+                                    <!-- TIPO -->
+
+                                    <td>
+                                        {{ fila.tipo }}
+                                    </td>
+
+
+                                    <!-- SUMAS DEBE -->
+
+                                    <td class="numero">
+                                        S/ {{ fila.debe|floatformat:2 }}
+                                    </td>
+
+
+                                    <!-- SUMAS HABER -->
+
+                                    <td class="numero">
+                                        S/ {{ fila.haber|floatformat:2 }}
+                                    </td>
+
+
+                                    <!-- SALDO DEUDOR -->
+
+                                    <td class="numero">
+                                        S/ {{ fila.saldo_deudor|floatformat:2 }}
+                                    </td>
+
+
+                                    <!-- SALDO ACREEDOR -->
+
+                                    <td class="numero">
+                                        S/ {{ fila.saldo_acreedor|floatformat:2 }}
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+
+                            <!-- ================================= -->
+                            <!-- TOTALES -->
+                            <!-- ================================= -->
+
+                            <tr class="total">
+
+                                <td colspan="3">
+                                    TOTAL
+                                </td>
+
+                                <td class="numero">
+                                    S/ {{ total_debe|floatformat:2 }}
+                                </td>
+
+                                <td class="numero">
+                                    S/ {{ total_haber|floatformat:2 }}
+                                </td>
+
+                                <td class="numero">
+                                    S/ {{ total_saldo_deudor|floatformat:2 }}
+                                </td>
+
+                                <td class="numero">
+                                    S/ {{ total_saldo_acreedor|floatformat:2 }}
+                                </td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            {% else %}
+
+                <div class="vacio">
+
+                    No existen movimientos contabilizados
+                    para los filtros seleccionados.
+
+                </div>
+
+            {% endif %}
+
+        </div>
+
+
+        <!-- ========================================== -->
+        <!-- VERIFICACIÓN DE CUADRE -->
+        <!-- ========================================== -->
 
         {% if filas %}
 
-            <table>
+            <div class="estado">
 
-                <thead>
+                <div>
 
-                    <tr>
+                    {% if cuadrado %}
 
-                        <th>
-                            Código
-                        </th>
+                        <span class="correcto">
+                            ✓ Sumas Debe y Haber cuadradas
+                        </span>
 
-                        <th>
-                            Cuenta
-                        </th>
+                    {% else %}
 
-                        <th>
-                            Tipo
-                        </th>
+                        <span class="error">
+                            ⚠ Las sumas Debe y Haber no cuadran
+                        </span>
 
-                        <th class="numero">
-                            Sumas Debe
-                        </th>
+                    {% endif %}
 
-                        <th class="numero">
-                            Sumas Haber
-                        </th>
-
-                        <th class="numero">
-                            Saldo Deudor
-                        </th>
-
-                        <th class="numero">
-                            Saldo Acreedor
-                        </th>
-
-                    </tr>
-
-                </thead>
+                </div>
 
 
-                <tbody>
+                <div>
 
-                    {% for fila in filas %}
+                    {% if saldos_cuadrados %}
 
-                        <tr>
+                        <span class="correcto">
+                            ✓ Saldos deudores y acreedores cuadrados
+                        </span>
 
-                            <td>
-                                {{ fila.codigo }}
-                            </td>
+                    {% else %}
 
-                            <td>
-                                {{ fila.nombre }}
-                            </td>
+                        <span class="error">
+                            ⚠ Los saldos no cuadran
+                        </span>
 
-                            <td>
-                                {{ fila.tipo }}
-                            </td>
+                    {% endif %}
 
-                            <td class="numero">
-                                S/ {{ fila.debe|floatformat:2 }}
-                            </td>
-
-                            <td class="numero">
-                                S/ {{ fila.haber|floatformat:2 }}
-                            </td>
-
-                            <td class="numero">
-                                S/ {{ fila.saldo_deudor|floatformat:2 }}
-                            </td>
-
-                            <td class="numero">
-                                S/ {{ fila.saldo_acreedor|floatformat:2 }}
-                            </td>
-
-                        </tr>
-
-                    {% endfor %}
-
-
-                    <tr class="total">
-
-                        <td colspan="3">
-                            TOTAL
-                        </td>
-
-                        <td class="numero">
-                            S/ {{ total_debe|floatformat:2 }}
-                        </td>
-
-                        <td class="numero">
-                            S/ {{ total_haber|floatformat:2 }}
-                        </td>
-
-                        <td class="numero">
-                            S/ {{ total_saldo_deudor|floatformat:2 }}
-                        </td>
-
-                        <td class="numero">
-                            S/ {{ total_saldo_acreedor|floatformat:2 }}
-                        </td>
-
-                    </tr>
-
-                </tbody>
-
-            </table>
-
-        {% else %}
-
-            <div class="vacio">
-
-                No existen movimientos contabilizados
-                para los filtros seleccionados.
+                </div>
 
             </div>
 
@@ -356,54 +541,6 @@
 
     </div>
 
-
-    {% if filas %}
-
-        <div class="estado">
-
-            <div>
-
-                {% if cuadrado %}
-
-                    <span class="correcto">
-                        ✓ Sumas Debe y Haber cuadradas
-                    </span>
-
-                {% else %}
-
-                    <span class="error">
-                        ⚠ Las sumas Debe y Haber no cuadran
-                    </span>
-
-                {% endif %}
-
-            </div>
-
-
-            <div>
-
-                {% if saldos_cuadrados %}
-
-                    <span class="correcto">
-                        ✓ Saldos deudores y acreedores cuadrados
-                    </span>
-
-                {% else %}
-
-                    <span class="error">
-                        ⚠ Los saldos no cuadran
-                    </span>
-
-                {% endif %}
-
-            </div>
-
-        </div>
-
-    {% endif %}
-
 </div>
 
-</body>
-
-</html>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends 'core/base.html' %}
+{% block title %}Editar producto vendido{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 640px;">
+
+    {% include "contabilidad/_mensajes.html" %}
+
+    <h3 class="mb-1">Editar producto vendido</h3>
+    <p class="text-muted">
+        Recibo {{ detalle.ticket_numero.numero|stringformat:"06d" }}
+        {% if detalle.ticket_numero.cliente %}· {{ detalle.ticket_numero.cliente }}{% endif %}
+        {% if detalle.producto %}· Código {{ detalle.producto.cod }}{% endif %}
+    </p>
+
+    <form method="post" class="card">
+        {% csrf_token %}
+        <div class="card-body">
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="mb-3">
+                <label class="form-label" for="{{ form.descripcion.id_for_label }}">Descripción</label>
+                {{ form.descripcion }}
+                {% for error in form.descripcion.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+
+            {% if solo_descripcion %}
+                <div class="alert alert-info py-2 small mb-0">
+                    Esta venta ya está contabilizada: puedes corregir el texto, pero no
+                    la cantidad ni el precio ({{ detalle.cantidad }} × S/ {{ detalle.precio }}).
+                    Si esos datos están mal, usa <a href="{% url 'anular_venta' detalle.ticket_numero.id %}">Anular venta</a>
+                    y regístrala de nuevo.
+                </div>
+            {% else %}
+            <div class="row g-3">
+                <div class="col-sm-6">
+                    <label class="form-label" for="{{ form.cantidad.id_for_label }}">Cantidad</label>
+                    {{ form.cantidad }}
+                    {% for error in form.cantidad.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="{{ form.precio.id_for_label }}">Precio unitario (S/)</label>
+                    {{ form.precio }}
+                    {% for error in form.precio.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+
+            <p class="small text-muted mt-3 mb-0">
+                El total y el saldo del recibo se ajustan solos. Si cambias la cantidad,
+                el stock se recalcula.
+            </p>
+            {% endif %}
+        </div>
+        <div class="card-footer bg-white d-flex justify-content-end gap-2">
+            <a href="{% url 'lista_ventas' %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

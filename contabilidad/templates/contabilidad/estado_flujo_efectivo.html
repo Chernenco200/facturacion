@@ -1,706 +1,1385 @@
-<!DOCTYPE html>
-<html lang="es">
+{% extends 'core/base.html' %}
+{% block title %}Estado de Flujo de Efectivo - Óptica IC{% endblock %}
+{% block content %}
+<style>
+        .flujo-efectivo-page {
 
-<head>
-
-    <meta charset="UTF-8">
-
-    <title>
-        Estado de Flujo de Efectivo
-    </title>
-
-    <style>
-
-        body {
             font-family: Arial, Helvetica, sans-serif;
-            background: #f4f7fa;
+
+            background: transparent;
+
             color: #17324d;
+
             margin: 0;
+
         }
 
-        .contenedor {
+
+
+        .flujo-efectivo-page .contenedor {
+
             max-width: 1150px;
+
             margin: 30px auto;
+
             padding: 0 20px 40px;
+
         }
 
-        h1 {
+
+
+        .flujo-efectivo-page h1 {
+
             margin-bottom: 4px;
+
         }
 
-        .empresa {
+
+
+        .flujo-efectivo-page .empresa {
+
             color: #667085;
+
             margin-bottom: 4px;
+
         }
 
-        .periodo {
+
+
+        .flujo-efectivo-page .periodo {
+
             color: #667085;
+
             margin-bottom: 22px;
+
         }
+
+
 
         /* ==================================================
+
            FILTROS
+
            ================================================== */
 
-        .filtros {
+
+
+        .flujo-efectivo-page .filtros {
+
+
 
             background: white;
+
             padding: 18px 20px;
+
             border-radius: 10px;
+
             margin-bottom: 22px;
+
+
 
         }
 
-        .filtros form {
+
+
+        .flujo-efectivo-page .filtros form {
+
+
 
             display: flex;
+
             gap: 14px;
+
             align-items: end;
+
             flex-wrap: wrap;
 
+
+
         }
 
-        .campo label {
+
+
+        .flujo-efectivo-page .campo label {
+
+
 
             display: block;
+
             font-weight: bold;
+
             margin-bottom: 6px;
 
+
+
         }
+
+
 
         .campo input,
-        .campo select {
+
+        .flujo-efectivo-page .campo select {
+
+
 
             padding: 8px 10px;
+
             border: 1px solid #d0d5dd;
+
             border-radius: 6px;
+
             min-width: 140px;
 
+
+
         }
 
-        .boton {
+
+
+        .flujo-efectivo-page .boton {
+
+
 
             background: #28627f;
+
             color: white;
+
             border: none;
+
             padding: 9px 18px;
+
             border-radius: 6px;
+
             cursor: pointer;
 
+
+
         }
+
+
 
         /* ==================================================
+
            ESTADO
+
            ================================================== */
 
-        .tarjeta {
+
+
+        .flujo-efectivo-page .tarjeta {
+
+
 
             background: white;
+
             border-radius: 10px;
+
             overflow: hidden;
+
             margin-bottom: 20px;
 
+
+
         }
 
-        .seccion {
+
+
+        .flujo-efectivo-page .seccion {
+
+
 
             background: #e8f0f5;
+
             font-weight: bold;
+
             padding: 14px 20px;
+
             font-size: 17px;
+
+
 
         }
 
-        .fila {
+
+
+        .flujo-efectivo-page .fila {
+
+
 
             display: flex;
+
             justify-content: space-between;
+
             padding: 12px 20px;
+
             border-bottom: 1px solid #eaecf0;
 
+
+
         }
 
-        .detalle {
+
+
+        .flujo-efectivo-page .detalle {
+
+
 
             padding-left: 35px;
+
         }
 
-        .importe {
+
+
+        .flujo-efectivo-page .importe {
+
+
 
             min-width: 160px;
+
             text-align: right;
+
             white-space: nowrap;
 
+
+
         }
 
-        .subtotal {
+
+
+        .flujo-efectivo-page .subtotal {
+
+
 
             background: #f8fafc;
+
             font-weight: bold;
+
+
 
         }
 
-        .resultado {
+
+
+        .flujo-efectivo-page .resultado {
+
+
 
             background: #dceaf2;
+
             font-weight: bold;
+
             font-size: 17px;
+
+
 
         }
 
-        .cero {
+
+
+        .flujo-efectivo-page .cero {
+
+
 
             color: #98a2b3;
 
+
+
         }
 
-        .control-ok {
+
+
+        .flujo-efectivo-page .control-ok {
+
+
 
             color: #067647;
+
             background: #ecfdf3;
 
+
+
         }
 
-        .control-error {
+
+
+        .flujo-efectivo-page .control-error {
+
+
 
             color: #b42318;
+
             background: #fef3f2;
+
+
 
         }
 
-    </style>
-
-</head>
 
 
-<body>
+    
+        .flujo-efectivo-page .contenedor { width: 100%; max-width: 1150px; margin: 20px auto; padding: 0 0 30px; }
+        .flujo-efectivo-page .filtros { box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+        .flujo-efectivo-page .fila { gap: 14px; align-items: baseline; }
+        .flujo-efectivo-page .fila > span:first-child { min-width: 0; }
+        .flujo-efectivo-page .importe { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+        @media (max-width: 600px) {
+            .flujo-efectivo-page .fila { padding: 12px; }
+            .flujo-efectivo-page .importe { min-width: 115px; }
+        }
+</style>
 
+
+
+
+<div class="flujo-efectivo-page">
 <div class="contenedor">
 
+
+
     <!-- ==================================================
+
          ENCABEZADO
+
          ================================================== -->
+
+
 
     <h1>
+
         Estado de Flujo de Efectivo
+
     </h1>
 
+
+
     <div class="empresa">
+
         Óptica IC
+
     </div>
 
+
+
     <div class="periodo">
+
         {{ nombre_periodo }}
+
         ·
+
         {{ fecha_inicio|date:"d/m/Y" }}
+
         al
+
         {{ fecha_fin|date:"d/m/Y" }}
+
     </div>
+
+
+
 
 
     <!-- ==================================================
+
          FILTROS
+
          ================================================== -->
+
+
 
     <div class="filtros">
 
+
+
         <form method="get">
+
+
 
             <div class="campo">
 
+
+
                 <label for="anio">
+
                     Año
+
                 </label>
 
+
+
                 <input
+
                     id="anio"
+
                     type="number"
+
                     name="anio"
+
                     value="{{ anio }}"
+
                     min="2000"
+
                     max="2100"
+
                 >
+
+
 
             </div>
 
 
+
+
+
             <div class="campo">
 
+
+
                 <label for="mes">
+
                     Mes
+
                 </label>
 
+
+
                 <select
+
                     id="mes"
+
                     name="mes"
+
                 >
 
+
+
                     <option value="">
+
                         Todos
+
                     </option>
+
+
 
                     {% for numero, nombre in meses %}
 
+
+
                         <option
+
                             value="{{ numero }}"
+
                             {% if mes == numero %}
+
                                 selected
+
                             {% endif %}
+
                         >
+
                             {{ nombre }}
+
                         </option>
+
+
 
                     {% endfor %}
 
+
+
                 </select>
+
+
 
             </div>
 
 
+
+
+
             <button
+
                 class="boton"
+
                 type="submit"
+
             >
+
                 Consultar
+
             </button>
 
+
+
         </form>
+
+
 
     </div>
 
 
+
+
+
     <!-- ==================================================
+
          OPERACIÓN
+
          ================================================== -->
+
+
 
     <div class="tarjeta">
 
+
+
         <div class="seccion">
+
             ACTIVIDADES DE OPERACIÓN
+
         </div>
+
+
+
 
 
         <div class="fila">
 
+
+
             <span>
+
                 Cobros de clientes
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ cobros_clientes|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
 
+
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Pagos a proveedores
+
             </span>
 
+
+
             <span class="importe">
+
                 (S/ {{ pagos_proveedores|floatformat:2 }})
+
             </span>
+
+
 
         </div>
 
 
+
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Pagos de gastos operativos
+
             </span>
+
+
 
             <span class="importe">
+
                 (S/ {{ pagos_gastos_operativos|floatformat:2 }})
+
             </span>
 
+
+
         </div>
+
+
+
 
 
         <div class="fila">
 
+
+
             <span>
+
                 Pagos de impuestos
+
             </span>
+
+
 
             <span class="importe">
+
                 (S/ {{ pagos_impuestos|floatformat:2 }})
+
             </span>
 
+
+
         </div>
+
+
+
 
 
         {% if otros_operacion_entradas %}
 
+
+
         <div class="fila detalle">
 
+
+
             <span>
+
                 Otros ingresos de operación
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ otros_operacion_entradas|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
+
+
         {% endif %}
+
+
+
 
 
         {% if otros_operacion_salidas %}
 
+
+
         <div class="fila detalle">
 
+
+
             <span>
+
                 Otros pagos de operación
+
             </span>
+
+
 
             <span class="importe">
+
                 (S/ {{ otros_operacion_salidas|floatformat:2 }})
+
             </span>
 
+
+
         </div>
+
+
 
         {% endif %}
 
 
+
+
+
         <div class="fila subtotal">
 
+
+
             <span>
+
                 FLUJO NETO DE ACTIVIDADES DE OPERACIÓN
+
             </span>
+
+
 
             <span class="importe">
+
                 S/ {{ flujo_operacion|floatformat:2 }}
+
             </span>
 
+
+
         </div>
+
+
 
     </div>
 
 
+
+
+
     <!-- ==================================================
+
          INVERSIÓN
+
          ================================================== -->
+
+
 
     <div class="tarjeta">
 
+
+
         <div class="seccion">
+
             ACTIVIDADES DE INVERSIÓN
+
         </div>
+
+
+
 
 
         <div class="fila">
 
+
+
             <span>
+
                 Compra de activos fijos
+
             </span>
+
+
 
             <span class="importe">
+
                 (S/ {{ compra_activos_fijos|floatformat:2 }})
+
             </span>
 
+
+
         </div>
+
+
+
 
 
         {% if otros_inversion_entradas %}
 
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Otros ingresos de inversión
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ otros_inversion_entradas|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
+
+
         {% endif %}
+
+
+
 
 
         {% if otros_inversion_salidas %}
 
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Otros pagos de inversión
+
             </span>
+
+
 
             <span class="importe">
+
                 (S/ {{ otros_inversion_salidas|floatformat:2 }})
+
             </span>
 
+
+
         </div>
+
+
 
         {% endif %}
 
 
+
+
+
         <div class="fila subtotal">
 
+
+
             <span>
+
                 FLUJO NETO DE ACTIVIDADES DE INVERSIÓN
+
             </span>
+
+
 
             <span class="importe">
+
                 S/ {{ flujo_inversion|floatformat:2 }}
+
             </span>
 
+
+
         </div>
+
+
 
     </div>
 
 
+
+
+
     <!-- ==================================================
+
          FINANCIAMIENTO
+
          ================================================== -->
+
+
 
     <div class="tarjeta">
 
+
+
         <div class="seccion">
+
             ACTIVIDADES DE FINANCIAMIENTO
+
         </div>
+
+
+
 
 
         <div class="fila">
 
+
+
             <span>
+
                 Aportes de capital
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ aportes_capital|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
 
+
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Préstamos recibidos
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ prestamos_recibidos|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
 
+
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Pago de préstamos
+
             </span>
+
+
 
             <span class="importe">
+
                 (S/ {{ pago_prestamos|floatformat:2 }})
+
             </span>
 
+
+
         </div>
+
+
+
 
 
         <div class="fila">
 
+
+
             <span>
+
                 Dividendos pagados
+
             </span>
+
+
 
             <span class="importe">
+
                 (S/ {{ dividendos_pagados|floatformat:2 }})
+
             </span>
 
+
+
         </div>
+
+
+
 
 
         {% if otros_financiamiento_entradas %}
 
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Otros ingresos de financiamiento
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ otros_financiamiento_entradas|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
+
+
         {% endif %}
+
+
+
 
 
         {% if otros_financiamiento_salidas %}
 
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Otros pagos de financiamiento
+
             </span>
+
+
 
             <span class="importe">
+
                 (S/ {{ otros_financiamiento_salidas|floatformat:2 }})
+
             </span>
 
+
+
         </div>
+
+
 
         {% endif %}
 
 
+
+
+
         <div class="fila subtotal">
 
+
+
             <span>
+
                 FLUJO NETO DE ACTIVIDADES DE FINANCIAMIENTO
+
             </span>
+
+
 
             <span class="importe">
+
                 S/ {{ flujo_financiamiento|floatformat:2 }}
+
             </span>
 
+
+
         </div>
+
+
 
     </div>
 
 
+
+
+
     <!-- ==================================================
+
          CONCILIACIÓN
+
          ================================================== -->
+
+
 
     <div class="tarjeta">
 
+
+
         <div class="seccion">
+
             CONCILIACIÓN DEL EFECTIVO
+
         </div>
+
+
+
 
 
         <div class="fila">
 
+
+
             <span>
+
                 Saldo inicial de efectivo y equivalentes
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ saldo_inicial|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
 
+
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Flujo neto de actividades de operación
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ flujo_operacion|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
 
+
+
+
         <div class="fila">
 
+
+
             <span>
+
                 Flujo neto de actividades de inversión
+
             </span>
+
+
 
             <span class="importe">
+
                 S/ {{ flujo_inversion|floatformat:2 }}
+
             </span>
 
+
+
         </div>
+
+
+
 
 
         <div class="fila">
 
+
+
             <span>
+
                 Flujo neto de actividades de financiamiento
+
             </span>
+
+
 
             <span class="importe">
+
                 S/ {{ flujo_financiamiento|floatformat:2 }}
+
             </span>
 
+
+
         </div>
+
+
+
 
 
         <div class="fila resultado">
 
+
+
             <span>
+
                 AUMENTO / DISMINUCIÓN NETA DEL EFECTIVO
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ variacion_neta|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
 
+
+
+
         <div class="fila subtotal">
 
+
+
             <span>
+
                 SALDO FINAL CALCULADO
+
             </span>
+
+
 
             <span class="importe">
+
                 S/ {{ saldo_final_calculado|floatformat:2 }}
+
             </span>
 
+
+
         </div>
+
+
+
 
 
         <div class="fila subtotal">
 
+
+
             <span>
+
                 SALDO FINAL CONTABLE
+
             </span>
+
+
 
             <span class="importe">
+
                 S/ {{ saldo_final_contable|floatformat:2 }}
+
             </span>
 
+
+
         </div>
+
+
 
     </div>
+
+
+
 
 
     <!-- ==================================================
+
          CONTROL
+
          ================================================== -->
 
+
+
     <div
+
         class="
+
             tarjeta
+
             {% if diferencia == 0 %}
+
                 control-ok
+
             {% else %}
+
                 control-error
+
             {% endif %}
+
         "
+
     >
+
+
 
         <div class="fila subtotal">
 
+
+
             <span>
+
                 DIFERENCIA
+
             </span>
 
+
+
             <span class="importe">
+
                 S/ {{ diferencia|floatformat:2 }}
+
             </span>
+
+
 
         </div>
 
+
+
     </div>
 
+
+
 </div>
-
-</body>
-
-</html>
+</div>
+{% endblock %}

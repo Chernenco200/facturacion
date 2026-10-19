@@ -1,0 +1,115 @@
+{% comment %}
+Campo "Factura con IGV (crédito fiscal)".
+
+Uso:
+    {% include "contabilidad/_campo_igv.html" with campo_total="#importe_total" marcado=... valor_igv=... %}
+
+campo_total: selector del input (o del texto "S/ 0.00") con el
+importe total del comprobante, IGV incluido.
+Si se deja el IGV vacío, el servidor lo calcula como el 18%
+incluido en el total.
+{% endcomment %}
+<div class="campo-igv" data-total="{{ campo_total }}">
+    <div class="form-check">
+        <input
+            class="form-check-input"
+            type="checkbox"
+            name="con_credito_fiscal"
+            value="1"
+            id="con_credito_fiscal"
+            {% if marcado == "1" or marcado is True or valor_igv > 0 %}checked{% endif %}
+        >
+        <label class="form-check-label fw-semibold" for="con_credito_fiscal">
+            Factura con IGV: usar el IGV como crédito fiscal
+        </label>
+    </div>
+    <div class="form-text mb-2">
+        Márcalo solo si el comprobante es factura a nombre de la empresa.
+        Con boleta, recibo o sin comprobante el IGV forma parte del costo.
+    </div>
+
+    <div class="igv-detalle" {% if not marcado == "1" and not marcado is True and not valor_igv > 0 %}hidden{% endif %}>
+        <label class="form-label" for="igv_credito_fiscal">IGV de la factura</label>
+        <div class="input-group" style="max-width: 260px;">
+            <span class="input-group-text">S/</span>
+            <input
+                type="number"
+                name="igv_credito_fiscal"
+                id="igv_credito_fiscal"
+                class="form-control"
+                min="0"
+                step="0.01"
+                value="{% if valor_igv %}{{ valor_igv|stringformat:'s' }}{% endif %}"
+            >
+        </div>
+        <div class="form-text">
+            Se calcula como el 18% incluido en el total; corrígelo si la factura
+            tiene partes exoneradas o inafectas.
+            Base sin IGV: <strong class="igv-base">—</strong>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const caja = document.querySelector(".campo-igv");
+    if (!caja) { return; }
+
+    const casilla = caja.querySelector("#con_credito_fiscal");
+    const detalle = caja.querySelector(".igv-detalle");
+    const campoIgv = caja.querySelector("#igv_credito_fiscal");
+    const textoBase = caja.querySelector(".igv-base");
+    const selectorTotal = caja.dataset.total;
+    const TASA = 0.18;
+
+    let editadoAMano = campoIgv.value !== "";
+
+    function leerTotal() {
+        const elemento = selectorTotal ? document.querySelector(selectorTotal) : null;
+        if (!elemento) { return 0; }
+        const texto = ("value" in elemento && elemento.tagName !== "DIV")
+            ? elemento.value
+            : elemento.textContent;
+        const numero = parseFloat(String(texto).replace(/[^0-9.\-]/g, ""));
+        return isNaN(numero) ? 0 : numero;
+    }
+
+    function redondear(valor) {
+        return Math.round(valor * 100) / 100;
+    }
+
+    function actualizar() {
+        detalle.hidden = !casilla.checked;
+        if (!casilla.checked) { return; }
+
+        const total = leerTotal();
+        const igvCalculado = redondear(total - redondear(total / (1 + TASA)));
+
+        if (!editadoAMano) {
+            campoIgv.value = total > 0 ? igvCalculado.toFixed(2) : "";
+        }
+
+        const igv = parseFloat(campoIgv.value) || 0;
+        textoBase.textContent = total > 0
+            ? "S/ " + (total - igv).toFixed(2)
+            : "—";
+    }
+
+    campoIgv.addEventListener("input", function () {
+        editadoAMano = campoIgv.value !== "";
+        actualizar();
+    });
+
+    casilla.addEventListener("change", actualizar);
+
+    // Otros scripts de la página recalculan el total al escribir;
+    // esperamos a que terminen antes de leerlo.
+    document.addEventListener("input", function (evento) {
+        if (evento.target !== campoIgv) { setTimeout(actualizar, 0); }
+    });
+    document.addEventListener("change", function () { setTimeout(actualizar, 0); });
+
+    actualizar();
+    document.addEventListener("DOMContentLoaded", actualizar);
+})();
+</script>

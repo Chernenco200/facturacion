@@ -1,59 +1,51 @@
-<!DOCTYPE html>
-<html lang="es">
+{% extends 'core/base.html' %}
 
-<head>
-    <meta charset="UTF-8">
-    <title>Balance General</title>
+{% block title %}Balance General - Óptica IC{% endblock %}
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f7fa;
-            margin: 0;
-            color: #243447;
-        }
+{% block content %}
+<style>
 
-        .contenedor {
+        .balance-general-page .contenedor {
             max-width: 1100px;
             margin: 30px auto;
             padding: 0 20px;
         }
 
-        h1 {
+        .balance-general-page h1 {
             margin-bottom: 5px;
         }
 
-        .subtitulo {
+        .balance-general-page .subtitulo {
             color: #667085;
             margin-bottom: 25px;
         }
 
-        .filtros {
+        .balance-general-page .filtros {
             background: white;
             padding: 18px;
             border-radius: 10px;
             margin-bottom: 20px;
         }
 
-        .filtros form {
+        .balance-general-page .filtros form {
             display: flex;
             align-items: end;
             gap: 12px;
         }
 
-        .campo label {
+        .balance-general-page .campo label {
             display: block;
             font-weight: bold;
             margin-bottom: 6px;
         }
 
-        .campo input {
+        .balance-general-page .campo input {
             padding: 9px;
             border: 1px solid #d0d5dd;
             border-radius: 6px;
         }
 
-        .boton {
+        .balance-general-page .boton {
             background: #285f7d;
             color: white;
             border: none;
@@ -62,61 +54,61 @@
             cursor: pointer;
         }
 
-        .tarjeta {
+        .balance-general-page .tarjeta {
             background: white;
             border-radius: 10px;
             overflow: hidden;
             margin-bottom: 20px;
         }
 
-        .seccion {
+        .balance-general-page .seccion {
             background: #eaf1f5;
             padding: 14px 20px;
             font-weight: bold;
             font-size: 17px;
         }
 
-        .fila {
+        .balance-general-page .fila {
             display: flex;
             justify-content: space-between;
             padding: 11px 20px;
             border-bottom: 1px solid #eaecf0;
         }
 
-        .codigo {
+        .balance-general-page .codigo {
             display: inline-block;
             min-width: 75px;
             color: #667085;
         }
 
-        .importe {
+        .balance-general-page .importe {
             min-width: 150px;
             text-align: right;
         }
 
-        .total {
+        .balance-general-page .total {
             font-weight: bold;
             background: #f8fafc;
             padding: 14px 20px;
         }
 
-        .resultado {
+        .balance-general-page .resultado {
             background: #dceaf1;
             font-weight: bold;
             font-size: 18px;
         }
 
-        .cuadrado {
+        .balance-general-page .cuadrado {
             background: #dcfae6;
             color: #16794b;
         }
 
-        .descuadrado {
+        .balance-general-page .descuadrado {
             background: #fee4e2;
             color: #b42318;
         }
         
-        .subseccion {
+        .balance-general-page .subseccion {
             background: #f7f9fb;
             padding: 11px 20px;
             font-weight: bold;
@@ -124,7 +116,7 @@
             border-bottom: 1px solid #e5e7eb;
         }
 
-        .subtotal {
+        .balance-general-page .subtotal {
             background: #fafafa;
             font-weight: bold;
             color: #344054;
@@ -132,12 +124,21 @@
 
 
 
-    </style>
-</head>
+    
+        .balance-general-page { width:100%; color:#243447; font-family:Arial,sans-serif; }
+        .balance-general-page .contenedor { width:100%; max-width:1100px; margin:20px auto; padding:0; }
+        .balance-general-page .filtros form { flex-wrap:wrap; }
+        .balance-general-page .fila { gap:16px; align-items:center; }
+        .balance-general-page .fila > div:first-child { min-width:0; }
+        .balance-general-page .importe { flex-shrink:0; font-variant-numeric:tabular-nums; }
+        @media (max-width:600px) {
+            .balance-general-page .fila { padding:10px 12px; }
+            .balance-general-page .importe { min-width:110px; }
+        }
+</style>
 
 
-<body>
-
+<div class="balance-general-page">
 <div class="contenedor">
 
     <h1>Balance General</h1>
@@ -489,6 +490,7 @@
     </div>
 
 </div>
+</div>
 
-</body>
-</html>
+
+{% endblock %}
