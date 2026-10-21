@@ -87,7 +87,7 @@ TEMPLATES = [
         },
     },
 ]
-
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 WSGI_APPLICATION = "facturacion.wsgi.application"  # <-- CAMBIA esto por tu proyecto
 
 # ========= DATABASE (Heroku Postgres) =========

@@ -47,7 +47,7 @@
                         {% for p in periodos %}
                             <option
                                 value="{{ p.id }}"
-                                {% if periodo and p.id =*=* periodo.id %}
+                                {% if periodo and p.id == periodo.id %}
                                     selected
                                 {% endif %}
                             >

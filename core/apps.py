@@ -2,16 +2,8 @@ from django.apps import AppConfig
 
 
 class CoreConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'core'
-
-def ready(self):
-    import core.signals
-    import core.pagos_signals
-
-class CoreConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "core"
 
-    def ready(self):
-        import core.signals  # noqa
+    def readys(self):
+        import core.signals  # noqa: F401

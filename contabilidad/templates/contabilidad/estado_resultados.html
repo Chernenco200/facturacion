@@ -491,7 +491,14 @@
 
         </div>
 
-
+        {% if diferencia_no_clasificada %}
+        <div class="alert alert-warning" role="alert">
+            Hay S/ {{ diferencia_no_clasificada|floatformat:2 }} en cuentas
+            de resultado que este estado no muestra (resultado según el
+            mayor: S/ {{ resultado_segun_mayor|floatformat:2 }}). Revisa que
+            todos los gastos tengan categoría gerencial 91, 92 o 93.
+        </div>
+        {% endif %}
 
 
 

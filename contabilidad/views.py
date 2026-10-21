@@ -135,10 +135,11 @@ def libro_mayor(request):
     total_haber = Decimal("0.00")
     saldo_final = Decimal("0.00")
 
-    if cuenta_id:
+    if cuenta_id and cuenta_id.isdigit():
 
-        cuenta_seleccionada = CuentaContable.objects.get(
-            id=cuenta_id
+        cuenta_seleccionada = get_object_or_404(
+            CuentaContable,
+            id=cuenta_id,
         )
 
         movimientos = (
@@ -584,8 +585,35 @@ def estado_resultados(request):
         - impuesto_renta
     )
 
+    # ========================================================
+    # CONTROL: RESULTADO SEGÚN EL MAYOR
+    # ========================================================
+    #
+    # Suma todas las cuentas de resultado (ingreso, costo y
+    # gasto) sin importar la categoría gerencial. Si no
+    # coincide con la utilidad neta, hay movimientos que el
+    # estado no está mostrando (p. ej. un gasto sin categoría).
+    #
+
+    movimientos_resultado = movimientos.filter(
+        cuenta__tipo__in=["INGRESO", "COSTO", "GASTO"],
+    ).exclude(
+        asiento__tipo=AsientoContable.TipoAsiento.CIERRE
+    )
+
+    resultado_segun_mayor = sum(
+        (mov.haber - mov.debe for mov in movimientos_resultado),
+        Decimal("0.00"),
+    )
+
+    diferencia_no_clasificada = (
+        resultado_segun_mayor - utilidad_neta
+    )
+
     context = {
         "periodos": periodos,
+        "resultado_segun_mayor": resultado_segun_mayor,
+        "diferencia_no_clasificada": diferencia_no_clasificada,
         "periodo_id": periodo_id,
         "fecha_desde": fecha_desde,
         "fecha_hasta": fecha_hasta,
