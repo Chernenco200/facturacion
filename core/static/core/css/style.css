@@ -11,3 +11,85 @@ legend {
     font-weight: bold;
     font-size: 14px;
 }
+
+/* =========================================================
+   AJUSTES RESPONSIVE GENERALES (aplican a todas las páginas)
+   ========================================================= */
+
+/* Imágenes, videos y canvas nunca más anchos que la pantalla */
+img,
+video,
+canvas,
+iframe {
+    max-width: 100%;
+}
+
+/* Las tablas envueltas hacen scroll suave en iOS */
+.table-responsive {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- Tablets y celulares ---------- */
+@media (max-width: 767.98px) {
+
+    /* Inputs dentro de tablas con un ancho mínimo usable */
+    .table input.form-control,
+    .table select.form-select,
+    .table select.form-control {
+        min-width: 90px;
+    }
+
+    /* Grupos de botones y barras de acciones se acomodan en varias líneas */
+    .btn-toolbar,
+    .btn-group {
+        flex-wrap: wrap;
+    }
+
+    /* Modales casi a pantalla completa */
+    .modal-dialog {
+        margin: .5rem;
+    }
+
+    /* Navbar: el texto del usuario y el botón de salir no empujan el menú */
+    .navbar .navbar-text {
+        font-size: .9rem;
+        margin-right: .5rem !important;
+    }
+}
+
+/* ---------- Celulares ---------- */
+@media (max-width: 575.98px) {
+
+    .container,
+    .container-fluid {
+        padding-left: .75rem;
+        padding-right: .75rem;
+    }
+
+    h1, .h1 { font-size: 1.6rem; }
+    h2, .h2 { font-size: 1.4rem; }
+    h3, .h3 { font-size: 1.25rem; }
+
+    .card-body {
+        padding: .85rem;
+    }
+
+    /* Campos de formulario a todo el ancho */
+    input.form-control,
+    select.form-select,
+    textarea.form-control {
+        max-width: 100%;
+    }
+
+    /* 16px en inputs evita que iPhone haga zoom automático al tocar un campo */
+    input.form-control,
+    select.form-select,
+    select.form-control,
+    textarea.form-control {
+        font-size: 16px;
+    }
+    .form-control-sm,
+    .form-select-sm {
+        font-size: 16px;
+    }
+}

@@ -3,6 +3,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <!-- Necesario para que el celular use el ancho real de la pantalla (sin esto todo se ve diminuto) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Óptica IC{% endblock %}</title>
 
     <!-- Bootstrap -->
@@ -28,6 +30,8 @@
         const csrftoken = "{{ csrf_token }}";
     </script>
 
+    <!-- Envuelve automáticamente las tablas para que hagan scroll horizontal en el celular -->
+    <script src="{% static 'core/js/responsive.js' %}"></script>
 
 </body>
 </html>
