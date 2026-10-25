@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 from decimal import Decimal
 from django.db.models import Sum
+from django.db import transaction
 
 def normalizar_numero(numero):
     numero = str(numero).strip()
@@ -584,12 +585,98 @@ def enviar_control_menor_6_meses(orden):
 
     return False
 
+# ==============================================================
+# SEGUIMIENTO COMERCIAL: RENOVACIÓN Y REACTIVACIÓN
+# ==============================================================
+#
+# Las reglas (plazos de 12/18 meses y separación de 12 meses entre
+# campañas) están en core/seguimiento.py. Aquí se vuelven a verificar
+# justo antes de enviar.
+#
+# Para evitar envíos duplicados se usa una "reserva":
+#   1. En una transacción corta se bloquea al cliente, se verifica
+#      que siga siendo apto y se marca el envío como realizado.
+#   2. Fuera de la transacción se llama a Meta.
+#   3. Si Meta rechaza el mensaje, se libera la reserva.
+#
+# Así, dos clics simultáneos no envían dos mensajes, y si el servidor
+# falla después de que Meta aceptó el mensaje, el cliente igual queda
+# marcado (no se le vuelve a escribir).
+# ==============================================================
+
+class ResultadoEnvio:
+    """
+    Resultado de un envío. Se comporta como True/False (igual que
+    antes) y además trae un motivo legible para mostrar al operador.
+    """
+
+    def __init__(self, ok, motivo=""):
+        self.ok = bool(ok)
+        self.motivo = motivo
+
+    def __bool__(self):
+        return self.ok
+
+    def __repr__(self):
+        return f"ResultadoEnvio(ok={self.ok}, motivo={self.motivo!r})"
+
+
+def _registrar_saliente_en_bandeja(numero, nombre, mensaje, wa_message_id):
+    """
+    Guarda el mensaje en la bandeja y crea la conversación si no existe.
+    No cambia el modo BOT/HUMANO de una conversación existente.
+    """
+
+    try:
+        MensajeWhatsApp.objects.create(
+            numero=numero,
+            nombre=nombre,
+            tipo="SALIENTE",
+            mensaje=mensaje,
+            wa_message_id=wa_message_id,
+            estado="ENVIADO",
+        )
+
+        ConversacionWhatsApp.objects.get_or_create(
+            numero=numero,
+            defaults={
+                "modo": "BOT",
+                "estado": "INICIO",
+            },
+        )
+
+    except Exception:
+        # El mensaje ya salió y el envío ya quedó reservado:
+        # solo se pierde la copia en la bandeja.
+        logger.exception(
+            "Meta aceptó el mensaje %s pero no se pudo guardar en la bandeja.",
+            wa_message_id,
+        )
+
+
 def enviar_renovacion_anual(orden):
+    from core.models import OrdenTrabajo
+    from core.seguimiento import orden_apta_renovacion
+
+    hoy = timezone.localdate()
+
     ticket = orden.ticket
-    cliente = ticket.cliente
+    cliente = ticket.cliente if ticket else None
+
+    # ==========================================================
+    # 1. VALIDACIONES
+    # ==========================================================
 
     if not cliente or not cliente.telefono:
-        return False
+        return ResultadoEnvio(False, "El cliente no tiene teléfono registrado.")
+
+    try:
+        numero = normalizar_numero(cliente.telefono)
+    except ValueError:
+        return ResultadoEnvio(
+            False,
+            f"El teléfono {cliente.telefono} no es un número válido de WhatsApp.",
+        )
 
     mensaje = (
         f"Hola {cliente.nombre} 😊\n\n"
@@ -600,23 +687,90 @@ def enviar_renovacion_anual(orden):
         f"Innovación y Calidad"
     )
 
-    if cliente_esta_en_ventana_servicio(cliente.telefono):
-        enviado = enviar_whatsapp_texto(cliente.telefono, mensaje)
-    else:
-        enviado = enviar_whatsapp_template(
-            numero=cliente.telefono,
-            template_name="renovacion_anual",
-            parametros=[cliente.nombre],
+    # ==========================================================
+    # 2. RESERVAR EL ENVÍO (transacción corta, sin llamar a Meta)
+    # ==========================================================
+
+    with transaction.atomic():
+        Cliente.objects.select_for_update().get(pk=cliente.pk)
+        orden_db = OrdenTrabajo.objects.select_for_update().get(pk=orden.pk)
+
+        if not orden_apta_renovacion(orden_db, hoy):
+            print("RENOVACIÓN NO ENVIADA: cliente ya no es apto. ORDEN:", orden.pk)
+            return ResultadoEnvio(
+                False,
+                "Este cliente ya no corresponde a renovación: compró "
+                "nuevamente, recibió otro mensaje comercial en los últimos "
+                "12 meses o fue retirado de la lista.",
+            )
+
+        fecha_anterior = orden_db.fecha_ultima_renovacion
+
+        orden_db.renovacion_enviada = True
+        orden_db.fecha_ultima_renovacion = hoy
+        orden_db.save(update_fields=[
+            "renovacion_enviada",
+            "fecha_ultima_renovacion",
+        ])
+
+    # ==========================================================
+    # 3. ENVIAR A META
+    # ==========================================================
+
+    wa_message_id = None
+
+    try:
+        if cliente_esta_en_ventana_servicio(numero):
+            wa_message_id = enviar_whatsapp_texto(
+                numero,
+                mensaje,
+                devolver_id=True,
+            )
+        else:
+            wa_message_id = enviar_whatsapp_template(
+                numero=numero,
+                template_name="renovacion_anual",
+                parametros=[cliente.nombre],
+                devolver_id=True,
+            )
+    except Exception:
+        logger.exception("Error enviando renovación. orden_id=%s", orden.pk)
+        wa_message_id = None
+
+    # ==========================================================
+    # 4. META RECHAZÓ: LIBERAR LA RESERVA
+    # ==========================================================
+
+    if not wa_message_id:
+        OrdenTrabajo.objects.filter(
+            pk=orden.pk,
+            renovacion_enviada=True,
+            fecha_ultima_renovacion=hoy,
+        ).update(
+            renovacion_enviada=False,
+            fecha_ultima_renovacion=fecha_anterior,
         )
 
-    if enviado:
-        MensajeWhatsApp.objects.create(
-            numero=cliente.telefono,
-            tipo="BOT",
-            mensaje=mensaje,
+        print("RENOVACIÓN NO ACEPTADA POR META. ORDEN:", orden.pk)
+
+        return ResultadoEnvio(
+            False,
+            "WhatsApp no aceptó el mensaje. Revisa el teléfono o la "
+            "plantilla. El cliente sigue en la lista.",
         )
 
-    return enviado
+    # ==========================================================
+    # 5. REGISTRAR EN LA BANDEJA
+    # ==========================================================
+
+    _registrar_saliente_en_bandeja(numero, cliente.nombre, mensaje, wa_message_id)
+
+    orden.renovacion_enviada = True
+    orden.fecha_ultima_renovacion = hoy
+
+    print("RENOVACIÓN ENVIADA. ORDEN:", orden.pk, "WA_MESSAGE_ID:", wa_message_id)
+
+    return ResultadoEnvio(True, "Recordatorio de renovación enviado correctamente.")
 
 def enviar_aviso_lentes_listos(orden):
     ticket = orden.ticket
@@ -892,103 +1046,46 @@ def nombre_corto_cliente(nombre_completo):
 
 
 def enviar_reactivacion(cliente):
+    from core.seguimiento import (
+        categoria_por_monto,
+        cliente_apto_reactivacion,
+        maxima_compra_dia_cliente,
+    )
 
-    print("===================================")
-    print("=== ENVIAR REACTIVACIÓN ===")
-    print("CLIENTE ID:", cliente.id if cliente else None)
-    print("CLIENTE:", cliente.nombre if cliente else None)
-    print("TELÉFONO:", cliente.telefono if cliente else None)
-    print("===================================")
+    hoy = timezone.localdate()
 
     # ==========================================================
     # 1. VALIDACIONES
     # ==========================================================
 
     if not cliente or not cliente.telefono:
-        print("Cliente sin teléfono. No se envía WhatsApp.")
-        return False
+        return ResultadoEnvio(False, "El cliente no tiene teléfono registrado.")
 
     if getattr(cliente, "excluir_reactivacion", False):
-        print("Cliente excluido de reactivaciones.")
-        return False
+        return ResultadoEnvio(False, "El cliente está excluido de reactivaciones.")
 
-    # Normalizar teléfono para que coincida con la bandeja
     try:
         numero = normalizar_numero(cliente.telefono)
-
-    except ValueError as e:
-        print("ERROR NORMALIZANDO TELÉFONO:", e)
-        return False
-
-    # ==========================================================
-    # 2. NOMBRE CORTO DEL CLIENTE
-    # ==========================================================
+    except ValueError:
+        return ResultadoEnvio(
+            False,
+            f"El teléfono {cliente.telefono} no es un número válido de WhatsApp.",
+        )
 
     nombre = nombre_corto_cliente(cliente.nombre)
 
     # ==========================================================
-    # 3. CALCULAR MÁXIMA COMPRA EN UN MISMO DÍA
+    # 2. CATEGORÍA Y PLANTILLA (mismas plantillas aprobadas en Meta)
     # ==========================================================
 
-    compras_por_dia = (
-        TicketVenta.objects
-        .filter(cliente=cliente)
-        .values("fecha_emision")
-        .annotate(
-            total_dia=Sum("total")
-        )
-        .order_by("-total_dia")
-    )
-
-    primera_compra = compras_por_dia.first()
-
-    if primera_compra:
-
-        maxima_compra_dia = (
-            primera_compra.get("total_dia")
-            or Decimal("0.00")
-        )
-
-    else:
-        maxima_compra_dia = Decimal("0.00")
-
-    print("MÁXIMA COMPRA DIARIA:", maxima_compra_dia)
-
-    # ==========================================================
-    # 4. DETERMINAR CATEGORÍA
-    # ==========================================================
-
-    if maxima_compra_dia >= Decimal("800"):
-        categoria = "BLUE"
-
-    elif maxima_compra_dia >= Decimal("300"):
-        categoria = "BLACK"
-
-    elif maxima_compra_dia >= Decimal("150"):
-        categoria = "RED"
-
-    elif maxima_compra_dia >= Decimal("100"):
-        categoria = "WHITE"
-
-    else:
-        categoria = "BROWN"
-
+    maxima_compra_dia = maxima_compra_dia_cliente(cliente)
+    categoria = categoria_por_monto(maxima_compra_dia)
     es_premium = categoria in ["BLUE", "BLACK"]
 
-    print("CATEGORÍA:", categoria)
-    print("ES PREMIUM:", es_premium)
-
-    # ==========================================================
-    # 5. SELECCIONAR TEMPLATE
-    # ==========================================================
-
     if es_premium:
-
         template_name = "reactivar_cliente_premium"
 
-        # IMPORTANTE:
         # Este texto debe coincidir con el template aprobado en Meta.
-
         mensaje_template = (
             f"Hola {nombre} 😊\n\n"
             f"Eres uno de nuestros clientes premium de Óptica IC y "
@@ -1003,12 +1100,9 @@ def enviar_reactivacion(cliente):
         )
 
     else:
-
         template_name = "reactivacion_clientes"
 
-        # IMPORTANTE:
         # Este texto debe coincidir con el template aprobado en Meta.
-
         mensaje_template = (
             f"Hola {nombre} 😊\n\n"
             f"En Óptica IC queremos seguir acompañándote en el cuidado "
@@ -1021,118 +1115,89 @@ def enviar_reactivacion(cliente):
             f"Innovación y Calidad"
         )
 
-    print("PLANTILLA SELECCIONADA:", template_name)
+    print("REACTIVACIÓN. CLIENTE:", cliente.pk, "CATEGORÍA:", categoria,
+          "PLANTILLA:", template_name)
 
     # ==========================================================
-    # 6. SIEMPRE ENVIAR TEMPLATE
+    # 3. RESERVAR EL ENVÍO (transacción corta, sin llamar a Meta)
     # ==========================================================
 
-    wa_message_id = enviar_whatsapp_template(
-        numero=numero,
-        template_name=template_name,
-        parametros=[
-            nombre,
-        ],
-        devolver_id=True,
-    )
+    with transaction.atomic():
+        cliente_db = Cliente.objects.select_for_update().get(pk=cliente.pk)
+
+        if not cliente_apto_reactivacion(cliente_db, hoy):
+            print("REACTIVACIÓN NO ENVIADA: cliente ya no es apto. CLIENTE:", cliente.pk)
+            return ResultadoEnvio(
+                False,
+                "Este cliente ya no corresponde a reactivación: compró "
+                "nuevamente, recibió otro mensaje comercial en los últimos "
+                "12 meses o fue excluido.",
+            )
+
+        fecha_anterior = cliente_db.fecha_ultima_reactivacion
+
+        cliente_db.fecha_ultima_reactivacion = hoy
+        cliente_db.save(update_fields=["fecha_ultima_reactivacion"])
 
     # ==========================================================
-    # 7. VERIFICAR RESPUESTA DE META
+    # 4. ENVIAR A META (siempre plantilla)
+    # ==========================================================
+
+    try:
+        wa_message_id = enviar_whatsapp_template(
+            numero=numero,
+            template_name=template_name,
+            parametros=[nombre],
+            devolver_id=True,
+        )
+    except Exception:
+        logger.exception("Error enviando reactivación. cliente_id=%s", cliente.pk)
+        wa_message_id = None
+
+    # ==========================================================
+    # 5. META RECHAZÓ: LIBERAR LA RESERVA
     # ==========================================================
 
     if not wa_message_id:
+        Cliente.objects.filter(
+            pk=cliente.pk,
+            fecha_ultima_reactivacion=hoy,
+        ).update(fecha_ultima_reactivacion=fecha_anterior)
 
-        print("===================================")
-        print("ERROR ENVIANDO REACTIVACIÓN")
-        print("CLIENTE:", cliente.nombre)
-        print("TELÉFONO:", numero)
-        print("PLANTILLA:", template_name)
-        print("===================================")
+        print("REACTIVACIÓN NO ACEPTADA POR META. CLIENTE:", cliente.pk)
 
-        return False
-
-    print("===================================")
-    print("META ACEPTÓ LA REACTIVACIÓN")
-    print("WA_MESSAGE_ID:", wa_message_id)
-    print("===================================")
-
-    # ==========================================================
-    # 8. REGISTRAR MENSAJE EN LA BANDEJA
-    # ==========================================================
-
-    MensajeWhatsApp.objects.create(
-        numero=numero,
-        nombre=cliente.nombre,
-        tipo="SALIENTE",
-        mensaje=mensaje_template,
-        wa_message_id=wa_message_id,
-        estado="ENVIADO",
-    )
-
-    print(
-        "MENSAJE GUARDADO EN BANDEJA:",
-        wa_message_id
-    )
-
-    # ==========================================================
-    # 9. CREAR CONVERSACIÓN SIN ALTERAR BOT/HUMANO
-    # ==========================================================
-
-    conversacion, created = (
-        ConversacionWhatsApp.objects.get_or_create(
-            numero=numero,
-            defaults={
-                "modo": "BOT",
-                "estado": "INICIO",
-            },
+        return ResultadoEnvio(
+            False,
+            "WhatsApp no aceptó el mensaje. Revisa el teléfono o la "
+            "plantilla. El cliente sigue en la lista.",
         )
+
+    # ==========================================================
+    # 6. REGISTRAR BANDEJA E HISTORIAL
+    # ==========================================================
+
+    _registrar_saliente_en_bandeja(
+        numero,
+        cliente.nombre,
+        mensaje_template,
+        wa_message_id,
     )
 
-    # IMPORTANTE:
-    # Si la conversación ya existe y está en HUMANO,
-    # permanece en HUMANO.
-    #
-    # No ejecutamos:
-    # conversacion.modo = "BOT"
+    try:
+        ReactivacionWhatsApp.objects.create(
+            cliente=cliente,
+            categoria=categoria,
+            monto_maximo=maxima_compra_dia,
+        )
+    except Exception:
+        logger.exception(
+            "Reactivación enviada (%s) pero no se guardó el historial. cliente_id=%s",
+            wa_message_id,
+            cliente.pk,
+        )
 
-    print(
-        "MODO ACTUAL DE CONVERSACIÓN:",
-        conversacion.modo
-    )
+    cliente.fecha_ultima_reactivacion = hoy
 
-    # ==========================================================
-    # 10. REGISTRAR HISTORIAL DE REACTIVACIÓN
-    # ==========================================================
+    print("REACTIVACIÓN ENVIADA. CLIENTE:", cliente.pk, "WA_MESSAGE_ID:", wa_message_id)
 
-    ReactivacionWhatsApp.objects.create(
-        cliente=cliente,
-        categoria=categoria,
-        monto_maximo=maxima_compra_dia,
-    )
-
-    # ==========================================================
-    # 11. ACTUALIZAR FECHA DE ÚLTIMA REACTIVACIÓN
-    # ==========================================================
-
-    cliente.fecha_ultima_reactivacion = timezone.localdate()
-
-    cliente.save(
-        update_fields=[
-            "fecha_ultima_reactivacion",
-        ]
-    )
-
-    # ==========================================================
-    # 12. RESULTADO FINAL
-    # ==========================================================
-
-    print("===================================")
-    print("REACTIVACIÓN REGISTRADA CORRECTAMENTE")
-    print("CLIENTE:", cliente.nombre)
-    print("CATEGORÍA:", categoria)
-    print("PLANTILLA:", template_name)
-    print("WA_MESSAGE_ID:", wa_message_id)
-    print("MODO:", conversacion.modo)
-    print("===================================")
-
-    return True
+    return ResultadoEnvio(True, "Reactivación enviada correctamente.")

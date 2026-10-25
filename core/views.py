@@ -4117,103 +4117,28 @@ def buscar_producto_codigo(request):
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def seguimiento_whatsapp(request):
+    """
+    Listados de seguimiento por WhatsApp.
+
+    Encuestas y controles de menores: sin cambios.
+    Renovación y reactivación: reglas en core/seguimiento.py
+      - Renovación:   última compra entre 12 y menos de 18 meses.
+      - Reactivación: última compra de 18 meses o más.
+      - Ninguna de las dos si recibió renovación o reactivación
+        en los últimos 12 meses.
+    """
+
+    from core.seguimiento import clientes_reactivacion_lista, ordenes_renovacion
+
     hoy = timezone.localdate()
 
-    # ==========================================================
-    # CLIENTES PARA REACTIVACIÓN
-    # ==========================================================
-
-    fecha_limite_reactivacion = hoy - relativedelta(months=12)
-
-    # 1. Total vendido por cliente en cada día
-    compras_diarias = (
-        TicketVenta.objects
-        .filter(cliente_id=OuterRef("pk"))
-        .values(
-            "cliente_id",
-            "fecha_emision",
-        )
-        .annotate(
-            total_dia=Sum("total")
-        )
-        .order_by("-total_dia")
-    )
-
-    # 2. Clientes cuya última compra fue hace 12 meses o más
-    clientes_reactivacion_qs = (
-        Cliente.objects
-        .filter(
-            excluir_reactivacion=False,
-            telefono__isnull=False,
-        )
-        .exclude(telefono="")
-        .filter(
-            Q(fecha_ultima_reactivacion__isnull=True)
-            |
-            Q(
-                fecha_ultima_reactivacion__lte=
-                fecha_limite_reactivacion
-            )
-        )
-        .annotate(
-            ultima_compra=Max("ticketventa__fecha_emision"),
-            maxima_compra_dia=Coalesce(
-                Subquery(
-                    compras_diarias.values("total_dia")[:1],
-                    output_field=DecimalField(
-                        max_digits=12,
-                        decimal_places=2,
-                    ),
-                ),
-                Decimal("0.00"),
-            ),
-        )
-        .filter(
-            ultima_compra__isnull=False,
-            ultima_compra__lte=fecha_limite_reactivacion,
-        )
-        .order_by(
-            "-maxima_compra_dia",
-            "ultima_compra",
-        )
-    )
-
-    clientes_reactivacion = []
-
-    for cliente in clientes_reactivacion_qs:
-        monto = cliente.maxima_compra_dia or Decimal("0.00")
-
-        if monto >= Decimal("800"):
-            categoria = "BLUE"
-        elif monto >= Decimal("300"):
-            categoria = "BLACK"
-        elif monto >= Decimal("150"):
-            categoria = "RED"
-        elif monto >= Decimal("100"):
-            categoria = "WHITE"
-        else:
-            categoria = "BROWN"
-
-        clientes_reactivacion.append({
-            "cliente": cliente,
-            "ultima_compra": cliente.ultima_compra,
-            "maxima_compra_dia": monto,
-            "categoria": categoria,
-        })
-
-
-
-    # Encuesta: entre 7 y 30 días
+    # Encuesta: entre 7 y 30 días desde la entrega
     encuesta_desde = hoy - timedelta(days=30)
     encuesta_hasta = hoy - timedelta(days=7)
 
-    # Control menores: entre 8 y 9 meses
+    # Control menores: entre 6 y 9 meses desde la entrega
     control_desde = hoy - relativedelta(months=9)
     control_hasta = hoy - relativedelta(months=6)
-
-    # Renovación adultos: entre 16 y 17 meses
-    renovacion_desde = hoy - relativedelta(months=17)
-    renovacion_hasta = hoy - relativedelta(months=12)
 
     encuestas = OrdenTrabajo.objects.select_related(
         "ticket", "ticket__cliente"
@@ -4249,22 +4174,8 @@ def seguimiento_whatsapp(request):
         ticket__cliente__telefono=""
     ).order_by("-ts_entregado")
 
-    renovaciones = OrdenTrabajo.objects.select_related(
-        "ticket", "ticket__cliente"
-    ).filter(
-        estado="ENTREGADO",
-        ts_entregado__date__gte=renovacion_desde,
-        ts_entregado__date__lte=renovacion_hasta,
-        ticket__cliente__telefono__isnull=False,
-    ).filter(
-        Q(ticket__cliente__Edad__gte=18) |
-        Q(ticket__cliente__Edad__isnull=True)
-    ).filter(
-        Q(fecha_ultima_renovacion__isnull=True) |
-        Q(fecha_ultima_renovacion__lte=hoy - relativedelta(months=12))
-    ).exclude(
-        ticket__cliente__telefono=""
-    ).order_by("-ts_entregado")
+    renovaciones = ordenes_renovacion(hoy)
+    clientes_reactivacion = clientes_reactivacion_lista(hoy)
 
     return render(request, "core/seguimiento_whatsapp.html", {
         "encuestas": encuestas,
@@ -4304,15 +4215,25 @@ def enviar_control_menor_manual(request, orden_id):
 
     if request.method == "POST":
         try:
-            enviar_control_menor_6_meses(orden)
+            enviado = enviar_control_menor_6_meses(orden)
 
-            orden.fecha_ultimo_control_menor = timezone.localdate()
+            # Solo se marca como enviado si Meta aceptó el mensaje
+            if enviado:
+                orden.control_menor_enviado = True
+                orden.fecha_ultimo_control_menor = timezone.localdate()
 
-            orden.save(update_fields=[
-                "fecha_ultimo_control_menor"
-            ])
+                orden.save(update_fields=[
+                    "control_menor_enviado",
+                    "fecha_ultimo_control_menor",
+                ])
 
-            messages.success(request, "Control de menor enviado correctamente.")
+                messages.success(request, "Control de menor enviado correctamente.")
+            else:
+                messages.error(
+                    request,
+                    "No se pudo enviar el control. Revisa el teléfono o la "
+                    "plantilla. El cliente sigue en la lista.",
+                )
 
         except Exception as e:
             messages.error(request, f"Error enviando control: {e}")
@@ -4327,17 +4248,22 @@ def enviar_renovacion_manual(request, orden_id):
 
     if request.method == "POST":
         try:
-            enviar_renovacion_anual(orden)
+            # enviar_renovacion_anual() verifica las reglas y registra
+            # renovacion_enviada y fecha_ultima_renovacion solo si
+            # Meta acepta el mensaje.
+            resultado = enviar_renovacion_anual(orden)
 
-            orden.fecha_ultima_renovacion = timezone.localdate()
-
-            orden.save(update_fields=[
-                "fecha_ultima_renovacion"
-            ])
-
-            messages.success(request, "Recordatorio de renovación enviado correctamente.")
+            if resultado:
+                messages.success(request, "Recordatorio de renovación enviado correctamente.")
+            else:
+                messages.error(
+                    request,
+                    getattr(resultado, "motivo", "")
+                    or "No se pudo enviar la renovación.",
+                )
 
         except Exception as e:
+            logger.exception("ERROR enviando renovación. orden_id=%s", orden_id)
             messages.error(request, f"Error enviando renovación: {e}")
 
     return redirect("seguimiento_whatsapp")
@@ -4347,10 +4273,12 @@ def enviar_renovacion_manual(request, orden_id):
 def eliminar_encuesta_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
-    orden.encuesta_enviada = True
-    orden.save()
+    if request.method == "POST":
+        orden.encuesta_enviada = True
+        orden.save(update_fields=["encuesta_enviada"])
 
-    messages.success(request, "Encuesta eliminada de la lista.")
+        messages.success(request, "Encuesta eliminada de la lista.")
+
     return redirect("seguimiento_whatsapp")
 
 @login_required
@@ -4372,10 +4300,14 @@ def eliminar_control_menor_manual(request, orden_id):
 def eliminar_renovacion_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
-    orden.renovacion_anual_enviada  = True
-    orden.save()
+    if request.method == "POST":
+        # Antes se usaba "renovacion_anual_enviada", campo que no existe:
+        # el cambio no se guardaba y la orden seguía en la lista.
+        orden.renovacion_enviada = True
+        orden.save(update_fields=["renovacion_enviada"])
 
-    messages.success(request, "Encuesta eliminada de la lista.")
+        messages.success(request, "Renovación eliminada de la lista.")
+
     return redirect("seguimiento_whatsapp")
 
 
@@ -4411,6 +4343,8 @@ def buscar_clientes_por_nombre(request):
 
 
 
+@login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def excluir_cliente_reactivacion(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
 
@@ -4429,24 +4363,20 @@ def excluir_cliente_reactivacion(request, cliente_id):
 def obtener_categoria_reactivacion(monto_maximo):
     """
     Determina la categoría del cliente según su máxima compra
-    acumulada en un solo día.
+    acumulada en un solo día (misma regla que el listado y el envío).
     """
 
-    if monto_maximo > Decimal("800.00"):
-        return "BLUE"
+    from core.seguimiento import categoria_por_monto
 
-    if monto_maximo > Decimal("300.00"):
-        return "BLACK"
+    return categoria_por_monto(monto_maximo)
 
-    if monto_maximo > Decimal("150.00"):
-        return "RED"
 
-    if monto_maximo > Decimal("100.00"):
-        return "WHITE"
-
-    return "BROWN"
-
+@login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def enviar_reactivacion_whatsapp(request, cliente_id):
+    if request.method != "POST":
+        return redirect("seguimiento_whatsapp")
+
     try:
         logger.info(
             "Inicio de envío de reactivación. cliente_id=%s",
@@ -4458,16 +4388,9 @@ def enviar_reactivacion_whatsapp(request, cliente_id):
             pk=cliente_id,
         )
 
-        logger.info(
-            "Cliente encontrado: id=%s, nombre=%s, telefono=%s",
-            cliente.id,
-            cliente.nombre,
-            cliente.telefono,
-        )
+        resultado = enviar_reactivacion(cliente)
 
-        ok = enviar_reactivacion(cliente)
-
-        if ok:
+        if resultado:
             messages.success(
                 request,
                 "Reactivación enviada correctamente.",
@@ -4475,7 +4398,8 @@ def enviar_reactivacion_whatsapp(request, cliente_id):
         else:
             messages.error(
                 request,
-                "No se pudo enviar la reactivación.",
+                getattr(resultado, "motivo", "")
+                or "No se pudo enviar la reactivación.",
             )
 
         return redirect("seguimiento_whatsapp")
