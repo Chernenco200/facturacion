@@ -1183,15 +1183,6 @@ def guardar_ticket(request):
 
 # Funciones auxiliares para impresión de medidas
 # No alteran los valores almacenados en la base de datos.
-def formato_cilindro_eje(valor):
-    if valor is None or str(valor).strip() == "":
-        return "0"
-    try:
-        if float(str(valor).replace(",", ".")) == 0:
-            return "0"
-    except (ValueError, TypeError):
-        pass
-    return str(valor)
 
 def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos=None, fecha_emision=None, hora_emision=None, fecha_entrega=None, hora_entrega=None, telefono=None, cliente=None, vendedor=None, receta=None):
     """
@@ -1277,15 +1268,26 @@ def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos
             elif num < 0:
                 return f"{num:.2f}"
             else:
-                return "0.00"
+                return "0"
 
         except:
             return str(valor)
+
+    def formato_cilindro_eje(valor):
+        if valor is None or str(valor).strip() == "":
+            return "0"
+        try:
+            if float(str(valor).replace(",", ".")) == 0:
+                return "0"
+        except (ValueError, TypeError):
+            pass
+        return str(valor)
+
     fila_OD = [
         "OD",
         formato_signo(receta.get("esf_lejos_OD", "")),
         formato_signo(receta.get("cil_lejos_OD", "")),
-        formato_signo(receta.get("eje_lejos_OD", "")),
+        formato_cilindro_eje(receta.get("eje_lejos_OD", "")),
         receta.get("DIP_lejos_OD", ""),
         receta.get("Add_lejos_OD", ""),
         #receta.get("AV_lejos_OD", ""),
@@ -1299,7 +1301,7 @@ def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos
         "OI",
         formato_signo(receta.get("esf_lejos_OI", "")),
         formato_signo(receta.get("cil_lejos_OI", "")),
-        formato_signo(receta.get("eje_lejos_OI", "")),
+        formato_cilindro_eje(receta.get("eje_lejos_OI", "")),
         receta.get("DIP_lejos_OI", ""),
         receta.get("Add_lejos_OI", ""),
         #receta.get("AV_lejos_OI", ""),
@@ -1328,7 +1330,7 @@ def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos
             "OD",
             formato_signo(receta.get("esf_cerca_OD", "")),
             formato_signo(receta.get("cil_cerca_OD", "")),
-            formato_signo(receta.get("eje_cerca_OD", "")),
+            formato_cilindro_eje(receta.get("eje_cerca_OD", "")),
             receta.get("DIP_cerca_OD", ""),
             #receta.get("AV_cerca_OD", ""),
         ]
@@ -1340,7 +1342,7 @@ def dibujar_orden_trabajo(p, ancho_mm=80, alto_mm=270, *, numero=None, productos
             "OI",
             formato_signo(receta.get("esf_cerca_OI", "")),
             formato_signo(receta.get("cil_cerca_OI", "")),
-            formato_signo(receta.get("eje_cerca_OI", "")),
+            formato_cilindro_eje(receta.get("eje_cerca_OI", "")),
             receta.get("DIP_cerca_OI", ""),
             #receta.get("AV_cerca_OI", ""),
         ]
@@ -1439,11 +1441,22 @@ def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
 
         except:
             return str(valor)    
+
+    def formato_cilindro_eje(valor):
+        if valor is None or str(valor).strip() == "":
+            return "0"
+        try:
+            if float(str(valor).replace(",", ".")) == 0:
+                return "0"
+        except (ValueError, TypeError):
+            pass
+        return str(valor)
+
     fila_OD = [
         "OD",
         formato_signo(receta.get("esf_lejos_OD", "")),
         formato_signo(receta.get("cil_lejos_OD", "")),
-        formato_signo(receta.get("eje_lejos_OD", "")),
+        formato_cilindro_eje(receta.get("eje_lejos_OD", "")),
         receta.get("DIP_lejos_OD", ""),
         receta.get("Add_lejos_OD", ""),
         receta.get("AV_lejos_OD", ""),
@@ -1457,7 +1470,7 @@ def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
         "OI",
         formato_signo(receta.get("esf_lejos_OI", "")),
         formato_signo(receta.get("cil_lejos_OI", "")),
-        formato_signo(receta.get("eje_lejos_OI", "")),
+        formato_cilindro_eje(receta.get("eje_lejos_OI", "")),
         receta.get("DIP_lejos_OI", ""),
         receta.get("Add_lejos_OI", ""),
         receta.get("AV_lejos_OI", ""),
@@ -1485,8 +1498,8 @@ def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
         fila_ODc = [
             "OD",
             formato_signo(receta.get("esf_cerca_OD", "")),
-            receta.get("cil_cerca_OD", ""),
-            receta.get("eje_cerca_OD", ""),
+            formato_signo(receta.get("cil_cerca_OD", "")),
+            formato_cilindro_eje(("eje_cerca_OD", "")),
             receta.get("DIP_cerca_OD", ""),
             receta.get("AV_cerca_OD", ""),
         ]
@@ -1497,8 +1510,8 @@ def dibujar_receta(p, *, ancho_mm=80, alto_mm=270, cliente=None, telefono=None,
         fila_OIc = [
             "OI",
             formato_signo(receta.get("esf_cerca_OI", "")),
-            receta.get("cil_cerca_OI", ""),
-            receta.get("eje_cerca_OI", ""),
+            formato_signo(receta.get("cil_cerca_OI", "")),
+            formato_signo(receta.get("eje_cerca_OI", "")),
             receta.get("DIP_cerca_OI", ""),
             receta.get("AV_cerca_OI", ""),
         ]
