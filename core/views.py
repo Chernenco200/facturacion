@@ -4120,25 +4120,28 @@ def seguimiento_whatsapp(request):
     """
     Listados de seguimiento por WhatsApp.
 
-    Encuestas y controles de menores: sin cambios.
-    Renovación y reactivación: reglas en core/seguimiento.py
-      - Renovación:   última compra entre 12 y menos de 18 meses.
+    Encuestas: sin cambios.
+    Controles de menores, renovación y reactivación: reglas en
+    core/seguimiento.py
+      - Controles:    una sola fila por menor.
+      - Renovación:   última compra entre 12 y menos de 18 meses
+                      (por cliente, no exige orden de trabajo).
       - Reactivación: última compra de 18 meses o más.
       - Ninguna de las dos si recibió renovación o reactivación
         en los últimos 12 meses.
     """
 
-    from core.seguimiento import clientes_reactivacion_lista, ordenes_renovacion
+    from core.seguimiento import (
+        clientes_reactivacion_lista,
+        clientes_renovacion_qs,
+        controles_menores_qs,
+    )
 
     hoy = timezone.localdate()
 
     # Encuesta: entre 7 y 30 días desde la entrega
     encuesta_desde = hoy - timedelta(days=30)
     encuesta_hasta = hoy - timedelta(days=7)
-
-    # Control menores: entre 6 y 9 meses desde la entrega
-    control_desde = hoy - relativedelta(months=9)
-    control_hasta = hoy - relativedelta(months=6)
 
     encuestas = OrdenTrabajo.objects.select_related(
         "ticket", "ticket__cliente"
@@ -4152,29 +4155,12 @@ def seguimiento_whatsapp(request):
         ticket__cliente__telefono=""
     ).order_by("-ts_entregado")
 
-    controles_menores = OrdenTrabajo.objects.select_related(
-        "ticket", "ticket__cliente"
-    ).filter(
-        estado="ENTREGADO",
-        ts_entregado__date__gte=control_desde,
-        ts_entregado__date__lte=control_hasta,
-        ticket__cliente__Edad__lt=18,
-        ticket__cliente__telefono__isnull=False,
+    # Control menores: 6 a 9 meses desde la entrega, una fila por menor
+    controles_menores = controles_menores_qs(hoy)
 
-        # No mostrar controles enviados o eliminados manualmente
-        control_menor_enviado=False,
+    # Renovación: por cliente (incluye compras históricas sin orden)
+    renovaciones = list(clientes_renovacion_qs(hoy))
 
-    ).filter(
-        Q(fecha_ultimo_control_menor__isnull=True) |
-        Q(
-            fecha_ultimo_control_menor__lte=
-            hoy - relativedelta(months=6)
-        )
-    ).exclude(
-        ticket__cliente__telefono=""
-    ).order_by("-ts_entregado")
-
-    renovaciones = ordenes_renovacion(hoy)
     clientes_reactivacion = clientes_reactivacion_lista(hoy)
 
     return render(request, "core/seguimiento_whatsapp.html", {
@@ -4243,15 +4229,14 @@ def enviar_control_menor_manual(request, orden_id):
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
-def enviar_renovacion_manual(request, orden_id):
-    orden = get_object_or_404(OrdenTrabajo, id=orden_id)
+def enviar_renovacion_manual(request, cliente_id):
+    cliente = get_object_or_404(Cliente, id=cliente_id)
 
     if request.method == "POST":
         try:
             # enviar_renovacion_anual() verifica las reglas y registra
-            # renovacion_enviada y fecha_ultima_renovacion solo si
-            # Meta acepta el mensaje.
-            resultado = enviar_renovacion_anual(orden)
+            # fecha_ultima_renovacion solo si Meta acepta el mensaje.
+            resultado = enviar_renovacion_anual(cliente)
 
             if resultado:
                 messages.success(request, "Recordatorio de renovación enviado correctamente.")
@@ -4263,7 +4248,7 @@ def enviar_renovacion_manual(request, orden_id):
                 )
 
         except Exception as e:
-            logger.exception("ERROR enviando renovación. orden_id=%s", orden_id)
+            logger.exception("ERROR enviando renovación. cliente_id=%s", cliente_id)
             messages.error(request, f"Error enviando renovación: {e}")
 
     return redirect("seguimiento_whatsapp")
@@ -4286,8 +4271,11 @@ def eliminar_control_menor_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
     if request.method == "POST":
-        orden.control_menor_enviado = True
-        orden.save(update_fields=["control_menor_enviado"])
+        from core.seguimiento import marcar_controles_menor_del_cliente
+
+        # Marca esta orden y las demás del mismo menor en el rango,
+        # para que no vuelva a aparecer con otra orden.
+        marcar_controles_menor_del_cliente(orden)
 
         messages.success(
             request,
@@ -4297,14 +4285,14 @@ def eliminar_control_menor_manual(request, orden_id):
     return redirect("seguimiento_whatsapp")
 
 @login_required
-def eliminar_renovacion_manual(request, orden_id):
-    orden = get_object_or_404(OrdenTrabajo, id=orden_id)
+def eliminar_renovacion_manual(request, cliente_id):
+    cliente = get_object_or_404(Cliente, id=cliente_id)
 
     if request.method == "POST":
-        # Antes se usaba "renovacion_anual_enviada", campo que no existe:
-        # el cambio no se guardaba y la orden seguía en la lista.
-        orden.renovacion_enviada = True
-        orden.save(update_fields=["renovacion_enviada"])
+        # Retira al cliente de la lista sin contarlo como mensaje enviado:
+        # no bloquea la reactivación y vuelve a aparecer si compra de nuevo.
+        cliente.renovacion_descartada = timezone.localdate()
+        cliente.save(update_fields=["renovacion_descartada"])
 
         messages.success(request, "Renovación eliminada de la lista.")
 

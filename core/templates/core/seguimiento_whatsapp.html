@@ -109,32 +109,38 @@
 
     <h4>Renovación anual</h4>
 
+    <p>
+        Clientes cuya última compra tiene entre 12 y 18 meses.
+        Total: <strong>{{ renovaciones|length }}</strong>
+    </p>
+
     <table class="table table-sm table-bordered">
         <thead>
             <tr>
-                <th>Ticket</th>
+                <th>Último ticket</th>
                 <th>Cliente</th>
                 <th>Teléfono</th>
-                <th>Entregado</th>
+                <th>Última compra</th>
                 <th>Acción</th>
             </tr>
         </thead>
         <tbody>
-            {% for orden in renovaciones %}
+            {% for cliente in renovaciones %}
             <tr>
-                <td>{{ orden.ticket.numero|stringformat:"06d" }}</td>
-                <td>{{ orden.ticket.cliente.nombre }}</td>
-                <td>{{ orden.ticket.cliente.telefono }}</td>
-                <td>{{ orden.ts_entregado|date:"d/m/Y H:i" }}</td>
+                <td>{{ cliente.ultimo_ticket|stringformat:"06d" }}</td>
+                <td>{{ cliente.nombre }}</td>
+                <td>{{ cliente.telefono }}</td>
+                <td>{{ cliente.ultima_compra|date:"d/m/Y" }}</td>
                 <td class="d-flex gap-1">
-                    <form method="post" action="{% url 'enviar_renovacion_manual' orden.id %}">
+                    <form method="post" action="{% url 'enviar_renovacion_manual' cliente.id %}"
+                        onsubmit="return confirm('¿Enviar recordatorio de renovación a {{ cliente.nombre|escapejs }}?');">
                         {% csrf_token %}
                         <button class="btn btn-success btn-sm">
                             Enviar renovación
                         </button>
                     </form>
 
-                    <form method="post" action="{% url 'eliminar_renovacion_manual' orden.id %}"
+                    <form method="post" action="{% url 'eliminar_renovacion_manual' cliente.id %}"
                         onsubmit="return confirm('¿Eliminar esta renovación pendiente?');">
                         {% csrf_token %}
                         <button class="btn btn-danger btn-sm">

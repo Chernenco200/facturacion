@@ -232,6 +232,19 @@ class Cliente(models.Model):
         default=False
     )
 
+    # Seguimiento de renovación por cliente (ver core/seguimiento.py)
+    fecha_ultima_renovacion = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    # Fecha en que se retiró al cliente de la lista de renovación
+    # sin enviarle mensaje. Vuelve a aparecer si compra de nuevo.
+    renovacion_descartada = models.DateField(
+        null=True,
+        blank=True
+    )
+
 
     def __str__(self):
         return self.nombre

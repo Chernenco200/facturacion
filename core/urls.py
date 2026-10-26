@@ -139,11 +139,11 @@ urlpatterns = [
 
     path("seguimiento-whatsapp/control-menor/<int:orden_id>/", views.enviar_control_menor_manual, name="enviar_control_menor_manual"),
 
-    path("seguimiento-whatsapp/renovacion/<int:orden_id>/", views.enviar_renovacion_manual, name="enviar_renovacion_manual"),
+    path("seguimiento-whatsapp/renovacion/<int:cliente_id>/", views.enviar_renovacion_manual, name="enviar_renovacion_manual"),
 
     path("seguimiento-whatsapp/eliminar-encuesta/<int:orden_id>/", views.eliminar_encuesta_manual, name="eliminar_encuesta_manual"),
     path("seguimiento-whatsapp/eliminar-control-menor/<int:orden_id>/", views.eliminar_control_menor_manual, name="eliminar_control_menor_manual"),
-    path("seguimiento-whatsapp/eliminar-renovacion/<int:orden_id>/", views.eliminar_renovacion_manual, name="eliminar_renovacion_manual"),
+    path("seguimiento-whatsapp/eliminar-renovacion/<int:cliente_id>/", views.eliminar_renovacion_manual, name="eliminar_renovacion_manual"),
 
     path("clientes/buscar-por-nombre/", views.buscar_clientes_por_nombre, name="buscar_clientes_por_nombre"),
 

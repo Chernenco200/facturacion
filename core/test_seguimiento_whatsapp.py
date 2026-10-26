@@ -22,7 +22,8 @@ from core.seguimiento import (
     categoria_por_monto,
     clientes_reactivacion_lista,
     clientes_reactivacion_qs,
-    ordenes_renovacion,
+    clientes_renovacion_qs,
+    controles_menores_qs,
 )
 from whatsapp.models import ConversacionWhatsApp, MensajeWhatsApp
 from whatsapp.utils import enviar_reactivacion, enviar_renovacion_anual
@@ -81,7 +82,7 @@ class BaseSeguimiento(TestCase):
         return ticket, ot
 
     def ids_renovacion(self):
-        return set(ordenes_renovacion(self.hoy).values_list("ticket__cliente_id", flat=True))
+        return set(clientes_renovacion_qs(self.hoy).values_list("id", flat=True))
 
     def ids_reactivacion(self):
         return set(clientes_reactivacion_qs(self.hoy).values_list("id", flat=True))
@@ -135,31 +136,30 @@ class ReglasListadosTests(BaseSeguimiento):
         self.assertNotIn(c.id, self.ids_renovacion())
         self.assertNotIn(c.id, self.ids_reactivacion())
 
-    def test_varias_ordenes_un_solo_registro_con_la_mas_reciente(self):
+    def test_varias_compras_un_solo_registro(self):
         c = self.cliente()
         self.compra(c, self.meses_atras(16))
-        _, ot_reciente = self.compra(c, self.meses_atras(13))
+        self.compra(c, self.meses_atras(13))
 
-        filas = list(ordenes_renovacion(self.hoy).filter(ticket__cliente=c))
+        filas = list(clientes_renovacion_qs(self.hoy).filter(pk=c.pk))
 
         self.assertEqual(len(filas), 1)
-        self.assertEqual(filas[0].id, ot_reciente.id)
+        self.assertEqual(filas[0].ultima_compra, self.meses_atras(13))
+        self.assertEqual(filas[0].ultimo_ticket, 2)
 
-    def test_ultima_compra_sin_orden_usa_la_ultima_orden_entregada(self):
+    def test_compra_historica_sin_orden_aparece_en_renovacion(self):
+        # Caso real: tickets importados del sistema antiguo, sin orden
         c = self.cliente()
-        _, ot = self.compra(c, self.meses_atras(20))
-        self.compra(c, self.meses_atras(14), orden=False)  # p. ej. un accesorio
+        self.compra(c, self.meses_atras(14), orden=False)
 
-        filas = list(ordenes_renovacion(self.hoy).filter(ticket__cliente=c))
-
-        self.assertEqual([f.id for f in filas], [ot.id])
+        self.assertIn(c.id, self.ids_renovacion())
         self.assertNotIn(c.id, self.ids_reactivacion())
 
-    def test_cliente_sin_orden_entregada_no_aparece_en_renovacion(self):
+    def test_orden_no_entregada_igual_cuenta_la_compra(self):
         c = self.cliente()
         self.compra(c, self.meses_atras(14), estado="LISTO")
 
-        self.assertNotIn(c.id, self.ids_renovacion())
+        self.assertIn(c.id, self.ids_renovacion())
 
     def test_menor_no_aparece_en_renovacion(self):
         c = self.cliente(edad=15)
@@ -187,12 +187,23 @@ class ReglasListadosTests(BaseSeguimiento):
         self.assertNotIn(c3.id, self.ids_reactivacion())
 
     def test_renovacion_eliminada_no_aparece(self):
-        c = self.cliente()
-        _, ot = self.compra(c, self.meses_atras(14))
-        ot.renovacion_enviada = True
-        ot.save()
+        c = self.cliente(renovacion_descartada=self.hoy)
+        self.compra(c, self.meses_atras(14))
 
         self.assertNotIn(c.id, self.ids_renovacion())
+
+    def test_eliminada_vuelve_si_compra_despues(self):
+        c = self.cliente(renovacion_descartada=self.meses_atras(16))
+        self.compra(c, self.meses_atras(17))
+        self.compra(c, self.meses_atras(13))
+
+        self.assertIn(c.id, self.ids_renovacion())
+
+    def test_eliminada_no_bloquea_reactivacion(self):
+        c = self.cliente(renovacion_descartada=self.meses_atras(3))
+        self.compra(c, self.meses_atras(25))
+
+        self.assertIn(c.id, self.ids_reactivacion())
 
     def test_excluido_no_aparece_en_reactivacion(self):
         c = self.cliente(excluir_reactivacion=True)
@@ -201,18 +212,14 @@ class ReglasListadosTests(BaseSeguimiento):
         self.assertNotIn(c.id, self.ids_reactivacion())
 
     def test_renovacion_reciente_bloquea_reactivacion(self):
-        c = self.cliente()
-        _, ot = self.compra(c, self.meses_atras(19))
-        ot.fecha_ultima_renovacion = self.meses_atras(2)
-        ot.save()
+        c = self.cliente(fecha_ultima_renovacion=self.meses_atras(2))
+        self.compra(c, self.meses_atras(19))
 
         self.assertNotIn(c.id, self.ids_reactivacion())
 
     def test_renovacion_de_hace_12_meses_ya_no_bloquea(self):
-        c = self.cliente()
-        _, ot = self.compra(c, self.meses_atras(30))
-        ot.fecha_ultima_renovacion = self.meses_atras(12)
-        ot.save()
+        c = self.cliente(fecha_ultima_renovacion=self.meses_atras(12))
+        self.compra(c, self.meses_atras(30))
 
         self.assertIn(c.id, self.ids_reactivacion())
 
@@ -241,8 +248,8 @@ class ReglasListadosTests(BaseSeguimiento):
         self.assertEqual(len(renov), 6)    # 12, 13, 14, 15, 16, 17 meses
         self.assertEqual(len(react), 23)   # 18 a 40 meses
 
-        filas = list(ordenes_renovacion(self.hoy))
-        self.assertEqual(len(filas), len({f.ticket.cliente_id for f in filas}))
+        filas = list(clientes_renovacion_qs(self.hoy))
+        self.assertEqual(len(filas), len({f.id for f in filas}))
 
 
 class CategoriasTests(BaseSeguimiento):
@@ -286,7 +293,7 @@ class EnvioRenovacionTests(BaseSeguimiento):
     @patch(TEXTO)
     @patch(TEMPLATE, return_value="wamid.RENOV1")
     def test_envio_exitoso_fuera_de_ventana(self, m_template, m_texto):
-        resultado = enviar_renovacion_anual(self.ot)
+        resultado = enviar_renovacion_anual(self.c)
 
         self.assertTrue(resultado)
         m_texto.assert_not_called()
@@ -297,9 +304,8 @@ class EnvioRenovacionTests(BaseSeguimiento):
             devolver_id=True,
         )
 
-        self.ot.refresh_from_db()
-        self.assertTrue(self.ot.renovacion_enviada)
-        self.assertEqual(self.ot.fecha_ultima_renovacion, self.hoy)
+        self.c.refresh_from_db()
+        self.assertEqual(self.c.fecha_ultima_renovacion, self.hoy)
 
         msg = MensajeWhatsApp.objects.get(wa_message_id="wamid.RENOV1")
         self.assertEqual(msg.tipo, "SALIENTE")
@@ -315,7 +321,7 @@ class EnvioRenovacionTests(BaseSeguimiento):
     def test_dentro_de_ventana_envia_texto(self, m_texto, m_template):
         MensajeWhatsApp.objects.create(numero="51987654321", tipo="ENTRANTE", mensaje="Hola")
 
-        self.assertTrue(enviar_renovacion_anual(self.ot))
+        self.assertTrue(enviar_renovacion_anual(self.c))
 
         m_template.assert_not_called()
         args, kwargs = m_texto.call_args
@@ -326,32 +332,30 @@ class EnvioRenovacionTests(BaseSeguimiento):
     @patch(TEMPLATE, return_value=None)
     def test_meta_rechaza_libera_la_reserva(self, m_template):
         fecha_antigua = self.meses_atras(30)
-        self.ot.fecha_ultima_renovacion = fecha_antigua
-        self.ot.save()
+        self.c.fecha_ultima_renovacion = fecha_antigua
+        self.c.save()
 
-        resultado = enviar_renovacion_anual(self.ot)
+        resultado = enviar_renovacion_anual(self.c)
 
         self.assertFalse(resultado)
         self.assertIn("no aceptó", resultado.motivo)
 
-        self.ot.refresh_from_db()
-        self.assertFalse(self.ot.renovacion_enviada)
-        self.assertEqual(self.ot.fecha_ultima_renovacion, fecha_antigua)
+        self.c.refresh_from_db()
+        self.assertEqual(self.c.fecha_ultima_renovacion, fecha_antigua)
         self.assertFalse(MensajeWhatsApp.objects.filter(tipo="SALIENTE").exists())
         self.assertIn(self.c.id, self.ids_renovacion())
 
     @patch(TEMPLATE, side_effect=RuntimeError("timeout"))
     def test_excepcion_de_red_libera_la_reserva(self, m_template):
-        self.assertFalse(enviar_renovacion_anual(self.ot))
+        self.assertFalse(enviar_renovacion_anual(self.c))
 
-        self.ot.refresh_from_db()
-        self.assertFalse(self.ot.renovacion_enviada)
-        self.assertIsNone(self.ot.fecha_ultima_renovacion)
+        self.c.refresh_from_db()
+        self.assertIsNone(self.c.fecha_ultima_renovacion)
 
     @patch(TEMPLATE, return_value="wamid.X")
     def test_segundo_clic_no_reenvia(self, m_template):
-        self.assertTrue(enviar_renovacion_anual(self.ot))
-        self.assertFalse(enviar_renovacion_anual(self.ot))
+        self.assertTrue(enviar_renovacion_anual(self.c))
+        self.assertFalse(enviar_renovacion_anual(self.c))
 
         self.assertEqual(m_template.call_count, 1)
         self.assertEqual(MensajeWhatsApp.objects.filter(tipo="SALIENTE").count(), 1)
@@ -360,24 +364,39 @@ class EnvioRenovacionTests(BaseSeguimiento):
     def test_no_envia_si_compro_despues(self, m_template):
         self.compra(self.c, self.meses_atras(1))
 
-        resultado = enviar_renovacion_anual(self.ot)
+        resultado = enviar_renovacion_anual(self.c)
 
         self.assertFalse(resultado)
         m_template.assert_not_called()
 
     @patch(TEMPLATE, return_value="wamid.X")
-    def test_no_envia_orden_antigua_si_hay_otra_mas_reciente(self, m_template):
-        _, ot_nueva = self.compra(self.c, self.meses_atras(13))
+    def test_acepta_orden_por_compatibilidad(self, m_template):
+        self.assertTrue(enviar_renovacion_anual(self.ot))
 
-        self.assertFalse(enviar_renovacion_anual(self.ot))
-        self.assertTrue(enviar_renovacion_anual(ot_nueva))
-        self.assertEqual(m_template.call_count, 1)
+        self.c.refresh_from_db()
+        self.assertEqual(self.c.fecha_ultima_renovacion, self.hoy)
+
+    @patch(TEMPLATE, return_value="wamid.HIST")
+    def test_cliente_historico_sin_orden(self, m_template):
+        c = self.cliente(nombre="CLIENTE HISTORICO")
+        self.compra(c, self.meses_atras(15), orden=False)
+
+        self.assertTrue(enviar_renovacion_anual(c))
+        self.assertEqual(m_template.call_args.kwargs["template_name"], "renovacion_anual")
+
+    @patch(TEMPLATE, return_value="wamid.X")
+    def test_no_envia_si_fue_eliminado(self, m_template):
+        self.c.renovacion_descartada = self.hoy
+        self.c.save()
+
+        self.assertFalse(enviar_renovacion_anual(self.c))
+        m_template.assert_not_called()
 
     @patch(TEMPLATE, return_value="wamid.X")
     def test_conserva_modo_humano(self, m_template):
         ConversacionWhatsApp.objects.create(numero="51987654321", modo="HUMANO", estado="ASESOR")
 
-        self.assertTrue(enviar_renovacion_anual(self.ot))
+        self.assertTrue(enviar_renovacion_anual(self.c))
 
         conv = ConversacionWhatsApp.objects.get(numero="51987654321")
         self.assertEqual(conv.modo, "HUMANO")
@@ -387,9 +406,8 @@ class EnvioRenovacionTests(BaseSeguimiento):
     def test_telefono_invalido(self, m_template):
         self.c.telefono = "12345"
         self.c.save()
-        self.ot.refresh_from_db()
 
-        self.assertFalse(enviar_renovacion_anual(self.ot))
+        self.assertFalse(enviar_renovacion_anual(self.c))
         m_template.assert_not_called()
 
 
@@ -458,10 +476,8 @@ class EnvioReactivacionTests(BaseSeguimiento):
 
     @patch(TEMPLATE, return_value="wamid.X")
     def test_no_envia_si_recibio_renovacion_reciente(self, m_template):
-        c = self.cliente()
-        _, ot = self.compra(c, self.meses_atras(20))
-        ot.fecha_ultima_renovacion = self.meses_atras(3)
-        ot.save()
+        c = self.cliente(fecha_ultima_renovacion=self.meses_atras(3))
+        self.compra(c, self.meses_atras(20))
 
         self.assertFalse(enviar_reactivacion(c))
         m_template.assert_not_called()
@@ -489,7 +505,7 @@ class EnvioReactivacionTests(BaseSeguimiento):
         c = self.cliente()
         _, ot = self.compra(c, self.meses_atras(17, dias=25))
 
-        self.assertTrue(enviar_renovacion_anual(ot))
+        self.assertTrue(enviar_renovacion_anual(c))
 
         # Aunque pase a 18+ meses, no recibe reactivación en 12 meses
         ot.ticket.fecha_emision = self.meses_atras(19)
@@ -520,7 +536,7 @@ class VistasSeguimientoTests(BaseSeguimiento):
 
     def test_pantalla_muestra_las_cuatro_listas(self):
         c_renov = self.cliente(nombre="CLIENTE RENOVACION")
-        self.compra(c_renov, self.meses_atras(14))
+        self.compra(c_renov, self.meses_atras(14), orden=False)
 
         c_react = self.cliente(nombre="CLIENTE REACTIVACION")
         self.compra(c_react, self.meses_atras(25), total="400.00")
@@ -556,46 +572,45 @@ class VistasSeguimientoTests(BaseSeguimiento):
 
     def test_eliminar_renovacion_la_quita_de_la_lista(self):
         c = self.cliente()
-        _, ot = self.compra(c, self.meses_atras(14))
+        self.compra(c, self.meses_atras(14))
 
-        r = self.client.post(reverse("eliminar_renovacion_manual", args=[ot.id]), follow=True)
+        r = self.client.post(reverse("eliminar_renovacion_manual", args=[c.id]), follow=True)
 
-        ot.refresh_from_db()
-        self.assertTrue(ot.renovacion_enviada)
-        self.assertIsNone(ot.fecha_ultima_renovacion)  # no cuenta como mensaje enviado
+        c.refresh_from_db()
+        self.assertEqual(c.renovacion_descartada, self.hoy)
+        self.assertIsNone(c.fecha_ultima_renovacion)  # no cuenta como mensaje enviado
         self.assertContains(r, "Renovación eliminada de la lista.")
         self.assertNotIn(c.id, self.ids_renovacion())
 
     def test_eliminar_por_get_no_hace_nada(self):
         c = self.cliente()
-        _, ot = self.compra(c, self.meses_atras(14))
+        self.compra(c, self.meses_atras(14))
 
-        self.client.get(reverse("eliminar_renovacion_manual", args=[ot.id]))
+        self.client.get(reverse("eliminar_renovacion_manual", args=[c.id]))
 
-        ot.refresh_from_db()
-        self.assertFalse(ot.renovacion_enviada)
+        c.refresh_from_db()
+        self.assertIsNone(c.renovacion_descartada)
 
     @patch(TEMPLATE, return_value=None)
     def test_boton_renovacion_si_falla_no_marca(self, m_template):
         c = self.cliente()
-        _, ot = self.compra(c, self.meses_atras(14))
+        self.compra(c, self.meses_atras(14))
 
-        r = self.client.post(reverse("enviar_renovacion_manual", args=[ot.id]), follow=True)
+        r = self.client.post(reverse("enviar_renovacion_manual", args=[c.id]), follow=True)
 
-        ot.refresh_from_db()
-        self.assertIsNone(ot.fecha_ultima_renovacion)
-        self.assertFalse(ot.renovacion_enviada)
+        c.refresh_from_db()
+        self.assertIsNone(c.fecha_ultima_renovacion)
         self.assertContains(r, "no aceptó el mensaje")
 
     @patch(TEMPLATE, return_value="wamid.OK")
     def test_boton_renovacion_exitoso(self, m_template):
         c = self.cliente()
-        _, ot = self.compra(c, self.meses_atras(14))
+        self.compra(c, self.meses_atras(14), orden=False)
 
-        r = self.client.post(reverse("enviar_renovacion_manual", args=[ot.id]), follow=True)
+        r = self.client.post(reverse("enviar_renovacion_manual", args=[c.id]), follow=True)
 
-        ot.refresh_from_db()
-        self.assertEqual(ot.fecha_ultima_renovacion, self.hoy)
+        c.refresh_from_db()
+        self.assertEqual(c.fecha_ultima_renovacion, self.hoy)
         self.assertContains(r, "Recordatorio de renovación enviado correctamente.")
 
     @patch(TEMPLATE, return_value=None)
@@ -675,3 +690,93 @@ class VistasSeguimientoTests(BaseSeguimiento):
         c.refresh_from_db()
         self.assertTrue(c.excluir_reactivacion)
         self.assertNotIn(c.id, self.ids_reactivacion())
+
+
+    def test_eliminar_control_quita_todas_las_ordenes_del_menor(self):
+        c = self.cliente(edad=12)
+        _, ot1 = self.compra(c, self.meses_atras(7))
+        _, ot2 = self.compra(c, self.meses_atras(7))
+
+        self.client.post(reverse("eliminar_control_menor_manual", args=[ot2.id]))
+
+        ot1.refresh_from_db()
+        ot2.refresh_from_db()
+        self.assertTrue(ot1.control_menor_enviado)
+        self.assertTrue(ot2.control_menor_enviado)
+        self.assertFalse(controles_menores_qs(self.hoy).exists())
+
+
+# ==================================================================
+# CONTROLES DE MENORES: UNA FILA POR MENOR
+# ==================================================================
+
+class ControlesMenoresTests(BaseSeguimiento):
+
+    def test_dos_ordenes_del_mismo_menor_una_sola_fila(self):
+        c = self.cliente(edad=16)
+        _, ot1 = self.compra(c, self.meses_atras(7))
+        _, ot2 = self.compra(c, self.meses_atras(7))
+
+        filas = list(controles_menores_qs(self.hoy))
+
+        self.assertEqual([f.id for f in filas], [ot2.id])
+
+    def test_menores_distintos_aparecen_todos(self):
+        for i in range(3):
+            c = self.cliente(nombre=f"MENOR {i}", edad=10)
+            self.compra(c, self.meses_atras(7))
+
+        self.assertEqual(controles_menores_qs(self.hoy).count(), 3)
+
+    def test_control_reciente_en_otra_orden_lo_excluye(self):
+        c = self.cliente(edad=16)
+        _, ot1 = self.compra(c, self.meses_atras(7))
+        _, ot2 = self.compra(c, self.meses_atras(7))
+        ot2.fecha_ultimo_control_menor = self.hoy
+        ot2.control_menor_enviado = True
+        ot2.save()
+
+        self.assertFalse(controles_menores_qs(self.hoy).exists())
+
+    def test_fuera_de_rango_y_adultos_no_aparecen(self):
+        self.compra(self.cliente(edad=10), self.meses_atras(4))
+        self.compra(self.cliente(edad=10), self.meses_atras(11))
+        self.compra(self.cliente(edad=30), self.meses_atras(7))
+
+        self.assertFalse(controles_menores_qs(self.hoy).exists())
+
+
+# ==================================================================
+# MIGRACIÓN: COPIA DE RENOVACIONES A CLIENTE
+# ==================================================================
+
+class MigracionRenovacionTests(BaseSeguimiento):
+
+    def test_copia_fechas_y_descartes(self):
+        import importlib
+        from django.apps import apps
+
+        mig = importlib.import_module("core.migrations.0013_cliente_fecha_ultima_renovacion")
+
+        c1 = self.cliente()
+        _, a = self.compra(c1, self.meses_atras(20))
+        _, b = self.compra(c1, self.meses_atras(15))
+        OrdenTrabajo.objects.filter(pk=a.pk).update(fecha_ultima_renovacion=self.meses_atras(8))
+        OrdenTrabajo.objects.filter(pk=b.pk).update(fecha_ultima_renovacion=self.meses_atras(2))
+
+        c2 = self.cliente()
+        _, d = self.compra(c2, self.meses_atras(14))
+        OrdenTrabajo.objects.filter(pk=d.pk).update(renovacion_enviada=True)
+
+        c3 = self.cliente()
+        self.compra(c3, self.meses_atras(14))
+
+        mig.copiar_renovaciones_a_cliente(apps, None)
+
+        c1.refresh_from_db(); c2.refresh_from_db(); c3.refresh_from_db()
+        self.assertEqual(c1.fecha_ultima_renovacion, self.meses_atras(2))
+        self.assertIsNone(c1.renovacion_descartada)
+        self.assertIsNone(c2.fecha_ultima_renovacion)
+        self.assertEqual(c2.renovacion_descartada, self.hoy)
+        self.assertIsNone(c3.fecha_ultima_renovacion)
+        self.assertIsNone(c3.renovacion_descartada)

@@ -13,20 +13,25 @@ Así la pantalla y el envío nunca aplican reglas distintas.
 REGLAS
 ------
   Renovación:   cliente adulto (o sin edad) cuya ÚLTIMA COMPRA tiene
-                12 meses o más, pero menos de 18 meses.
+                12 meses o más, pero menos de 18 meses. Se controla por
+                cliente: no exige orden de trabajo, así que incluye a los
+                clientes con compras históricas importadas.
   Reactivación: cliente cuya ÚLTIMA COMPRA tiene 18 meses o más.
 
   Ambas campañas comparten un plazo común: si el cliente recibió una
   renovación o una reactivación en los últimos 12 meses, no aparece en
   ninguna de las dos.
 
-  Las encuestas y los controles de menores NO se controlan aquí.
+  Controles de menores: una sola fila por menor (ver
+  controles_menores_qs).
+
+  Las encuestas NO se controlan aquí.
 """
 
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from django.db.models import DecimalField, Max, OuterRef, Q, Subquery, Sum
+from django.db.models import DecimalField, Exists, F, Max, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -94,37 +99,22 @@ def maxima_compra_dia_cliente(cliente):
 
 def _clientes_comerciales(hoy=None):
     """
-    Clientes con teléfono que NO recibieron renovación ni reactivación
-    en los últimos 12 meses, anotados con:
-
-      ultima_compra:      fecha del ticket más reciente
-      ultima_renovacion:  fecha de renovación más reciente (cualquier orden)
+    Clientes con teléfono y al menos una compra, que NO recibieron
+    renovación ni reactivación en los últimos 12 meses.
+    Anota ultima_compra (fecha del ticket más reciente).
     """
 
     f = fechas_referencia(hoy)
-
-    ultima_renovacion = (
-        OrdenTrabajo.objects
-        .filter(
-            ticket__cliente_id=OuterRef("pk"),
-            fecha_ultima_renovacion__isnull=False,
-        )
-        .order_by("-fecha_ultima_renovacion")
-        .values("fecha_ultima_renovacion")[:1]
-    )
 
     return (
         Cliente.objects
         .filter(telefono__isnull=False)
         .exclude(telefono="")
-        .annotate(
-            ultima_compra=Max("ticketventa__fecha_emision"),
-            ultima_renovacion=Subquery(ultima_renovacion),
-        )
+        .annotate(ultima_compra=Max("ticketventa__fecha_emision"))
         .filter(ultima_compra__isnull=False)
         .filter(
-            Q(ultima_renovacion__isnull=True)
-            | Q(ultima_renovacion__lte=f["limite_campanas"])
+            Q(fecha_ultima_renovacion__isnull=True)
+            | Q(fecha_ultima_renovacion__lte=f["limite_campanas"])
         )
         .filter(
             Q(fecha_ultima_reactivacion__isnull=True)
@@ -137,50 +127,41 @@ def _clientes_comerciales(hoy=None):
 # RENOVACIÓN
 # ==============================================================
 
-def ordenes_renovacion(hoy=None):
+def clientes_renovacion_qs(hoy=None):
     """
-    Una orden por cliente: la orden ENTREGADA más reciente de cada
-    cliente adulto cuya última compra tiene entre 12 y menos de 18 meses.
+    Clientes adultos (o sin edad) cuya última compra tiene entre 12 y
+    menos de 18 meses. Primero los que están más cerca de cumplir
+    18 meses (luego pasarían a reactivación).
     """
 
     f = fechas_referencia(hoy)
 
-    orden_mas_reciente = (
-        OrdenTrabajo.objects
-        .filter(
-            ticket__cliente_id=OuterRef("pk"),
-            estado="ENTREGADO",
-        )
-        .order_by("-ticket__fecha_emision", "-ts_entregado", "-id")
-        .values("id")[:1]
+    ultimo_ticket = (
+        TicketVenta.objects
+        .filter(cliente_id=OuterRef("pk"))
+        .order_by("-fecha_emision", "-id")
+        .values("numero")[:1]
     )
 
-    ids_ordenes = (
+    return (
         _clientes_comerciales(hoy)
         .filter(Q(Edad__gte=18) | Q(Edad__isnull=True))
         .filter(
             ultima_compra__lte=f["inicio_renovacion"],
             ultima_compra__gt=f["inicio_reactivacion"],
         )
-        .annotate(orden_renovacion_id=Subquery(orden_mas_reciente))
-        .filter(orden_renovacion_id__isnull=False)
-        .values("orden_renovacion_id")
-    )
-
-    return (
-        OrdenTrabajo.objects
-        .select_related("ticket", "ticket__cliente")
+        # Retirado manualmente de la lista: vuelve solo si compra después
         .filter(
-            id__in=ids_ordenes,
-            # Renovación ya enviada o eliminada manualmente de la lista
-            renovacion_enviada=False,
+            Q(renovacion_descartada__isnull=True)
+            | Q(renovacion_descartada__lt=F("ultima_compra"))
         )
-        .order_by("-ts_entregado")
+        .annotate(ultimo_ticket=Subquery(ultimo_ticket))
+        .order_by("ultima_compra", "nombre")
     )
 
 
-def orden_apta_renovacion(orden, hoy=None):
-    return ordenes_renovacion(hoy).filter(pk=orden.pk).exists()
+def cliente_apto_renovacion(cliente, hoy=None):
+    return clientes_renovacion_qs(hoy).filter(pk=cliente.pk).exists()
 
 
 # ==============================================================
@@ -239,3 +220,91 @@ def clientes_reactivacion_lista(hoy=None):
 
 def cliente_apto_reactivacion(cliente, hoy=None):
     return clientes_reactivacion_qs(hoy).filter(pk=cliente.pk).exists()
+
+
+# ==============================================================
+# CONTROLES DE MENORES
+# ==============================================================
+
+def controles_menores_qs(hoy=None):
+    """
+    Órdenes entregadas a menores hace 6 a 9 meses, con una sola fila
+    por cliente (su orden más reciente dentro de ese rango).
+
+    No aparece el menor si cualquiera de sus órdenes recibió un control
+    en los últimos 6 meses.
+    """
+
+    hoy = hoy or timezone.localdate()
+
+    control_desde = hoy - relativedelta(months=9)
+    control_hasta = hoy - relativedelta(months=6)
+
+    candidatas = (
+        OrdenTrabajo.objects
+        .filter(
+            estado="ENTREGADO",
+            ts_entregado__date__gte=control_desde,
+            ts_entregado__date__lte=control_hasta,
+            ticket__cliente__Edad__lt=18,
+            ticket__cliente__telefono__isnull=False,
+            # No mostrar controles enviados o eliminados manualmente
+            control_menor_enviado=False,
+        )
+        .filter(
+            Q(fecha_ultimo_control_menor__isnull=True)
+            | Q(fecha_ultimo_control_menor__lte=control_hasta)
+        )
+        .exclude(ticket__cliente__telefono="")
+    )
+
+    control_reciente = OrdenTrabajo.objects.filter(
+        ticket__cliente_id=OuterRef("ticket__cliente_id"),
+        fecha_ultimo_control_menor__gt=control_hasta,
+    )
+
+    mas_reciente = (
+        candidatas
+        .filter(ticket__cliente_id=OuterRef("ticket__cliente_id"))
+        .order_by("-ts_entregado", "-id")
+        .values("id")[:1]
+    )
+
+    return (
+        candidatas
+        .select_related("ticket", "ticket__cliente")
+        .filter(id=Subquery(mas_reciente))
+        .exclude(Exists(control_reciente))
+        .order_by("-ts_entregado")
+    )
+
+
+def marcar_controles_menor_del_cliente(orden, hoy=None):
+    """
+    Al eliminar un control de la lista, se marcan también las demás
+    órdenes del mismo menor dentro del rango, para que no reaparezca
+    con otra orden.
+    """
+
+    hoy = hoy or timezone.localdate()
+    control_hasta = hoy - relativedelta(months=6)
+
+    cliente_id = orden.ticket.cliente_id
+
+    if not cliente_id:
+        orden.control_menor_enviado = True
+        orden.save(update_fields=["control_menor_enviado"])
+        return 1
+
+    return (
+        OrdenTrabajo.objects
+        .filter(
+            Q(pk=orden.pk)
+            | Q(
+                ticket__cliente_id=cliente_id,
+                estado="ENTREGADO",
+                ts_entregado__date__lte=control_hasta,
+            )
+        )
+        .update(control_menor_enviado=True)
+    )
