@@ -110,6 +110,9 @@ class Producto(models.Model):
         ('Tous', 'Tous'),
         ('Vogue', 'Vogue'),
 
+        ('Lacoste', 'Lacoste'),      # nueva
+        ('Razza', 'Razza'),          # nueva
+        ('Fiorela', 'Fiorella Conti'),          # nueva
         ('Otros', 'Otros'),
 
         ('Acuvue', 'Acuvue'),
