@@ -654,14 +654,24 @@ def _registrar_saliente_en_bandeja(numero, nombre, mensaje, wa_message_id):
         )
 
 
-def enviar_renovacion_anual(orden):
+def enviar_renovacion_anual(cliente_u_orden):
+    """
+    Envía el recordatorio de renovación a un cliente.
+
+    Acepta un Cliente o, por compatibilidad, una OrdenTrabajo (se usa
+    su cliente). La renovación se controla por cliente.
+    """
+
     from core.models import OrdenTrabajo
-    from core.seguimiento import orden_apta_renovacion
+    from core.seguimiento import cliente_apto_renovacion
 
     hoy = timezone.localdate()
 
-    ticket = orden.ticket
-    cliente = ticket.cliente if ticket else None
+    if isinstance(cliente_u_orden, OrdenTrabajo):
+        ticket = cliente_u_orden.ticket
+        cliente = ticket.cliente if ticket else None
+    else:
+        cliente = cliente_u_orden
 
     # ==========================================================
     # 1. VALIDACIONES
@@ -692,11 +702,10 @@ def enviar_renovacion_anual(orden):
     # ==========================================================
 
     with transaction.atomic():
-        Cliente.objects.select_for_update().get(pk=cliente.pk)
-        orden_db = OrdenTrabajo.objects.select_for_update().get(pk=orden.pk)
+        cliente_db = Cliente.objects.select_for_update().get(pk=cliente.pk)
 
-        if not orden_apta_renovacion(orden_db, hoy):
-            print("RENOVACIÓN NO ENVIADA: cliente ya no es apto. ORDEN:", orden.pk)
+        if not cliente_apto_renovacion(cliente_db, hoy):
+            print("RENOVACIÓN NO ENVIADA: cliente ya no es apto. CLIENTE:", cliente.pk)
             return ResultadoEnvio(
                 False,
                 "Este cliente ya no corresponde a renovación: compró "
@@ -704,14 +713,10 @@ def enviar_renovacion_anual(orden):
                 "12 meses o fue retirado de la lista.",
             )
 
-        fecha_anterior = orden_db.fecha_ultima_renovacion
+        fecha_anterior = cliente_db.fecha_ultima_renovacion
 
-        orden_db.renovacion_enviada = True
-        orden_db.fecha_ultima_renovacion = hoy
-        orden_db.save(update_fields=[
-            "renovacion_enviada",
-            "fecha_ultima_renovacion",
-        ])
+        cliente_db.fecha_ultima_renovacion = hoy
+        cliente_db.save(update_fields=["fecha_ultima_renovacion"])
 
     # ==========================================================
     # 3. ENVIAR A META
@@ -734,7 +739,7 @@ def enviar_renovacion_anual(orden):
                 devolver_id=True,
             )
     except Exception:
-        logger.exception("Error enviando renovación. orden_id=%s", orden.pk)
+        logger.exception("Error enviando renovación. cliente_id=%s", cliente.pk)
         wa_message_id = None
 
     # ==========================================================
@@ -742,16 +747,12 @@ def enviar_renovacion_anual(orden):
     # ==========================================================
 
     if not wa_message_id:
-        OrdenTrabajo.objects.filter(
-            pk=orden.pk,
-            renovacion_enviada=True,
+        Cliente.objects.filter(
+            pk=cliente.pk,
             fecha_ultima_renovacion=hoy,
-        ).update(
-            renovacion_enviada=False,
-            fecha_ultima_renovacion=fecha_anterior,
-        )
+        ).update(fecha_ultima_renovacion=fecha_anterior)
 
-        print("RENOVACIÓN NO ACEPTADA POR META. ORDEN:", orden.pk)
+        print("RENOVACIÓN NO ACEPTADA POR META. CLIENTE:", cliente.pk)
 
         return ResultadoEnvio(
             False,
@@ -765,12 +766,12 @@ def enviar_renovacion_anual(orden):
 
     _registrar_saliente_en_bandeja(numero, cliente.nombre, mensaje, wa_message_id)
 
-    orden.renovacion_enviada = True
-    orden.fecha_ultima_renovacion = hoy
+    cliente.fecha_ultima_renovacion = hoy
 
-    print("RENOVACIÓN ENVIADA. ORDEN:", orden.pk, "WA_MESSAGE_ID:", wa_message_id)
+    print("RENOVACIÓN ENVIADA. CLIENTE:", cliente.pk, "WA_MESSAGE_ID:", wa_message_id)
 
     return ResultadoEnvio(True, "Recordatorio de renovación enviado correctamente.")
+
 
 def enviar_aviso_lentes_listos(orden):
     ticket = orden.ticket
