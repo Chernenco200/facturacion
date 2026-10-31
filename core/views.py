@@ -303,6 +303,7 @@ def lista_compras(request):
     })
 
 
+@role_required("ADMIN", "SUPERVISOR")
 def editar_producto(request, pk):
     producto = get_object_or_404(Producto, pk=pk)
     if request.method == 'POST':
@@ -354,6 +355,7 @@ def eliminar_producto(request, pk):
 
 
 
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def buscar_codigos(request):
     q = request.GET.get("q", "")
     productos = Producto.objects.filter(cod__icontains=q)
@@ -362,6 +364,7 @@ def buscar_codigos(request):
     )
 
 
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def detalle_producto_por_codigo(request):
     cod = request.GET.get("cod", "")
     try:
@@ -391,6 +394,7 @@ from datetime import datetime
 import textwrap
 
 # Este es el que imprime el ticket
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def generar_ticket_pdf(request):
     buffer = BytesIO()
 
@@ -670,6 +674,7 @@ from datetime import datetime
 
 from .models import MedidaVista  # ajusta si tu modelo se llama distinto
 
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def receta_pdf(request, medida_id):
     medida = get_object_or_404(MedidaVista, id=medida_id)
     cliente = medida.cliente  # ajusta si tu FK se llama diferente
@@ -758,6 +763,58 @@ from .models import (
     Producto,
 )
 
+def _buscar_venta_duplicada(data, fecha_emision):
+    """
+    Busca un ticket del mismo cliente, del mismo día, con el mismo total
+    y los mismos productos (descripción, cantidad e importe).
+    Devuelve el ticket existente o None.
+    """
+
+    nombre_cliente = (data.get("cliente") or "").strip()
+    if not nombre_cliente:
+        return None
+
+    cliente = Cliente.objects.filter(nombre=nombre_cliente).first()
+    if not cliente:
+        return None
+
+    try:
+        total = Decimal(str(data.get("total", "0") or "0")).quantize(Decimal("0.01"))
+
+        nuevos = sorted(
+            (
+                (det.get("descripcion") or "").strip(),
+                int(det.get("cantidad", 0) or 0),
+                Decimal(str(det.get("precio", "0") or "0")).quantize(Decimal("0.01")),
+            )
+            for det in data.get("detalles", [])
+        )
+    except (ArithmeticError, TypeError, ValueError):
+        return None
+
+    candidatos = (
+        TicketVenta.objects
+        .filter(cliente=cliente, fecha_emision=fecha_emision, total=total)
+        .prefetch_related("detalles")
+        .order_by("-numero")
+    )
+
+    for ticket in candidatos:
+        existentes = sorted(
+            (
+                (d.descripcion or "").strip(),
+                d.cantidad,
+                Decimal(d.precio).quantize(Decimal("0.01")),
+            )
+            for d in ticket.detalles.all()
+        )
+
+        if existentes == nuevos:
+            return ticket
+
+    return None
+
+
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 @require_POST
@@ -789,6 +846,26 @@ def guardar_ticket(request):
         fecha_emision = timezone.localdate()
 
     # ========================================================
+    # 0.1 HORA DE ENTREGA (formato estándar "5:30 p. m.")
+    # ========================================================
+
+    from core.horas import normalizar_hora_entrega
+
+    hora_entrega = normalizar_hora_entrega(data.get("hora_entrega", ""))
+
+    if hora_entrega is None:
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": (
+                    "Hora de entrega inválida. Escríbela con a. m. o p. m., por ejemplo "
+                    "5:30 p. m. o 17:30. La venta NO se registró."
+                ),
+            },
+            status=400,
+        )
+
+    # ========================================================
     # PROCESAR VENTA
     # ========================================================
 
@@ -797,12 +874,37 @@ def guardar_ticket(request):
         # ====================================================
         # 1. CORRELATIVO
         # ====================================================
+        #
+        # El bloqueo del correlativo hace que las ventas se
+        # registren de una en una, así la verificación de
+        # duplicados también funciona con dos pestañas abiertas.
 
         correlativo, _ = (
             ReciboCorrelativo.objects
             .select_for_update()
             .get_or_create(pk=1)
         )
+
+        # ====================================================
+        # 1.1 VENTA DUPLICADA
+        # ====================================================
+
+        if not data.get("confirmar_duplicado"):
+            duplicado = _buscar_venta_duplicada(data, fecha_emision)
+
+            if duplicado:
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "duplicado": True,
+                        "numero_existente": duplicado.numero,
+                        "error": (
+                            f"La venta ya se generó con el ticket "
+                            f"N.º {duplicado.numero:06d}."
+                        ),
+                    },
+                    status=409,
+                )
 
         correlativo.numero_actual += 1
         numero = correlativo.numero_actual
@@ -871,10 +973,7 @@ def guardar_ticket(request):
                 ""
             ),
 
-            hora_entrega=data.get(
-                "hora_entrega",
-                ""
-            ),
+            hora_entrega=hora_entrega,
 
             total=total,
             a_cuenta=a_cuenta,
@@ -2236,6 +2335,7 @@ class EditarMedidaVistaForm(forms.ModelForm):
                 })
 
 
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def editar_medida_vista(request, cliente_id, medida_id):
 
     cliente = get_object_or_404(Cliente, pk=cliente_id)
@@ -2310,6 +2410,7 @@ def editar_medida_vista(request, cliente_id, medida_id):
 
 
 @require_POST
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def eliminar_medida_vista(request, cliente_id, medida_id):
 
     cliente = get_object_or_404(Cliente, pk=cliente_id)
@@ -2622,6 +2723,7 @@ import os, json, textwrap
 # Si tienes un modelo detalle:
 # from core.models import TicketVentaDetalle
 
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def imprimir_ticket_pdf(request):
     buffer = BytesIO()
 
@@ -3516,6 +3618,7 @@ def caja_reabrir(request, fecha):
     return redirect("caja_detalle", fecha=fecha)
 
 @login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def caja_reporte_pdf(request, fecha):
     fecha_dt = datetime.strptime(fecha, "%Y-%m-%d").date()
     caja = get_or_create_caja(fecha_dt)
@@ -3711,6 +3814,7 @@ def operador_ordenes(request):
     })
 
 @login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR", "TALLER")
 def operador_cambiar_estado(request, ticket_id):
     if request.method != "POST":
         return redirect("operador_ordenes")
@@ -3751,6 +3855,7 @@ def operador_cambiar_estado(request, ticket_id):
 
     return redirect("operador_ordenes")
 
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def lista_ventas(request):
 
     recibo = request.GET.get("recibo", "").strip()
@@ -4084,17 +4189,30 @@ def eliminar_recibo(request, ticket_id):
     return redirect("lista_ventas")
 
 
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def eliminar_movimiento(request, id):
-    movimiento = get_object_or_404(MovimientoCaja, id=id)
+    movimiento = get_object_or_404(MovimientoCaja.objects.select_related("caja"), id=id)
+    fecha = movimiento.caja.fecha.strftime("%Y-%m-%d")
 
     if request.method == "POST":
-        movimiento.delete()
-        messages.success(request, "Movimiento eliminado correctamente.")
 
-    # vuelve a donde estabas
-    return redirect("caja_hoy")
+        # Igual que al agregar: una caja cerrada no se modifica.
+        # Si hay que corregirla, un ADMIN la reabre primero.
+        if movimiento.caja.cerrada:
+            messages.error(
+                request,
+                "La caja de este día está cerrada. Para eliminar un "
+                "movimiento, un administrador debe reabrirla primero.",
+            )
+        else:
+            movimiento.delete()
+            messages.success(request, "Movimiento eliminado correctamente.")
+
+    # vuelve a la caja de ese día
+    return redirect("caja_detalle", fecha=fecha)
 
 
+@role_required("ADMIN", "SUPERVISOR")
 def buscar_producto_codigo(request):
     q = request.GET.get("q", "").strip()
 
@@ -4255,6 +4373,7 @@ def enviar_renovacion_manual(request, cliente_id):
 
 
 @login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def eliminar_encuesta_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
@@ -4267,6 +4386,7 @@ def eliminar_encuesta_manual(request, orden_id):
     return redirect("seguimiento_whatsapp")
 
 @login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def eliminar_control_menor_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
@@ -4285,6 +4405,7 @@ def eliminar_control_menor_manual(request, orden_id):
     return redirect("seguimiento_whatsapp")
 
 @login_required
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def eliminar_renovacion_manual(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
 
@@ -4299,6 +4420,7 @@ def eliminar_renovacion_manual(request, cliente_id):
     return redirect("seguimiento_whatsapp")
 
 
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def buscar_clientes_por_nombre(request):
     texto = request.GET.get("q", "").strip()
 

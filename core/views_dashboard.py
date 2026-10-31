@@ -94,7 +94,7 @@ def _money(x) -> float:
 def dashboard(request):
     return render(request, "core/dashboard.html")
 
-
+@role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR", "TALLER")
 def dashboard_data(request):
     dr = _parse_range(request)
     days = _daterange_list(dr)

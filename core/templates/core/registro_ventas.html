@@ -1323,6 +1323,37 @@ document.addEventListener("DOMContentLoaded", function () {
     // HORA SUGERIDA + 1 HORA
     // ======================================================
 
+    // Acepta "5:30 p. m.", "5:30p. m.", "5:30pm", "17:30"...
+    // y devuelve siempre "5:30 p. m.". Devuelve null si no es una hora.
+    // (Misma regla que core/horas.py en el servidor.)
+    function normalizarHora(texto) {
+        const m = (texto || "").trim().match(
+            /^(\d{1,2})(?:\s*[:.h]\s*(\d{2}))?\s*(?:([ap])\s*\.?\s*m\s*\.?)?$/i
+        );
+
+        if (!m) return null;
+
+        let horas = parseInt(m[1], 10);
+        const minutos = m[2] === undefined ? 0 : parseInt(m[2], 10);
+        const ampm = (m[3] || "").toLowerCase();
+
+        if (minutos > 59) return null;
+
+        if (ampm) {
+            if (horas < 1 || horas > 12) return null;
+            if (ampm === "p" && horas !== 12) horas += 12;
+            if (ampm === "a" && horas === 12) horas = 0;
+        } else if (m[2] === undefined || horas < 13 || horas > 23) {
+            // Sin a. m./p. m. solo vale 13:00 a 23:59 (sin ambigüedad)
+            return null;
+        }
+
+        const horas12 = horas % 12 || 12;
+        const sufijo = horas >= 12 ? "p. m." : "a. m.";
+
+        return `${horas12}:${String(minutos).padStart(2, "0")} ${sufijo}`;
+    }
+
     function obtenerHoraSugerida() {
         const fecha = new Date();
 
@@ -1587,14 +1618,36 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            const horaIngresada = prompt(
-                "Hora de entrega (hh:mm am/pm):",
-                obtenerHoraSugerida()
-            );
+            let sugerida = obtenerHoraSugerida();
 
-            if (horaIngresada === null) return;
+            while (true) {
+                const horaIngresada = prompt(
+                    "Hora de entrega (ejemplo: 5:30 p. m. o 17:30):",
+                    sugerida
+                );
 
-            horaEntrega = horaIngresada.trim();
+                if (horaIngresada === null) return;
+
+                if (!horaIngresada.trim()) {
+                    horaEntrega = "";
+                    break;
+                }
+
+                const normalizada = normalizarHora(horaIngresada);
+
+                if (normalizada) {
+                    horaEntrega = normalizada;
+                    break;
+                }
+
+                alert(
+                    "Hora de entrega no reconocida: " + horaIngresada +
+                    "\n\nEscríbela con a. m. o p. m. (ejemplo: 5:30 p. m.)" +
+                    "\no en formato de 24 horas (ejemplo: 17:30)."
+                );
+
+                sugerida = horaIngresada;
+            }
         }
 
         // ==================================================
@@ -1777,7 +1830,7 @@ document.addEventListener("DOMContentLoaded", function () {
         // Se ejecuta únicamente después de confirmar.
         // ==================================================
 
-        try {
+        async function enviarVenta(datos) {
 
             const response = await fetch(
                 "/guardar-ticket/",
@@ -1791,7 +1844,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     credentials: "same-origin",
 
-                    body: JSON.stringify(datosVenta)
+                    body: JSON.stringify(datos)
                 }
             );
 
@@ -1803,6 +1856,47 @@ document.addEventListener("DOMContentLoaded", function () {
                 throw new Error(
                     "No se pudo interpretar la respuesta del servidor."
                 );
+            }
+
+            return { response, data };
+        }
+
+        try {
+
+            let { response, data } = await enviarVenta(datosVenta);
+
+            // ----------------------------------------------
+            // VENTA DUPLICADA: el servidor encontró un ticket
+            // igual (mismo cliente, día, total y productos).
+            // ----------------------------------------------
+
+            if (response.status === 409 && data.duplicado) {
+
+                const numeroExistente = String(
+                    data.numero_existente
+                ).padStart(6, "0");
+
+                const generarOtraVez = confirm(
+                    "LA VENTA YA SE GENERÓ\n\n" +
+                    `Ticket N.º ${numeroExistente}\n` +
+                    `Cliente: ${nombre}\n` +
+                    `Total: S/ ${totalGeneral.toFixed(2)}\n\n` +
+                    "¿Desea generar la misma venta otra vez?\n\n" +
+                    "Aceptar: crear un ticket nuevo.\n" +
+                    "Cancelar: NO registrar otra venta."
+                );
+
+                if (!generarOtraVez) {
+                    alert(
+                        "No se registró una nueva venta.\n\n" +
+                        `La venta ya existe con el ticket N.º ${numeroExistente}.`
+                    );
+                    return;
+                }
+
+                datosVenta.confirmar_duplicado = true;
+
+                ({ response, data } = await enviarVenta(datosVenta));
             }
 
             if (!response.ok || !data.ok) {

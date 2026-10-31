@@ -707,27 +707,21 @@ class OrdenTrabajo(models.Model):
         if not t or not t.fecha_entrega or not t.hora_entrega:
             return None
 
-        fecha = t.fecha_entrega.strip()
-        hora = t.hora_entrega.strip().lower()
+        from .horas import leer_hora
 
-        # Normalizar AM/PM
-        hora = (
-            hora.replace("a. m.", "am")
-                .replace("p. m.", "pm")
-                .replace("a.m.", "am")
-                .replace("p.m.", "pm")
-        )
+        fecha_txt = t.fecha_entrega.strip()
 
-        formatos_fecha = ["%Y-%m-%d", "%d/%m/%Y"]
-        formatos_hora = ["%H:%M", "%I:%M %p"]
+        # Acepta "5:30 p. m.", "5:30p. m.", "5:30pm", "17:30", etc.
+        hora = leer_hora(t.hora_entrega, estricto=False)
+        if hora is None:
+            return None
 
-        for f_fmt in formatos_fecha:
-            for h_fmt in formatos_hora:
-                try:
-                    dt = datetime.strptime(f"{fecha} {hora}", f"{f_fmt} {h_fmt}")
-                    return timezone.make_aware(dt)
-                except ValueError:
-                    continue
+        for f_fmt in ["%Y-%m-%d", "%d/%m/%Y"]:
+            try:
+                fecha = datetime.strptime(fecha_txt, f_fmt).date()
+                return timezone.make_aware(datetime.combine(fecha, hora))
+            except ValueError:
+                continue
 
         return None
 

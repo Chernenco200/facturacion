@@ -25,11 +25,19 @@
       <td>{{ u.profile.rol }}</td>
       <td>{{ u.is_active|yesno:"Sí,No" }}</td>
       <td class="d-flex gap-2">
+        {% if u.puede_gestionar %}
         <a class="btn btn-outline-primary btn-sm" href="{% url 'accounts:usuarios_update' u.id %}">Editar</a>
         <a class="btn btn-outline-warning btn-sm" href="{% url 'accounts:usuarios_reset_password' u.id %}">Reset pass</a>
-        <a class="btn btn-outline-danger btn-sm" href="{% url 'accounts:usuarios_toggle_active' u.id %}">
-          {% if u.is_active %}Desactivar{% else %}Activar{% endif %}
-        </a>
+        <form method="post" action="{% url 'accounts:usuarios_toggle_active' u.id %}"
+              onsubmit="return confirm('¿{% if u.is_active %}Desactivar{% else %}Activar{% endif %} a {{ u.username|escapejs }}?');">
+          {% csrf_token %}
+          <button class="btn btn-outline-danger btn-sm">
+            {% if u.is_active %}Desactivar{% else %}Activar{% endif %}
+          </button>
+        </form>
+        {% else %}
+        <span class="text-muted small">Sin permiso para modificarlo</span>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}
