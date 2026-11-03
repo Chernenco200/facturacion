@@ -390,7 +390,8 @@
                 <!-- SOLO SUPERUSUARIOS -->
                 <!-- ========================================= -->
 
-                {% if request.user.is_superuser %}
+               
+                {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
 
                     <li class="nav-item dropdown">
 

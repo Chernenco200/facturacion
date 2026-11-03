@@ -4,7 +4,7 @@ from .models import Producto
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ("cod", "descripcion", "tipo", "precio_venta","precio_anterior", "stock", "thumb_f", "thumb_d", "thumb_l")
+    list_display = ("cod", "descripcion", "tipo", "marca", "precio_venta","precio_anterior", "stock", "thumb_f", "thumb_d", "thumb_l")
     search_fields = ("cod", "descripcion")
     list_filter = ("tipo", "activo")
     readonly_fields = ("preview_f", "preview_d", "preview_l")
