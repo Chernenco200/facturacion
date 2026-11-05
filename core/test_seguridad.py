@@ -39,7 +39,7 @@ def crear_usuario(username, rol, superuser=False, staff=False):
 # Rutas que antes funcionaban sin iniciar sesión
 RUTAS_ANTES_ABIERTAS = [
     "/ventas/",
-    "/whatsapp/chat/51999999999/",
+    "/whatsapp/chat/1/",
     "/dashboard/data/",
     "/buscar-codigos/?q=a",
     "/producto-por-codigo/?codigo=a",
@@ -66,7 +66,7 @@ class SinSesionTests(TestCase):
 
     @patch("whatsapp.views.enviar_whatsapp_texto", return_value="wamid.X")
     def test_no_puede_enviar_whatsapp(self, m_envio):
-        self.client.post("/whatsapp/chat/51999999999/", {"mensaje": "hola"})
+        self.client.post("/whatsapp/chat/1/", {"mensaje": "hola"})
         m_envio.assert_not_called()
 
     def test_no_puede_borrar_movimientos_de_caja(self):

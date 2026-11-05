@@ -21,7 +21,7 @@
         {% for c in conversaciones %}
         <tr>
             <td>{{ c.nombre|default:"Cliente" }}</td>
-            <td>{{ c.numero }}</td>
+            <td>{{ c.numero_mostrar }}</td>
             <td>{{ c.ultimo_mensaje|default:"Archivo enviado" }}</td>
 
             <td>
@@ -43,7 +43,7 @@
             <td>{{ c.ultimo|date:"d/m/Y H:i" }}</td>
 
             <td>
-                <a href="{% url 'chat_whatsapp' c.numero %}" class="btn btn-success btn-sm">
+                <a href="{% url 'chat_whatsapp' c.conversacion_id %}" class="btn btn-success btn-sm">
                     Abrir chat
                 </a>
             </td>

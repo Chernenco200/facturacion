@@ -17,6 +17,8 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Max
 
 from .ai import responder_con_openai
+from .privacidad import numero_para_usuario
+from django.views.decorators.http import require_POST
 
 from datetime import timedelta
 from django.utils import timezone
@@ -1401,7 +1403,10 @@ def bandeja_whatsapp(request):
             )
 
             lista.append({
-                "numero": numero,
+                # El número completo solo se envía a la plantilla
+                # si el rol del usuario lo permite.
+                "numero_mostrar": numero_para_usuario(numero, request.user),
+                "conversacion_id": conversacion.id,
                 "nombre": nombre_mostrar,
                 "ultimo_mensaje": ultimo_msg.mensaje if ultimo_msg else "",
                 "ultimo": ultimo_msg.creado if ultimo_msg else None,
@@ -1423,17 +1428,26 @@ def bandeja_whatsapp(request):
 # CHAT WHATSAPP
 # ============================================================
 @login_required
-def chat_whatsapp(request, numero):
+def chat_whatsapp(request, conversacion_id):
 
     # ========================================================
-    # 1. NORMALIZAR NÚMERO
+    # 1. OBTENER CONVERSACIÓN Y NÚMERO
+    # ========================================================
+    #
+    # El número se obtiene de la base de datos a partir del ID.
+    # Nunca viaja en la URL.
     # ========================================================
 
-    numero = normalizar_numero(numero)
+    conversacion = get_object_or_404(
+        ConversacionWhatsApp,
+        pk=conversacion_id
+    )
 
-    if not numero:
-        print("Número inválido en chat WhatsApp.")
-        return redirect("whatsapp_bandeja")
+    try:
+        numero = normalizar_numero(conversacion.numero)
+    except ValueError:
+        print("Número inválido en chat WhatsApp. Conversación:", conversacion.id)
+        return redirect("bandeja_whatsapp")
 
     numero_sin_51 = (
         numero[2:]
@@ -1447,22 +1461,11 @@ def chat_whatsapp(request, numero):
     ]
 
     # ========================================================
-    # 2. OBTENER O CREAR CONVERSACIÓN
+    # 2. CONVERSACIÓN
     # ========================================================
-
-    conversacion, created = (
-        ConversacionWhatsApp.objects.get_or_create(
-            numero=numero,
-            defaults={
-                "modo": "BOT",
-                "estado": "INICIO",
-            }
-        )
-    )
-
-    # IMPORTANTE:
-    # Si ya existe y está en HUMANO,
-    # NO modificamos conversacion.modo.
+    #
+    # Ya se obtuvo en el paso 1.
+    # Si está en HUMANO, NO modificamos conversacion.modo.
 
     # ========================================================
     # 3. ENVÍO MANUAL
@@ -1481,7 +1484,8 @@ def chat_whatsapp(request, numero):
 
         print("===================================")
         print("=== ENVÍO MANUAL DESDE CHAT ===")
-        print("NÚMERO:", numero)
+        print("CONVERSACIÓN:", conversacion.id)
+        print("USUARIO:", request.user.username)
         print("MODO:", conversacion.modo)
         print("TEXTO:", texto)
 
@@ -1681,7 +1685,7 @@ def chat_whatsapp(request, numero):
 
         return redirect(
             "chat_whatsapp",
-            numero=numero
+            conversacion_id=conversacion.id
         )
 
     # ========================================================
@@ -1716,20 +1720,18 @@ def chat_whatsapp(request, numero):
         request,
         "whatsapp/chat.html",
         {
-            "numero": numero,
+            "numero_mostrar": numero_para_usuario(numero, request.user),
             "mensajes": mensajes,
             "conversacion": conversacion,
         }
     )
 
 @login_required
-def cambiar_modo_whatsapp(request, numero):
-    conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-        numero=numero,
-        defaults={
-            "modo": "BOT",
-            "estado": "INICIO",
-        }
+@require_POST
+def cambiar_modo_whatsapp(request, conversacion_id):
+    conversacion = get_object_or_404(
+        ConversacionWhatsApp,
+        pk=conversacion_id
     )
 
     if conversacion.modo == "BOT":
@@ -1740,7 +1742,7 @@ def cambiar_modo_whatsapp(request, numero):
 
     conversacion.save()
 
-    return redirect("chat_whatsapp", numero=numero)
+    return redirect("chat_whatsapp", conversacion_id=conversacion.id)
     
 
 def transferir_a_asesor(numero, texto_original):

@@ -144,7 +144,7 @@
 
         <div>
 
-            <h3>Chat con {{ numero }}</h3>
+            <h3>Chat con {{ numero_mostrar }}</h3>
 
             {% if conversacion.modo == "HUMANO" %}
 
@@ -171,20 +171,27 @@
 
             </a>
 
-            <a href="{% url 'cambiar_modo_whatsapp' numero %}"
-               class="btn btn-primary btn-sm">
+            <form method="POST"
+                  action="{% url 'cambiar_modo_whatsapp' conversacion.id %}"
+                  class="d-inline">
 
-                {% if conversacion.modo == "HUMANO" %}
+                {% csrf_token %}
 
-                    Activar bot
+                <button type="submit" class="btn btn-primary btn-sm">
 
-                {% else %}
+                    {% if conversacion.modo == "HUMANO" %}
 
-                    Activar humano
+                        Activar bot
 
-                {% endif %}
+                    {% else %}
 
-            </a>
+                        Activar humano
+
+                    {% endif %}
+
+                </button>
+
+            </form>
 
         </div>
 
