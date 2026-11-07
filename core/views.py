@@ -24,6 +24,7 @@ from django.shortcuts import get_object_or_404
 
 from django.http import JsonResponse
 from django.db.models import Count, F, Q, Sum, DecimalField, ExpressionWrapper
+from django.db.models import Case, IntegerField, Value, When
 
 from django.views.decorators.csrf import csrf_exempt
 import json
@@ -355,29 +356,61 @@ def eliminar_producto(request, pk):
 
 
 
+def productos_por_codigo(q, limite=20):
+    """
+    Productos cuyo código contiene q, ordenados por relevancia:
+    primero el código exacto (lo que envía la lectora de códigos de barra),
+    luego los que empiezan con q y al final los que solo lo contienen.
+    """
+    q = (q or "").strip()
+    if not q:
+        return Producto.objects.none()
+    return (
+        Producto.objects.filter(cod__icontains=q)
+        .annotate(
+            prioridad_busqueda=Case(
+                When(cod__iexact=q, then=Value(0)),
+                When(cod__istartswith=q, then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("prioridad_busqueda", "cod")[:limite]
+    )
+
+
+def producto_por_codigo_exacto(cod):
+    """Busca un producto por su código exacto (ignorando espacios y mayúsculas)."""
+    cod = (cod or "").strip()
+    if not cod:
+        return None
+    producto = Producto.objects.filter(cod=cod).first()
+    if producto is None:
+        producto = Producto.objects.filter(cod__iexact=cod).first()
+    return producto
+
+
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def buscar_codigos(request):
-    q = request.GET.get("q", "")
-    productos = Producto.objects.filter(cod__icontains=q)
-    data = list(productos.values("cod"))
-    return JsonResponse(data, safe=False
-    )
+    productos = productos_por_codigo(request.GET.get("q", ""), limite=20)
+    data = list(productos.values("cod", "descripcion"))
+    return JsonResponse(data, safe=False)
 
 
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
 def detalle_producto_por_codigo(request):
-    cod = request.GET.get("cod", "")
-    try:
-        producto = Producto.objects.get(cod=cod)
-        data = {
-            "descripcion": producto.descripcion,
-            "precio_venta": producto.precio_venta,
-            "precio_compra": producto.precio_compra,
-            "stock": producto.stock,
-            "tipo": producto.tipo,
-        }
-    except Producto.DoesNotExist:
-        data = {}
+    cod = request.GET.get("cod") or request.GET.get("codigo") or ""
+    producto = producto_por_codigo_exacto(cod)
+    if producto is None:
+        return JsonResponse({})
+    data = {
+        "cod": producto.cod,
+        "descripcion": producto.descripcion,
+        "precio_venta": producto.precio_venta,
+        "precio_compra": producto.precio_compra,
+        "stock": producto.stock,
+        "tipo": producto.tipo,
+    }
     return JsonResponse(data)
 
 
@@ -4216,7 +4249,8 @@ def eliminar_movimiento(request, id):
 def buscar_producto_codigo(request):
     q = request.GET.get("q", "").strip()
 
-    productos = Producto.objects.filter(cod__icontains=q)[:10]
+    # El código exacto va primero, así la lectora siempre lo encuentra
+    productos = productos_por_codigo(q, limite=10)
 
     data = [
         {

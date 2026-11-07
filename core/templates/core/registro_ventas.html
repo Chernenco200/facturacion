@@ -312,8 +312,10 @@
                             <div class="modal-body">
                             <div class="mb-3 position-relative">
                                 <label for="id_cod" class="form-label">Código</label>
-                                <input type="text" name="cod" class="form-control" id="id_cod" autocomplete="off">
+                                <input type="text" name="cod" class="form-control" id="id_cod" autocomplete="off"
+                                       placeholder="Escanee o escriba el código">
                                 <ul id="sugerencias-cod" class="list-group position-absolute w-100" style="z-index: 1000;"></ul>
+                                <div class="invalid-feedback" id="cod-feedback">No existe un producto con ese código.</div>
                             </div>
                             <p>
                             {{ producto_form.descripcion.label_tag }} {{ producto_form.descripcion }}
@@ -1110,52 +1112,161 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 <script>
+// Búsqueda de productos por código (escritura manual o lectora de códigos de barra).
+// La lectora "teclea" el código muy rápido y termina con Enter: al recibir Enter
+// se busca el código exacto y el producto queda seleccionado sin hacer clic.
 document.addEventListener("DOMContentLoaded", function () {
+    const modal = document.getElementById("modalProducto");
     const codInput = document.getElementById("id_cod");
     const sugerencias = document.getElementById("sugerencias-cod");
+    const feedback = document.getElementById("cod-feedback");
 
     const descripcionInput = document.getElementById("id_descripcion");
     const precioVentaInput = document.getElementById("id_precio_venta");
     const precioCompraInput = document.getElementById("id_precio_compra");
     const stockInput = document.getElementById("id_stock");
     const tipoInput = document.getElementById("id_tipo");
+    const cantidadInput = document.getElementById("id_cantidad");
+    const botonAgregar = document.getElementById("agregarProductoTabla");
+
+    if (!codInput || !sugerencias) { return; }
+
+    let temporizador = null;
+    let ultimaConsulta = 0;   // descarta respuestas que llegan tarde
+    let codigoCargado = "";   // código del producto que está en el formulario
+
+    function asignar(input, valor) {
+        if (input) { input.value = (valor === null || valor === undefined) ? "" : valor; }
+    }
+
+    function limpiarProducto() {
+        [descripcionInput, precioVentaInput, precioCompraInput, stockInput, tipoInput].forEach(function (i) { asignar(i, ""); });
+        codigoCargado = "";
+        codInput.classList.remove("is-valid", "is-invalid");
+    }
+
+    function cerrarSugerencias() { sugerencias.innerHTML = ""; }
+
+    function llenarProducto(datos) {
+        codInput.value = datos.cod;
+        asignar(descripcionInput, datos.descripcion);
+        asignar(precioVentaInput, datos.precio_venta);
+        asignar(precioCompraInput, datos.precio_compra);
+        asignar(stockInput, datos.stock);
+        asignar(tipoInput, datos.tipo);
+        codigoCargado = datos.cod;
+        codInput.classList.remove("is-invalid");
+        codInput.classList.add("is-valid");
+    }
+
+    // Busca el código exacto y llena el formulario. Devuelve true si lo encontró.
+    function seleccionarProducto(cod, opciones) {
+        opciones = opciones || {};
+        cod = (cod || "").trim();
+        if (!cod) { return Promise.resolve(false); }
+
+        clearTimeout(temporizador);
+        const consulta = ++ultimaConsulta;
+
+        return fetch(`/producto-por-codigo/?cod=${encodeURIComponent(cod)}`)
+            .then(function (res) { return res.json(); })
+            .then(function (datos) {
+                if (consulta !== ultimaConsulta) { return false; }
+                if (!datos || !datos.cod) {
+                    if (opciones.avisarSiNoExiste) {
+                        limpiarProducto();
+                        codInput.classList.add("is-invalid");
+                        if (feedback) { feedback.textContent = `No existe un producto con el código ${cod}.`; }
+                        codInput.select();
+                    }
+                    return false;
+                }
+                llenarProducto(datos);
+                if (opciones.cerrarLista) { cerrarSugerencias(); }
+                if (opciones.pasarACantidad && cantidadInput) {
+                    cantidadInput.focus();
+                    cantidadInput.select();
+                }
+                return true;
+            })
+            .catch(function () { return false; });
+    }
+
+    function mostrarSugerencias(q) {
+        const consulta = ++ultimaConsulta;
+        fetch(`/buscar-codigos/?q=${encodeURIComponent(q)}`)
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                // Si el usuario siguió escribiendo, esta respuesta ya no sirve
+                if (consulta !== ultimaConsulta || codInput.value.trim() !== q) { return; }
+
+                cerrarSugerencias();
+                data.forEach(function (item) {
+                    const li = document.createElement("li");
+                    li.textContent = item.descripcion ? `${item.cod} - ${item.descripcion}` : item.cod;
+                    li.classList.add("list-group-item", "list-group-item-action");
+                    li.addEventListener("click", function () {
+                        seleccionarProducto(item.cod, { cerrarLista: true, pasarACantidad: true });
+                    });
+                    sugerencias.appendChild(li);
+                });
+
+                // Coincidencia exacta (lectora sin Enter o código escrito completo):
+                // se selecciona sola, la lista queda visible por si busca otro.
+                const exacto = data.find(function (item) {
+                    return String(item.cod).toLowerCase() === q.toLowerCase();
+                });
+                if (exacto) { seleccionarProducto(exacto.cod); }
+            })
+            .catch(function () { /* sin conexión: no se muestran sugerencias */ });
+    }
 
     codInput.addEventListener("input", function () {
-        const query = this.value.trim();
-        sugerencias.innerHTML = "";
-
-        if (query.length > 0) {
-            fetch(`/buscar-codigos/?q=${encodeURIComponent(query)}`)
-                .then(res => res.json())
-                .then(data => {
-                    data.forEach(item => {
-                        const li = document.createElement("li");
-                        li.textContent = item.cod;
-                        li.classList.add("list-group-item", "list-group-item-action");
-                        li.addEventListener("click", function () {
-                            codInput.value = item.cod;
-                            sugerencias.innerHTML = "";
-
-                            // Obtener más datos del producto seleccionado
-                            fetch(`/producto-por-codigo/?cod=${item.cod}`)
-                                .then(res => res.json())
-                                .then(datos => {
-                                    descripcionInput.value = datos.descripcion || "";
-                                    precioVentaInput.value = datos.precio_venta || "";
-                                    precioCompraInput.value = datos.precio_compra || "";
-                                    stockInput.value = datos.stock || "";
-                                    tipoInput.value = datos.tipo || "";
-                                });
-                        });
-                        sugerencias.appendChild(li);
-                    });
-                });
-        }
+        const q = this.value.trim();
+        limpiarProducto();
+        clearTimeout(temporizador);
+        ultimaConsulta++;   // invalida búsquedas en curso
+        if (!q) { cerrarSugerencias(); return; }
+        // Espera a que termine de escribir/escanear antes de consultar
+        temporizador = setTimeout(function () { mostrarSugerencias(q); }, 250);
     });
+
+    codInput.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter") { return; }
+        e.preventDefault();   // que el Enter de la lectora no envíe el formulario
+        const q = codInput.value.trim();
+        if (!q) { return; }
+        if (q === codigoCargado) {
+            cerrarSugerencias();
+            if (cantidadInput) { cantidadInput.focus(); cantidadInput.select(); }
+            return;
+        }
+        seleccionarProducto(q, { cerrarLista: true, pasarACantidad: true, avisarSiNoExiste: true });
+    });
+
+    // Enter en Cantidad agrega el producto a la tabla
+    if (cantidadInput && botonAgregar) {
+        cantidadInput.addEventListener("keydown", function (e) {
+            if (e.key !== "Enter") { return; }
+            e.preventDefault();
+            botonAgregar.click();
+        });
+    }
+
+    // Al abrir el modal: formulario limpio y cursor en Código, listo para escanear
+    if (modal) {
+        modal.addEventListener("show.bs.modal", function () {
+            codInput.value = "";
+            limpiarProducto();
+            cerrarSugerencias();
+            if (cantidadInput) { cantidadInput.value = 1; }
+        });
+        modal.addEventListener("shown.bs.modal", function () { codInput.focus(); });
+    }
 
     document.addEventListener("click", function (e) {
         if (!codInput.contains(e.target) && !sugerencias.contains(e.target)) {
-            sugerencias.innerHTML = "";
+            cerrarSugerencias();
         }
     });
 });

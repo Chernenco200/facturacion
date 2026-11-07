@@ -251,7 +251,7 @@
     // ---------------- Filas ----------------
 
     function limpiarFila(fila) {
-        fila.querySelectorAll("input").forEach(function (input) { input.value = ""; });
+        fila.querySelectorAll("input").forEach(function (input) { input.value = ""; input.classList.remove("is-valid"); });
         fila.querySelectorAll("select").forEach(function (select) { select.value = ""; });
         fila.querySelector(".subtotal-fila").textContent = soles(0);
     }
@@ -328,44 +328,102 @@
     formaPago.addEventListener("change", actualizarPago);
 
     // ---------------- Búsqueda de productos ----------------
+    // Funciona escribiendo el código o con la lectora de códigos de barra
+    // (que teclea el código y termina con Enter).
 
+    const urlBuscar = "{% url 'buscar_producto_codigo' %}";
     let temporizador = null;
+
+    function llenarFila(fila, producto) {
+        fila.querySelector("input[name='cod[]']").value = producto.cod;
+        fila.querySelector("input[name='descripcion[]']").value = producto.descripcion || "";
+        fila.querySelector("input[name='precio_compra[]']").value = producto.precio_compra || "";
+        fila.querySelector("input[name='precio_venta[]']").value = producto.precio_venta || "";
+        if (producto.tipo) {
+            fila.querySelector("select[name='tipo[]']").value = producto.tipo;
+        }
+        recalcular();
+    }
+
+    // Consulta el código; si hay coincidencia exacta llena la fila.
+    // Devuelve una promesa con true/false (o null si la respuesta ya no aplica).
+    function buscarCodigo(campo, q) {
+        campo.dataset.consulta = q;
+        return fetch(urlBuscar + "?q=" + encodeURIComponent(q))
+            .then(function (respuesta) { return respuesta.json(); })
+            .then(function (productos) {
+                // El usuario siguió escribiendo o escaneó otro código
+                if (campo.dataset.consulta !== q || campo.value.trim() !== q) { return null; }
+
+                const lista = document.getElementById("lista-productos");
+                lista.innerHTML = "";
+                productos.forEach(function (p) {
+                    const opcion = document.createElement("option");
+                    opcion.value = p.cod;
+                    opcion.textContent = p.cod + " - " + (p.descripcion || "");
+                    lista.appendChild(opcion);
+                });
+
+                const producto = productos.find(function (p) {
+                    return String(p.cod).toLowerCase() === q.toLowerCase();
+                });
+                if (!producto) { return false; }
+
+                llenarFila(campo.closest("tr"), producto);
+                campo.classList.add("is-valid");
+                return true;
+            })
+            .catch(function () { return false; /* sin conexión: se completa a mano */ });
+    }
 
     tabla.addEventListener("input", function (evento) {
         const campo = evento.target;
         if (!campo.classList.contains("codigo-producto")) { return; }
 
-        const fila = campo.closest("tr");
+        campo.classList.remove("is-valid");
         const q = campo.value.trim();
+        clearTimeout(temporizador);
         if (q.length < 2) { return; }
 
+        temporizador = setTimeout(function () { buscarCodigo(campo, q); }, 250);
+    });
+
+    // Enter en el código (lo envía la lectora): buscar ya y no enviar la compra
+    tabla.addEventListener("keydown", function (evento) {
+        const campo = evento.target;
+        if (evento.key !== "Enter" || !campo.classList.contains("codigo-producto")) { return; }
+        evento.preventDefault();
+
+        const q = campo.value.trim();
+        if (!q) { return; }
         clearTimeout(temporizador);
-        temporizador = setTimeout(function () {
-            fetch("{% url 'buscar_producto_codigo' %}?q=" + encodeURIComponent(q))
-                .then(function (respuesta) { return respuesta.json(); })
-                .then(function (productos) {
-                    const lista = document.getElementById("lista-productos");
-                    lista.innerHTML = "";
-                    productos.forEach(function (p) {
-                        const opcion = document.createElement("option");
-                        opcion.value = p.cod;
-                        opcion.textContent = p.cod + " - " + (p.descripcion || "");
-                        lista.appendChild(opcion);
-                    });
 
-                    const producto = productos.find(function (p) { return p.cod === q; });
-                    if (!producto) { return; }
+        const fila = campo.closest("tr");
+        buscarCodigo(campo, q).then(function (encontrado) {
+            if (encontrado === null) { return; }
+            if (encontrado) {
+                const cantidad = fila.querySelector("input[name='cantidad[]']");
+                if (!cantidad.value) { cantidad.value = 1; recalcular(); }
+                cantidad.focus();
+                cantidad.select();
+            } else {
+                // Código nuevo: se registra el producto escribiendo sus datos
+                fila.querySelector("input[name='descripcion[]']").focus();
+            }
+        });
+    });
 
-                    fila.querySelector("input[name='descripcion[]']").value = producto.descripcion || "";
-                    fila.querySelector("input[name='precio_compra[]']").value = producto.precio_compra || "";
-                    fila.querySelector("input[name='precio_venta[]']").value = producto.precio_venta || "";
-                    if (producto.tipo) {
-                        fila.querySelector("select[name='tipo[]']").value = producto.tipo;
-                    }
-                    recalcular();
-                })
-                .catch(function () { /* sin conexión: se completa a mano */ });
-        }, 250);
+    // Enter en Cantidad: abre una fila nueva lista para el siguiente escaneo
+    tabla.addEventListener("keydown", function (evento) {
+        const campo = evento.target;
+        if (evento.key !== "Enter" || campo.name !== "cantidad[]") { return; }
+        evento.preventDefault();
+        const fila = campo.closest("tr");
+        if (fila === tabla.rows[tabla.rows.length - 1]) {
+            document.getElementById("boton-agregar").click();
+        } else {
+            fila.nextElementSibling.querySelector("input[name='cod[]']").focus();
+        }
     });
 
     actualizarPago();
