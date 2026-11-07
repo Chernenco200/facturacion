@@ -231,6 +231,49 @@
 
 
                 <!-- ========================================= -->
+                <!-- INVENTARIO (toma con lectora) -->
+                <!-- ========================================= -->
+
+                {% if request.user|has_role:"ADMIN,SUPERVISOR,VENDEDOR,CAJA" %}
+
+                    <li class="nav-item dropdown">
+
+                        <a
+                            class="nav-link dropdown-toggle"
+                            href="#"
+                            id="navbarInventario"
+                            role="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                        >
+                            📋 Inventario
+                        </a>
+
+                        <ul
+                            class="dropdown-menu"
+                            aria-labelledby="navbarInventario"
+                        >
+                            <li>
+                                <a class="dropdown-item" href="{% url 'tomas_lista' %}">
+                                    Toma de inventario
+                                </a>
+                            </li>
+
+                            {% if request.user|has_role:"ADMIN,SUPERVISOR" %}
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'faltantes_recurrentes' %}">
+                                        Faltantes recurrentes
+                                    </a>
+                                </li>
+                            {% endif %}
+                        </ul>
+
+                    </li>
+
+                {% endif %}
+
+
+                <!-- ========================================= -->
                 <!-- OPERACIONES -->
                 <!-- ========================================= -->
 

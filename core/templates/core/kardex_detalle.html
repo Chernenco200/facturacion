@@ -36,6 +36,9 @@
           {% else %}
             <span class="badge bg-danger">OUT</span>
           {% endif %}
+          {% if m.ajuste_id %}
+            <div class="small text-muted">Ajuste inv. #{{ m.ajuste_id }}</div>
+          {% endif %}
         </td>
         <td class="text-end">{{ m.cantidad|floatformat:2 }}</td>
         <td class="text-end">{{ m.costo_unitario|floatformat:2 }}</td>

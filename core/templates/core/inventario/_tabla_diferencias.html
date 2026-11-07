@@ -1,0 +1,51 @@
+{# filas: dicts del cálculo en vivo o DetalleTomaInventario; recontar: mostrar botón #}
+<table class="table table-sm table-hover align-middle">
+  <thead class="table-light">
+    <tr>
+      <th>Código</th><th>Montura</th>
+      <th class="text-end">Sistema</th><th class="text-end">Contado</th>
+      <th class="text-end" title="Escaneadas y vendidas después de escanearlas">Vendidas tras escanear</th>
+      <th class="text-end">Diferencia</th><th class="text-end">Valor a costo</th>
+      {% if recontar %}<th></th>{% endif %}
+      {% if con_motivo %}<th>Motivo</th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for f in filas %}
+    <tr>
+      <td><a href="{% url 'kardex_detalle' f.producto.pk %}" target="_blank">{{ f.producto.cod }}</a></td>
+      <td>{{ f.producto.descripcion|default:"" }} <span class="text-muted small">{{ f.producto.get_marca_display|default:"" }}</span></td>
+      <td class="text-end">{{ f.stock_sistema }}</td>
+      <td class="text-end">{{ f.contado }}</td>
+      <td class="text-end">{% if f.vendido_tras_lectura %}{{ f.vendido_tras_lectura }}{% else %}<span class="text-muted">0</span>{% endif %}</td>
+      <td class="text-end fw-semibold {% if f.diferencia < 0 %}text-danger{% elif f.diferencia > 0 %}text-success{% endif %}">
+        {% if f.diferencia > 0 %}+{% endif %}{{ f.diferencia }}
+      </td>
+      <td class="text-end">S/ {{ f.valor_costo|floatformat:2 }}</td>
+      {% if recontar %}
+        <td class="text-end">
+          <form method="post" action="{% url 'toma_recontar' toma.pk f.producto.pk %}" class="d-inline">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-secondary" title="Anula sus lecturas para volver a escanearlo">Recontar</button>
+          </form>
+        </td>
+      {% endif %}
+      {% if con_motivo %}
+        <td>
+          {% if editable %}
+            <select name="motivo_{{ f.producto.pk }}" form="formAjuste" class="form-select form-select-sm">
+              {% for valor, texto in motivos %}
+                <option value="{{ valor }}" {% if toma.es_inicial %}{% if valor == 'ERROR_REGISTRO' %}selected{% endif %}{% elif f.diferencia < 0 and valor == 'PERDIDA' or f.diferencia > 0 and valor == 'ERROR_REGISTRO' %}selected{% endif %}>{{ texto }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            {% for pid, texto in motivos_ajuste.items %}{% if pid == f.producto.pk %}{{ texto }}{% endif %}{% endfor %}
+          {% endif %}
+        </td>
+      {% endif %}
+    </tr>
+  {% empty %}
+    <tr><td colspan="9" class="text-center text-muted">Ninguna.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>

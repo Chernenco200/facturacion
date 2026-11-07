@@ -1,5 +1,5 @@
 from django.urls import path
-from core import views, views_dashboard  
+from core import views, views_dashboard, views_inventario
 from django.contrib.auth import views as auth_views
 urlpatterns = [
     path('', views.index, name='index'),
@@ -80,6 +80,23 @@ urlpatterns = [
 
     path("kardex/", views.kardex_resumen, name="kardex_resumen"),
     path("kardex/<int:producto_id>/", views.kardex_detalle, name="kardex_detalle"),
+
+    # Toma de inventario con lectora y ajustes
+    path("inventario/", views_inventario.tomas_lista, name="tomas_lista"),
+    path("inventario/nueva/", views_inventario.toma_nueva, name="toma_nueva"),
+    path("inventario/faltantes-recurrentes/", views_inventario.faltantes_recurrentes, name="faltantes_recurrentes"),
+    path("inventario/<int:toma_id>/escanear/", views_inventario.toma_escanear, name="toma_escanear"),
+    path("inventario/<int:toma_id>/lectura/", views_inventario.api_toma_lectura, name="api_toma_lectura"),
+    path("inventario/<int:toma_id>/deshacer/", views_inventario.api_toma_deshacer, name="api_toma_deshacer"),
+    path("inventario/<int:toma_id>/avance/", views_inventario.toma_avance, name="toma_avance"),
+    path("inventario/<int:toma_id>/recontar/<int:producto_id>/", views_inventario.toma_recontar, name="toma_recontar"),
+    path("inventario/<int:toma_id>/cerrar/", views_inventario.toma_cerrar, name="toma_cerrar"),
+    path("inventario/<int:toma_id>/reabrir/", views_inventario.toma_reabrir, name="toma_reabrir"),
+    path("inventario/<int:toma_id>/anular/", views_inventario.toma_anular, name="toma_anular"),
+    path("inventario/<int:toma_id>/reporte/", views_inventario.toma_reporte, name="toma_reporte"),
+    path("inventario/<int:toma_id>/aprobar/", views_inventario.toma_aprobar_ajuste, name="toma_aprobar_ajuste"),
+    path("inventario/<int:toma_id>/excel/", views_inventario.toma_exportar_excel, name="toma_exportar_excel"),
+    path("inventario/ajuste/<int:ajuste_id>/anular/", views_inventario.ajuste_anular, name="ajuste_anular"),
 
     path("caja/<str:fecha>/cobrar-saldo/<int:ticket_id>/", views.caja_cobrar_saldo, name="caja_cobrar_saldo"),
 

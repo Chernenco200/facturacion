@@ -66,3 +66,46 @@ class ProductoAdmin(admin.ModelAdmin):
             return None
 
         return url
+
+# ============================================================
+# TOMA DE INVENTARIO Y AJUSTES (solo consulta)
+# ============================================================
+
+from .models import (  # noqa: E402
+    AjusteInventario,
+    DetalleAjusteInventario,
+    DetalleTomaInventario,
+    TomaInventario,
+)
+
+
+class DetalleTomaInline(admin.TabularInline):
+    model = DetalleTomaInventario
+    extra = 0
+    can_delete = False
+    raw_id_fields = ("producto",)
+    readonly_fields = ("producto", "stock_sistema", "contado", "vendido_tras_lectura",
+                       "diferencia", "costo_unitario", "precio_venta", "primera_lectura")
+
+
+@admin.register(TomaInventario)
+class TomaInventarioAdmin(admin.ModelAdmin):
+    list_display = ("id", "fecha_inicio", "fecha_cierre", "estado", "creada_por")
+    list_filter = ("estado",)
+    inlines = [DetalleTomaInline]
+
+
+class DetalleAjusteInline(admin.TabularInline):
+    model = DetalleAjusteInventario
+    extra = 0
+    can_delete = False
+    raw_id_fields = ("producto",)
+    readonly_fields = ("producto", "cantidad", "costo_unitario", "motivo")
+
+
+@admin.register(AjusteInventario)
+class AjusteInventarioAdmin(admin.ModelAdmin):
+    list_display = ("id", "toma", "fecha", "estado", "aprobado_por")
+    list_filter = ("estado",)
+    inlines = [DetalleAjusteInline]
+    readonly_fields = ("toma", "fecha", "estado", "aprobado_por", "anulado_por", "fecha_anulacion")

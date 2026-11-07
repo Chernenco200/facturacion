@@ -12,6 +12,8 @@ from .models import (
     KardexMovimiento,
     DetalleCompra,
     DetalleTicketVenta,
+    AjusteInventario,
+    DetalleAjusteInventario,
 )
 
 
@@ -122,6 +124,20 @@ def _nota_credito_dt(nota):
 def recalcular_kardex_producto(
     producto: Producto,
 ):
+
+    # ========================================================
+    # 0. BLOQUEAR EL PRODUCTO
+    #
+    # Si dos ventas o compras del mismo producto se registran a la
+    # vez, el segundo recálculo espera a que termine el primero.
+    # Sin esto, ambos podrían borrar y recrear el kardex al mismo
+    # tiempo y dejar movimientos duplicados. El bloqueo dura hasta
+    # el final de la transacción (en SQLite no hace nada).
+    # ========================================================
+
+    Producto.objects.select_for_update().filter(
+        pk=producto.pk
+    ).exists()
 
     # ========================================================
     # 1. BORRAR EL KARDEX CALCULADO ACTUAL
@@ -280,6 +296,42 @@ def recalcular_kardex_producto(
             "ticket": detalle_nc.detalle_ticket.ticket_numero,
             "detalle_ticket_id": detalle_nc.detalle_ticket_id,
             "nota_credito": detalle_nc.nota_credito,
+        })
+
+    # ========================================================
+    # 4b. AJUSTES DE INVENTARIO (toma física)
+    #
+    # El ajuste es un documento propio: si se escribiera solo en
+    # el Kardex, el siguiente recálculo lo borraría.
+    # ========================================================
+
+    ajustes = (
+        DetalleAjusteInventario.objects
+        .filter(
+            producto=producto,
+            ajuste__estado=AjusteInventario.Estado.APROBADO,
+        )
+        .select_related("ajuste")
+    )
+
+    for detalle_ajuste in ajustes:
+
+        eventos.append({
+            "tipo": (
+                "IN_AJUSTE"
+                if detalle_ajuste.cantidad > 0
+                else "OUT_AJUSTE"
+            ),
+            "fecha": _con_zona(detalle_ajuste.ajuste.fecha),
+            "cantidad": Decimal(abs(detalle_ajuste.cantidad)),
+            "costo_in": Decimal(
+                str(detalle_ajuste.costo_unitario or 0)
+            ),
+            "compra": None,
+            "ticket": None,
+            "detalle_ticket_id": None,
+            "nota_credito": None,
+            "ajuste": detalle_ajuste.ajuste,
         })
 
     # ========================================================
@@ -569,6 +621,77 @@ def recalcular_kardex_producto(
             stock = nuevo_stock
 
             costo_prom = nuevo_costo_prom
+
+        # ====================================================
+        # SOBRANTE DE INVENTARIO
+        #
+        # Entra al costo promedio vigente, así el promedio no
+        # cambia y no se alteran los costos de ventas futuras.
+        # Si no hay costo previo, usa el registrado en el ajuste.
+        # ====================================================
+
+        elif tipo == "IN_AJUSTE":
+
+            costo_in = (
+                costo_prom
+                if costo_prom > Decimal("0")
+                else evento["costo_in"]
+            )
+
+            nuevo_stock = (
+                stock
+                + cantidad
+            )
+
+            if stock <= Decimal("0"):
+                nuevo_costo_prom = costo_in
+            else:
+                nuevo_costo_prom = (
+                    (stock * costo_prom) + (cantidad * costo_in)
+                ) / nuevo_stock
+
+            KardexMovimiento.objects.create(
+                producto=producto,
+                fecha=fecha_dt,
+                tipo="IN",
+                cantidad=cantidad,
+                costo_unitario=costo_in,
+                costo_total=cantidad * costo_in,
+                stock_anterior=stock,
+                stock_actual=nuevo_stock,
+                costo_promedio=nuevo_costo_prom,
+                ajuste=evento["ajuste"],
+            )
+
+            stock = nuevo_stock
+
+            costo_prom = nuevo_costo_prom
+
+        # ====================================================
+        # FALTANTE DE INVENTARIO (sale al costo promedio)
+        # ====================================================
+
+        elif tipo == "OUT_AJUSTE":
+
+            nuevo_stock = (
+                stock
+                - cantidad
+            )
+
+            KardexMovimiento.objects.create(
+                producto=producto,
+                fecha=fecha_dt,
+                tipo="OUT",
+                cantidad=cantidad,
+                costo_unitario=costo_prom,
+                costo_total=cantidad * costo_prom,
+                stock_anterior=stock,
+                stock_actual=nuevo_stock,
+                costo_promedio=costo_prom,
+                ajuste=evento["ajuste"],
+            )
+
+            stock = nuevo_stock
 
     # ========================================================
     # 8. SINCRONIZAR STOCK DEL PRODUCTO

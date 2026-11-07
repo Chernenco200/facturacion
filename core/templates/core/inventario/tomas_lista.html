@@ -1,0 +1,117 @@
+{% extends 'core/base.html' %}
+{% load tz %}
+{% block title %}Toma de inventario | Óptica IC{% endblock %}
+{% block content %}
+{% timezone "America/Lima" %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <h2 class="mb-0">📋 Toma de inventario de monturas</h2>
+  {% if puede_gestionar %}
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'faltantes_recurrentes' %}">Faltantes recurrentes</a>
+  {% endif %}
+</div>
+
+{% include 'core/inventario/_mensajes.html' %}
+
+{% if activa %}
+  <div class="alert alert-primary d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div>
+      <strong>Toma #{{ activa.pk }}{% if activa.es_inicial %} (inventario inicial){% endif %} en conteo</strong> desde el {{ activa.fecha_inicio|date:"d/m/Y H:i" }}.
+      {% if activa.observacion %}<span class="text-muted">— {{ activa.observacion }}</span>{% endif %}
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-primary" href="{% url 'toma_escanear' activa.pk %}">🔫 Escanear</a>
+      {% if puede_gestionar %}
+        <a class="btn btn-outline-primary" href="{% url 'toma_avance' activa.pk %}">Ver avance y cerrar</a>
+      {% endif %}
+    </div>
+  </div>
+{% elif puede_gestionar %}
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Nueva toma</h5>
+      <p class="text-muted small mb-2">
+        Se cuentan las monturas oftálmicas, solares y de marca. Pueden seguir vendiendo
+        durante el conteo: las ventas hechas después de escanear una montura se descuentan solas.
+        Evita registrar o acomodar compras de monturas hasta cerrar el conteo.
+      </p>
+      <form method="post" action="{% url 'toma_nueva' %}" class="row g-2">
+        {% csrf_token %}
+        <div class="col-md-8">
+          <input type="text" name="observacion" class="form-control" maxlength="255"
+                 placeholder="Observación (opcional), p. ej. Inventario de noviembre">
+        </div>
+        <div class="col-md-4 d-grid">
+          <button class="btn btn-success">Abrir toma de inventario</button>
+        </div>
+        {% if puede_ser_inicial %}
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="es_inicial" value="1" id="esInicial" checked>
+              <label class="form-check-label" for="esInicial">
+                <strong>Toma de inventario inicial (apertura)</strong>
+              </label>
+              <div class="form-text">
+                Solo para la primera toma. Su ajuste se fecha el día 1 del mes y el asiento va contra
+                50101 Capital aportado, no como faltantes o sobrantes. Desde la siguiente toma se usan
+                65901 y 75901.
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+{% else %}
+  <div class="alert alert-secondary">No hay ninguna toma en conteo. La abre un administrador o supervisor.</div>
+{% endif %}
+
+<h5>Historial</h5>
+<table class="table table-sm table-hover align-middle">
+  <thead class="table-light">
+    <tr>
+      <th>#</th><th>Inicio</th><th>Cierre</th><th>Estado</th>
+      <th class="text-end">Lecturas</th>
+      <th class="text-end">Faltantes</th><th class="text-end">Valor faltante</th>
+      <th class="text-end">Sobrantes</th><th class="text-end">Valor sobrante</th>
+      <th class="text-end">Exactitud</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for f in filas %}
+    {% with t=f.toma r=f.res %}
+    <tr>
+      <td>{{ t.pk }}</td>
+      <td>{{ t.fecha_inicio|date:"d/m/Y H:i" }}</td>
+      <td>{{ t.fecha_cierre|date:"d/m/Y H:i"|default:"—" }}</td>
+      <td>
+        <span class="badge {% if t.estado == 'EN_CONTEO' %}bg-primary{% elif t.estado == 'CERRADA' %}bg-warning text-dark{% elif t.estado == 'AJUSTADA' %}bg-success{% else %}bg-secondary{% endif %}">
+          {{ t.get_estado_display }}
+        </span>
+        {% if t.es_inicial %}<span class="badge bg-info text-dark">Inicial</span>{% endif %}
+      </td>
+      <td class="text-end">{{ t.n_lecturas }}</td>
+      {% if r %}
+        <td class="text-end text-danger">{{ r.unid_faltantes }}</td>
+        <td class="text-end text-danger">S/ {{ r.valor_faltante|floatformat:2 }}</td>
+        <td class="text-end text-success">{{ r.unid_sobrantes }}</td>
+        <td class="text-end text-success">S/ {{ r.valor_sobrante|floatformat:2 }}</td>
+        <td class="text-end">{{ r.exactitud }} %</td>
+      {% else %}
+        <td colspan="5" class="text-muted text-center">—</td>
+      {% endif %}
+      <td class="text-end">
+        {% if t.estado == 'EN_CONTEO' %}
+          <a href="{% url 'toma_escanear' t.pk %}" class="btn btn-sm btn-outline-primary">Escanear</a>
+        {% elif puede_gestionar and t.estado != 'ANULADA' %}
+          <a href="{% url 'toma_reporte' t.pk %}" class="btn btn-sm btn-outline-secondary">Reporte</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+  {% empty %}
+    <tr><td colspan="11" class="text-center text-muted">Aún no hay tomas de inventario.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endtimezone %}
+{% endblock %}

@@ -556,6 +556,13 @@ class KardexMovimiento(models.Model):
         blank=True
     )
 
+    ajuste = models.ForeignKey(
+        'AjusteInventario',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
     class Meta:
         ordering = ['fecha']
 
@@ -794,3 +801,235 @@ def recalcular_totales_ticket(ticket: "TicketVenta"):
 
     # guardamos SOLO esos campos para no tocar fecha/hora etc.
     ticket.save(update_fields=["total", "saldo"])
+
+
+# ============================================================
+# TOMA DE INVENTARIO Y AJUSTES (control mensual de monturas)
+# ============================================================
+
+from django.conf import settings as _settings
+
+
+TIPOS_MONTURA = (
+    "Monturas oftálmicas",
+    "Monturas Solares",
+    "Monturas de Marca",
+)
+
+
+class TomaInventario(models.Model):
+    """
+    Conteo físico de monturas con lectora.
+
+    Se hace con la tienda abierta: cada lectura guarda su hora y,
+    al cerrar, las ventas registradas después de escanear una
+    montura se descuentan del conteo (la montura se contó, pero
+    ya no está ni debe estar en el stock del sistema).
+    """
+
+    class Estado(models.TextChoices):
+        EN_CONTEO = "EN_CONTEO", "En conteo"
+        CERRADA = "CERRADA", "Cerrada (por ajustar)"
+        AJUSTADA = "AJUSTADA", "Ajustada"
+        ANULADA = "ANULADA", "Anulada"
+
+    fecha_inicio = models.DateTimeField(default=timezone.now)
+    fecha_cierre = models.DateTimeField(null=True, blank=True)
+    estado = models.CharField(
+        max_length=12, choices=Estado.choices, default=Estado.EN_CONTEO,
+    )
+    observacion = models.CharField(max_length=255, blank=True, default="")
+    # Toma de apertura: su ajuste se fecha el día 1 del mes y se
+    # contabiliza contra Capital (no como faltante/sobrante).
+    es_inicial = models.BooleanField(default=False)
+    creada_por = models.ForeignKey(
+        _settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="tomas_creadas",
+    )
+    cerrada_por = models.ForeignKey(
+        _settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="tomas_cerradas",
+    )
+
+    class Meta:
+        ordering = ["-fecha_inicio"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["estado"],
+                condition=models.Q(estado="EN_CONTEO"),
+                name="una_sola_toma_en_conteo",
+            ),
+        ]
+        verbose_name = "Toma de inventario"
+        verbose_name_plural = "Tomas de inventario"
+
+    def __str__(self):
+        return f"Toma #{self.pk} ({self.fecha_inicio:%d/%m/%Y})"
+
+
+class LecturaInventario(models.Model):
+    """Cada escaneo es una fila: suma 1 unidad al producto."""
+
+    toma = models.ForeignKey(
+        TomaInventario, on_delete=models.CASCADE, related_name="lecturas",
+    )
+    # Nulo cuando el código escaneado no existe en el sistema.
+    producto = models.ForeignKey(
+        "Producto", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="lecturas_inventario",
+    )
+    codigo_leido = models.CharField(max_length=50)
+    zona = models.CharField(max_length=40, blank=True, default="")
+    fecha_hora = models.DateTimeField(default=timezone.now)
+    usuario = models.ForeignKey(
+        _settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="lecturas_inventario",
+    )
+    # Deshacer / recontar: la lectura se conserva para auditoría.
+    anulada = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-fecha_hora", "-id"]
+        indexes = [
+            models.Index(fields=["toma", "producto"]),
+        ]
+
+    def __str__(self):
+        return f"{self.codigo_leido} @ {self.fecha_hora:%H:%M:%S}"
+
+
+class DetalleTomaInventario(models.Model):
+    """
+    Foto congelada al cerrar el conteo. Es la base del reporte de
+    faltantes y sobrantes; no cambia aunque luego se registren
+    más ventas o compras.
+    """
+
+    toma = models.ForeignKey(
+        TomaInventario, on_delete=models.CASCADE, related_name="detalles",
+    )
+    producto = models.ForeignKey(
+        "Producto", on_delete=models.PROTECT, related_name="detalles_toma",
+    )
+    stock_sistema = models.IntegerField(default=0)
+    contado = models.IntegerField(default=0)
+    vendido_tras_lectura = models.IntegerField(default=0)
+    diferencia = models.IntegerField(default=0)
+    costo_unitario = models.DecimalField(
+        max_digits=10, decimal_places=4, default=0,
+    )
+    precio_venta = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+    )
+    primera_lectura = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["producto__cod"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["toma", "producto"], name="unique_producto_por_toma",
+            ),
+        ]
+
+    @property
+    def contado_neto(self):
+        return self.contado - self.vendido_tras_lectura
+
+    @property
+    def valor_costo(self):
+        return (Decimal(self.diferencia) * self.costo_unitario).quantize(
+            Decimal("0.01")
+        )
+
+    @property
+    def valor_venta(self):
+        return Decimal(self.diferencia) * (self.precio_venta or Decimal("0"))
+
+    @property
+    def resultado(self):
+        if self.diferencia < 0:
+            return "FALTANTE"
+        if self.diferencia > 0:
+            return "SOBRANTE"
+        return "OK"
+
+
+class AjusteInventario(models.Model):
+    """
+    Documento de ajuste. Es una fuente del kardex (igual que una
+    compra o un ticket), por eso sobrevive a cada recálculo.
+    """
+
+    class Estado(models.TextChoices):
+        APROBADO = "APROBADO", "Aprobado"
+        ANULADO = "ANULADO", "Anulado"
+
+    toma = models.ForeignKey(
+        TomaInventario, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="ajustes",
+    )
+    # Fecha del movimiento en el kardex (= cierre del conteo).
+    fecha = models.DateTimeField(default=timezone.now)
+    estado = models.CharField(
+        max_length=10, choices=Estado.choices, default=Estado.APROBADO,
+    )
+    observacion = models.CharField(max_length=255, blank=True, default="")
+    aprobado_por = models.ForeignKey(
+        _settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="ajustes_aprobados",
+    )
+    fecha_aprobacion = models.DateTimeField(auto_now_add=True)
+    anulado_por = models.ForeignKey(
+        _settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="ajustes_anulados",
+    )
+    fecha_anulacion = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-fecha"]
+        verbose_name = "Ajuste de inventario"
+        verbose_name_plural = "Ajustes de inventario"
+
+    def __str__(self):
+        return f"Ajuste #{self.pk} ({self.fecha:%d/%m/%Y})"
+
+
+class DetalleAjusteInventario(models.Model):
+
+    class Motivo(models.TextChoices):
+        PERDIDA = "PERDIDA", "Pérdida o robo"
+        DANADO = "DANADO", "Dañado / dado de baja"
+        ERROR_REGISTRO = "ERROR_REGISTRO", "Error de registro"
+        VENTA_NO_REGISTRADA = "VENTA_NO_REGISTRADA", "Venta no registrada"
+        COMPRA_NO_REGISTRADA = "COMPRA_NO_REGISTRADA", "Compra no registrada"
+        OTRO = "OTRO", "Otro"
+
+    ajuste = models.ForeignKey(
+        AjusteInventario, on_delete=models.CASCADE, related_name="detalles",
+    )
+    producto = models.ForeignKey(
+        "Producto", on_delete=models.PROTECT, related_name="ajustes_inventario",
+    )
+    # Positivo = sobrante (entra), negativo = faltante (sale).
+    cantidad = models.IntegerField()
+    costo_unitario = models.DecimalField(
+        max_digits=10, decimal_places=4, default=0,
+    )
+    motivo = models.CharField(
+        max_length=25, choices=Motivo.choices, default=Motivo.ERROR_REGISTRO,
+    )
+
+    class Meta:
+        ordering = ["producto__cod"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(cantidad=0),
+                name="ajuste_cantidad_distinta_de_cero",
+            ),
+        ]
+
+    @property
+    def valor(self):
+        return (Decimal(abs(self.cantidad)) * self.costo_unitario).quantize(
+            Decimal("0.01")
+        )

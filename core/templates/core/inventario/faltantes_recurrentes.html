@@ -1,0 +1,34 @@
+{% extends 'core/base.html' %}
+{% block title %}Faltantes recurrentes | Óptica IC{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+  <h3 class="mb-0">Monturas con faltantes repetidos</h3>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'tomas_lista' %}">Volver</a>
+</div>
+<p class="text-muted small">
+  Monturas que salieron como faltantes en {{ minimo }} o más tomas. Es la señal más clara de
+  robo o de ventas que no se registran con el código.
+</p>
+<form class="mb-3" method="get">
+  <label class="small">Mínimo de tomas:
+    <input type="number" name="minimo" min="2" value="{{ minimo }}" class="form-control form-control-sm d-inline-block" style="width:5rem">
+  </label>
+  <button class="btn btn-sm btn-primary">Filtrar</button>
+</form>
+<table class="table table-sm table-hover">
+  <thead class="table-light"><tr><th>Código</th><th>Descripción</th><th>Marca</th><th>Tipo</th><th class="text-end">Tomas con faltante</th></tr></thead>
+  <tbody>
+  {% for f in filas %}
+    <tr>
+      <td><a href="{% url 'kardex_detalle' f.producto_id %}">{{ f.producto__cod }}</a></td>
+      <td>{{ f.producto__descripcion|default:"" }}</td>
+      <td>{{ f.producto__marca|default:"" }}</td>
+      <td>{{ f.producto__tipo|default:"" }}</td>
+      <td class="text-end">{{ f.veces }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5" class="text-center text-muted">No hay monturas con faltantes repetidos.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

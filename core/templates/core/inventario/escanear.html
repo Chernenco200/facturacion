@@ -1,0 +1,216 @@
+{% extends 'core/base.html' %}
+{% load tz %}
+{% block title %}Escanear | Toma #{{ toma.pk }}{% endblock %}
+{% block content %}
+{% timezone "America/Lima" %}
+<style>
+  #codigo { font-size: 1.6rem; letter-spacing: .1em; }
+  #tarjeta { min-height: 150px; transition: background-color .25s; }
+  #tarjeta.ok { background: #e8f6ec; border-color: #2e9d55; }
+  #tarjeta.aviso { background: #fff6e0; border-color: #e0a100; }
+  #tarjeta.error { background: #fdeaea; border-color: #d33; }
+  #foto { width: 120px; height: 90px; object-fit: contain; }
+  #total { font-size: 2.2rem; font-weight: 700; line-height: 1; }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+  <h3 class="mb-0">🔫 Toma #{{ toma.pk }} — escaneo</h3>
+  <div class="d-flex gap-2">
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'tomas_lista' %}">Volver</a>
+    {% if puede_gestionar %}
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'toma_avance' toma.pk %}">Ver avance y cerrar</a>
+    {% endif %}
+  </div>
+</div>
+
+{% include 'core/inventario/_mensajes.html' %}
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-8">
+            <label class="form-label small text-muted mb-1" for="codigo">Escanea la etiqueta de la montura</label>
+            <input id="codigo" type="text" class="form-control" autocomplete="off" autofocus
+                   inputmode="none" placeholder="Código…">
+          </div>
+          <div class="col-4">
+            <label class="form-label small text-muted mb-1" for="zona">Zona (opcional)</label>
+            <input id="zona" type="text" class="form-control" maxlength="40" placeholder="Vitrina 1">
+          </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <button id="btnTeclado" type="button" class="btn btn-sm btn-outline-secondary">⌨️ Escribir a mano</button>
+          <button id="btnDeshacer" type="button" class="btn btn-sm btn-outline-danger">↩️ Deshacer mi última lectura</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tarjeta" class="card">
+      <div class="card-body d-flex gap-3 align-items-center">
+        <img id="foto" src="" alt="" class="d-none rounded border">
+        <div>
+          <div id="titulo" class="fs-5 fw-semibold">Esperando lectura…</div>
+          <div id="detalle" class="text-muted"></div>
+          <div id="mensaje" class="mt-1"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-body text-center">
+        <div class="text-muted small">Unidades escaneadas en esta toma</div>
+        <div id="total">{{ total }}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header py-2">Últimas lecturas</div>
+      <ul id="ultimas" class="list-group list-group-flush small">
+        {% for l in ultimas %}
+          <li class="list-group-item d-flex justify-content-between {% if l.anulada %}text-decoration-line-through text-muted{% elif not l.producto %}list-group-item-warning{% endif %}">
+            <span><strong>{{ l.codigo_leido }}</strong> {{ l.producto.descripcion|default:"(no existe)" }}</span>
+            <span class="text-muted">{{ l.fecha_hora|date:"H:i:s" }}</span>
+          </li>
+        {% empty %}
+          <li class="list-group-item text-muted" id="vacio">Todavía no hay lecturas.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const urlLectura = "{% url 'api_toma_lectura' toma.pk %}";
+  const urlDeshacer = "{% url 'api_toma_deshacer' toma.pk %}";
+  const input = document.getElementById("codigo");
+  const zona = document.getElementById("zona");
+  const tarjeta = document.getElementById("tarjeta");
+  const lista = document.getElementById("ultimas");
+  let enviando = false;
+
+  zona.value = localStorage.getItem("inv_zona") || "";
+  zona.addEventListener("change", () => localStorage.setItem("inv_zona", zona.value));
+
+  // Sonidos: agudo = correcto, grave = revisar
+  let audio;
+  function pitido(ok) {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = ok ? 1200 : 300;
+      o.type = ok ? "sine" : "square";
+      g.gain.value = 0.15;
+      o.connect(g); g.connect(audio.destination);
+      o.start(); o.stop(audio.currentTime + (ok ? 0.12 : 0.45));
+    } catch (e) {}
+    if (!ok && navigator.vibrate) navigator.vibrate(300);
+  }
+
+  function hora() {
+    return new Date().toLocaleTimeString("es-PE", { hour12: false });
+  }
+
+  function agregarALista(codigo, texto, clase) {
+    const vacio = document.getElementById("vacio");
+    if (vacio) vacio.remove();
+    const li = document.createElement("li");
+    li.className = "list-group-item d-flex justify-content-between " + (clase || "");
+    const a = document.createElement("span");
+    const b = document.createElement("strong");
+    b.textContent = codigo;
+    a.appendChild(b);
+    a.appendChild(document.createTextNode(" " + texto));
+    const h = document.createElement("span");
+    h.className = "text-muted";
+    h.textContent = hora();
+    li.appendChild(a); li.appendChild(h);
+    lista.prepend(li);
+    while (lista.children.length > 15) lista.lastChild.remove();
+  }
+
+  function mostrar(d) {
+    tarjeta.classList.remove("ok", "aviso", "error");
+    tarjeta.classList.add(d.nivel);
+    const foto = document.getElementById("foto");
+    const p = d.producto;
+    if (p) {
+      document.getElementById("titulo").textContent = p.cod + " — " + (p.descripcion || p.tipo);
+      document.getElementById("detalle").textContent =
+        [p.marca, p.color, p.precio ? "S/ " + p.precio : ""].filter(Boolean).join(" · ");
+      if (p.foto) { foto.src = p.foto; foto.classList.remove("d-none"); }
+      else { foto.classList.add("d-none"); }
+    } else {
+      document.getElementById("titulo").textContent = d.codigo || "";
+      document.getElementById("detalle").textContent = "";
+      foto.classList.add("d-none");
+    }
+    let msg = d.mensaje || "";
+    if (d.ok) msg = "✔ Contada. Unidades de este código: " + d.contado_producto;
+    document.getElementById("mensaje").textContent = msg;
+    if (d.total !== undefined) document.getElementById("total").textContent = d.total;
+  }
+
+  async function enviar(codigo) {
+    enviando = true;
+    try {
+      const r = await fetch(urlLectura, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrftoken },
+        body: JSON.stringify({ codigo: codigo, zona: zona.value }),
+      });
+      const d = await r.json();
+      mostrar(d);
+      pitido(d.ok);
+      if (d.guardada) {
+        agregarALista(codigo, d.producto ? (d.producto.descripcion || "") : "(no existe)",
+                      d.producto ? "" : "list-group-item-warning");
+      }
+    } catch (e) {
+      mostrar({ nivel: "error", codigo: codigo, mensaje: "Sin conexión: vuelve a escanear este código." });
+      pitido(false);
+    } finally {
+      enviando = false;
+      input.focus();
+    }
+  }
+
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter") return;
+    ev.preventDefault();
+    const codigo = input.value.trim();
+    input.value = "";
+    if (codigo && !enviando) enviar(codigo);
+    else if (codigo) setTimeout(() => enviar(codigo), 150);
+  });
+
+  // Mantener el foco en el campo para que la lectora siempre escriba ahí
+  document.addEventListener("click", (ev) => {
+    if (!ev.target.closest("input, button, a, select, textarea")) input.focus();
+  });
+
+  document.getElementById("btnTeclado").addEventListener("click", () => {
+    const manual = input.getAttribute("inputmode") === "none";
+    input.setAttribute("inputmode", manual ? "text" : "none");
+    document.getElementById("btnTeclado").classList.toggle("active", manual);
+    input.blur(); input.focus();
+  });
+
+  document.getElementById("btnDeshacer").addEventListener("click", async () => {
+    if (!confirm("¿Deshacer tu última lectura?")) return;
+    const r = await fetch(urlDeshacer, { method: "POST", headers: { "X-CSRFToken": csrftoken } });
+    const d = await r.json();
+    alert(d.mensaje);
+    if (d.ok) {
+      document.getElementById("total").textContent = d.total;
+      agregarALista("↩️", d.mensaje, "text-muted");
+    }
+    input.focus();
+  });
+})();
+</script>
+{% endtimezone %}
+{% endblock %}

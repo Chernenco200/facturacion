@@ -696,6 +696,7 @@ class Command(BaseCommand):
             ("65119", "Multas, sanciones y penalidades", "65", "GASTO", "DEUDORA", "65", "ER", True),
             ("65120", "Accesorios y equipos menores no capitalizables", "65", "GASTO", "DEUDORA", "65", "ER", True),
             ("65199", "Otros gastos de gestión", "65", "GASTO", "DEUDORA", "65", "ER", True),
+            ("65901", "Faltantes de inventario", "65", "GASTO", "DEUDORA", "659", "ER", True),
 
             # FINANCIEROS
 
@@ -745,6 +746,9 @@ class Command(BaseCommand):
             ("70401", "Servicio de biselado a terceros", "70", "INGRESO", "ACREEDORA", "70", "ER", True),
             ("70402", "Servicio de venta/suministro de lunas", "70", "INGRESO", "ACREEDORA", "70", "ER", True),
             ("70403", "Otros servicios ópticos", "70", "INGRESO", "ACREEDORA", "70", "ER", True),
+
+            ("75", "Otros ingresos de gestión", None, "INGRESO", "ACREEDORA", "75", "ER", False),
+            ("75901", "Sobrantes de inventario", "75", "INGRESO", "ACREEDORA", "759", "ER", True),
 
             ("77", "Ingresos financieros", None, "INGRESO", "ACREEDORA", "77", "ER", True),
 

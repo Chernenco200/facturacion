@@ -1,0 +1,98 @@
+{% extends 'core/base.html' %}
+{% load tz %}
+{% block title %}Reporte | Toma #{{ toma.pk }}{% endblock %}
+{% block content %}
+{% timezone "America/Lima" %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+  <h3 class="mb-0">Toma #{{ toma.pk }} — faltantes y sobrantes{% if toma.es_inicial %} <span class="badge bg-info text-dark fs-6">Inventario inicial</span>{% endif %}</h3>
+  <div class="d-flex gap-2">
+    <a class="btn btn-sm btn-outline-success" href="{% url 'toma_exportar_excel' toma.pk %}">⬇️ Excel</a>
+    <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">🖨️ Imprimir</button>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'tomas_lista' %}">Volver</a>
+  </div>
+</div>
+
+{% include 'core/inventario/_mensajes.html' %}
+
+<p class="text-muted small mb-2">
+  Inicio {{ toma.fecha_inicio|date:"d/m/Y H:i" }} · Cierre {{ toma.fecha_cierre|date:"d/m/Y H:i"|default:"—" }}
+  {% if toma.cerrada_por %}por {{ toma.cerrada_por.username }}{% endif %}
+  · Estado: <strong>{{ toma.get_estado_display }}</strong>
+  {% if toma.observacion %}· {{ toma.observacion }}{% endif %}
+</p>
+
+<div class="row g-2 mb-3 text-center">
+  <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Faltantes</div><div class="fs-4 text-danger">{{ res.unid_faltantes }}</div><div class="small">Costo S/ {{ res.valor_faltante|floatformat:2 }} · Venta S/ {{ res.venta_faltante|floatformat:2 }}</div></div></div>
+  <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Sobrantes</div><div class="fs-4 text-success">{{ res.unid_sobrantes }}</div><div class="small">Costo S/ {{ res.valor_sobrante|floatformat:2 }}</div></div></div>
+  <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Coinciden</div><div class="fs-4">{{ res.coinciden }}</div><div class="small">de {{ res.lineas }} códigos</div></div></div>
+  <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Exactitud</div><div class="fs-4">{{ res.exactitud }} %</div></div></div>
+</div>
+
+{% if ajuste %}
+  <div class="alert alert-success d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div>
+      <strong>Ajuste #{{ ajuste.pk }} aprobado</strong>
+      {% if ajuste.aprobado_por %}por {{ ajuste.aprobado_por.username }}{% endif %}
+      el {{ ajuste.fecha_aprobacion|date:"d/m/Y H:i" }}.
+      {% if asiento %}Asiento contable N.° {{ asiento.numero }} ({{ asiento.periodo }}).{% else %}Sin asiento (diferencias sin valor de costo).{% endif %}
+    </div>
+    {% if es_admin %}
+      <form method="post" action="{% url 'ajuste_anular' ajuste.pk %}" onsubmit="return confirm('¿Anular el ajuste? Se revierte el stock, el kardex y el asiento.');">
+        {% csrf_token %}<button class="btn btn-sm btn-outline-danger">Anular ajuste</button>
+      </form>
+    {% endif %}
+  </div>
+{% endif %}
+
+<h5 class="text-danger">Faltantes ({{ faltantes|length }})</h5>
+{% include 'core/inventario/_tabla_diferencias.html' with filas=faltantes con_motivo=True %}
+
+<h5 class="text-success">Sobrantes ({{ sobrantes|length }})</h5>
+{% include 'core/inventario/_tabla_diferencias.html' with filas=sobrantes con_motivo=True %}
+
+{% if no_reconocidos %}
+  <h5 class="text-warning">Códigos no reconocidos ({{ no_reconocidos|length }})</h5>
+  <ul>{% for r in no_reconocidos %}<li><code>{{ r.codigo_leido }}</code> — {{ r.veces }} vez/veces</li>{% endfor %}</ul>
+{% endif %}
+
+<details class="mb-4">
+  <summary>Coinciden ({{ coinciden|length }})</summary>
+  {% include 'core/inventario/_tabla_diferencias.html' with filas=coinciden %}
+</details>
+
+{% if toma.estado == 'CERRADA' %}
+  <div class="card border-success">
+    <div class="card-body">
+      <h5 class="card-title">Aprobar el ajuste</h5>
+      <p class="small text-muted mb-2">
+        El stock de cada montura quedará igual al conteo, se registran los movimientos
+        «ajuste» en el kardex y el asiento contable valorizado al costo promedio:
+        {% if toma.es_inicial %}
+          <strong>asiento de apertura al {{ fecha_inicial|date:"d/m/Y" }}</strong>:
+          20101 Monturas / 50101 Capital aportado (y a la inversa para las que no se encontraron).
+          No registres la 20101 en tu asiento manual de saldos iniciales.
+        {% else %}
+          faltantes 65901 / 20101 y sobrantes 20101 / 75901.
+        {% endif %}
+        Si una diferencia es una <strong>venta o compra no registrada</strong>, lo correcto es registrar ese
+        documento en lugar de ajustarla.
+      </p>
+      <form id="formAjuste" method="post" action="{% url 'toma_aprobar_ajuste' toma.pk %}"
+            onsubmit="return confirm('¿Aprobar el ajuste de inventario?');" class="row g-2">
+        {% csrf_token %}
+        <div class="col-md-8">
+          <input type="text" name="observacion" maxlength="255" class="form-control" placeholder="Observación (opcional)">
+        </div>
+        <div class="col-md-4 d-grid">
+          <button class="btn btn-success">Aprobar ajuste</button>
+        </div>
+      </form>
+      <form method="post" action="{% url 'toma_reabrir' toma.pk %}" class="mt-2">
+        {% csrf_token %}
+        <button class="btn btn-link btn-sm p-0">Reabrir el conteo para seguir escaneando</button>
+      </form>
+    </div>
+  </div>
+{% endif %}
+{% endtimezone %}
+{% endblock %}
