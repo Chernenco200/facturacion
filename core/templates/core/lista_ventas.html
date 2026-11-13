@@ -98,4 +98,14 @@
         </table>
     </div>
 </div>
+
+{% if pagina.paginator.num_pages > 1 %}
+<nav class="mt-3">
+  <ul class="pagination justify-content-center">
+    {% if pagina.has_previous %}<li class="page-item"><a class="page-link" href="?{{ filtros }}&page={{ pagina.previous_page_number }}">&laquo; Anterior</a></li>{% endif %}
+    <li class="page-item disabled"><span class="page-link">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }} ({{ pagina.paginator.count }} líneas)</span></li>
+    {% if pagina.has_next %}<li class="page-item"><a class="page-link" href="?{{ filtros }}&page={{ pagina.next_page_number }}">Siguiente &raquo;</a></li>{% endif %}
+  </ul>
+</nav>
+{% endif %}
 {% endblock %}

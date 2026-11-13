@@ -132,7 +132,7 @@ def registrar_venta(request):
 
         if cliente:
             cliente_form = ClienteForm(instance=cliente)
-            medida = MedidaVista.objects.filter(cliente=cliente).last()
+            medida = MedidaVista.objects.filter(cliente=cliente).order_by(F('fecha_registro').desc(nulls_last=True), '-id').first()
             medida_form = MedidaVistaForm(instance=medida) if medida else MedidaVistaForm()
             ultima_luna = TipoLunas.objects.filter(cliente=cliente).last()
             tipo_lunas_form = TipoLunasForm(instance=ultima_luna) if ultima_luna else TipoLunasForm()
@@ -221,7 +221,9 @@ def registrar_cliente(request):
             # si no hay cliente_id, buscamos por DNI
             if dni:
                 try:
-                    cliente = Cliente.objects.get(DNI=dni)
+                    cliente = Cliente.objects.filter(DNI=dni).order_by('id').last()
+                    if cliente is None:
+                        raise Cliente.DoesNotExist
                     # si lo encontramos, usamos ese objeto
                     cliente_form = ClienteForm(request.POST, instance=cliente)
                 except Cliente.DoesNotExist:
@@ -2282,7 +2284,7 @@ def eliminar_cliente(request, cliente_id):
 def cliente_historial(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
 
-    medidas = MedidaVista.objects.filter(cliente=cliente).order_by('-id')
+    medidas = MedidaVista.objects.filter(cliente=cliente).order_by(F('fecha_registro').desc(nulls_last=True), '-id')
     ticket_ventas = TicketVenta.objects.filter(cliente=cliente).order_by('-fecha_emision', '-id')
     ventas = Venta.objects.filter(cliente=cliente).order_by('-fecha', '-id')
 
@@ -2534,7 +2536,7 @@ def ultima_medida_cliente(request):
     medida = (
         MedidaVista.objects
             .filter(cliente_id=cliente_id)
-            .order_by('-fecha_registro', "-id")   # tu campo real
+            .order_by(F('fecha_registro').desc(nulls_last=True), "-id")
             .first()
     )
 
@@ -2588,12 +2590,12 @@ def buscar_medidas(request):
                 Q(cliente__DNI__icontains=term) |
                 Q(cliente__nombre__icontains=term)
             )
-            .order_by("-fecha_registro")[:20]
+            .order_by(F("fecha_registro").desc(nulls_last=True), "-id")[:20]
         )
 
         for medida in qs:
             c = medida.cliente
-            label = f"{c.DNI or ''} - {c.nombre} · {medida.fecha_registro:%d/%m/%Y}"
+            label = f"{c.DNI or ''} - {c.nombre} · {medida.fecha_registro.strftime('%d/%m/%Y') if medida.fecha_registro else 'sin fecha'}"
             resultados.append({
                 "label": label,
                 "value": label,
@@ -2665,13 +2667,13 @@ def ultimas_medidas(request):
     qs = (
         MedidaVista.objects
         .select_related("cliente")
-        .order_by("-fecha_registro", "-id")[:9]
+        .order_by(F("fecha_registro").desc(nulls_last=True), "-id")[:9]
     )
 
     resultados = []
     for medida in qs:
         c = medida.cliente
-        label = f"{c.DNI or ''} - {c.nombre} · {medida.fecha_registro:%d/%m/%Y}"
+        label = f"{c.DNI or ''} - {c.nombre} · {medida.fecha_registro.strftime('%d/%m/%Y') if medida.fecha_registro else 'sin fecha'}"
 
         resultados.append({
             "medida_id": medida.id,
@@ -2925,7 +2927,7 @@ def imprimir_ticket_pdf(request):
             mv = (
                 MedidaVista.objects
                 .filter(cliente=cli)
-                .order_by("-fecha_registro", "-id")
+                .order_by(F("fecha_registro").desc(nulls_last=True), "-id")
                 .first()
             )
 
@@ -2999,7 +3001,7 @@ def imprimir_ticket_pdf(request):
 
         numero = request.GET.get("numero")
         if not numero:
-            ultimo_numero = TicketVenta.objects.order_by("-numero").values_list("numero", flat=True).first()
+            ultimo_numero = ReciboCorrelativo.objects.values_list("numero_actual", flat=True).first()  # no usar max(numero): los históricos usan 10/11/12xxxxxxxx
             numero = ultimo_numero or 1
 
         try:
@@ -3919,8 +3921,16 @@ def lista_ventas(request):
     if fecha:
         ventas = ventas.filter(ticket_numero__fecha_emision=fecha)
 
+    # Paginación: con el historial importado hay decenas de miles de líneas.
+    from django.core.paginator import Paginator
+    pagina = Paginator(ventas, 200).get_page(request.GET.get("page"))
+    filtros = request.GET.copy()
+    filtros.pop("page", None)
+
     return render(request, "core/lista_ventas.html", {
-        "ventas": ventas
+        "ventas": pagina,
+        "pagina": pagina,
+        "filtros": filtros.urlencode(),
     })
 
 # ============================================================
