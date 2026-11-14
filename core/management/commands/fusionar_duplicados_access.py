@@ -15,7 +15,8 @@ Fusión automática cuando el nombre tiene 3 o más palabras útiles (sin contar
   * o, si no hay ninguno con DNI, con otros clientes sin DNI -> se juntan en uno
 Fusión automática también cuando el nombre corto está contenido en UN solo nombre más
 largo y además tienen el MISMO teléfono (ej. "LINDA EFFIO" -> "EFFIO BECERRA LINDA LADY").
-Nombres de 1 o 2 palabras ("CARLOS RODRIGUEZ"), con varios candidatos con DNI o con
+Nombres de 1 o 2 palabras iguales se fusionan solo si además tienen el MISMO teléfono
+(ej. "MARIELA CORDOVA" 997935599). Sin teléfono igual, nombres cortos, con varios candidatos con DNI o con
 coincidencia parcial sin teléfono igual solo se listan para revisión manual.
 Pares confirmados por usted:  --par ORIGEN:DESTINO  (se puede repetir).
 El ORIGEN siempre debe ser un cliente importado de Access; nunca se borra un cliente real.
@@ -104,12 +105,14 @@ class Command(BaseCommand):
                     grupos[k].append(c)
 
             fusiones, manual = [], []        # fusiones: (origen_id, destino_id)
+            cortos_tel = set()               # nombre corto igual + mismo teléfono
             for k, miembros in grupos.items():
                 fuentes = [c for c in miembros if not c['DNI'] and importado(c)]
                 if not fuentes or len(miembros) < 2:
                     continue
                 con_dni = [c for c in miembros if dni_ok(c['DNI'])]
-                if palabras_utiles(k) < 3 or len(con_dni) > 1:
+                corto = palabras_utiles(k) < 3
+                if len(con_dni) > 1:
                     manual.append((k, miembros))
                     continue
                 if con_dni:
@@ -121,6 +124,17 @@ class Command(BaseCommand):
                         continue
                     destino = reales[0] if reales else min(
                         fuentes, key=lambda c: (c['fecha_registro'] or c['id'], c['id']))
+                if corto:
+                    # nombre corto: solo se fusiona si además tiene el MISMO teléfono que el destino
+                    tel_d = (destino['telefono'] or '').strip()
+                    iguales = [f for f in fuentes if f['id'] != destino['id'] and tel_d
+                               and (f['telefono'] or '').strip() == tel_d]
+                    if len(iguales) < len([f for f in fuentes if f['id'] != destino['id']]):
+                        manual.append((k, miembros))
+                    for f in iguales:
+                        fusiones.append((f['id'], destino['id']))
+                        cortos_tel.add(f['id'])
+                    continue
                 for f in fuentes:
                     if f['id'] != destino['id']:
                         fusiones.append((f['id'], destino['id']))
@@ -191,12 +205,13 @@ class Command(BaseCommand):
             origen_tipo = {}
             if not opt['solo_pares']:
                 for o in origenes_a:
-                    origen_tipo[o] = 'A'
+                    origen_tipo[o] = 'A2' if o in cortos_tel else 'A'
                 for o, _ in parciales:
                     origen_tipo.setdefault(o, 'B')
             for o, _ in pares:
                 origen_tipo[o] = 'C'
-            for tipo, titulo in (('A', 'NOMBRE IGUAL'), ('B', 'NOMBRE PARCIAL + MISMO TELÉFONO'),
+            for tipo, titulo in (('A', 'NOMBRE IGUAL'), ('A2', 'NOMBRE CORTO IGUAL + MISMO TELÉFONO'),
+                                 ('B', 'NOMBRE PARCIAL + MISMO TELÉFONO'),
                                  ('C', 'PARES INDICADOS CON --par')):
                 sel = [(o, d) for o, d in fusiones if origen_tipo.get(o) == tipo]
                 self.stdout.write(f'FUSIONES {titulo}: {len(sel)}')
@@ -210,7 +225,8 @@ class Command(BaseCommand):
             self.stdout.write(f'\nREVISIÓN MANUAL (posibles homónimos, no se tocan; confirme con --par): {len(manual)} nombres')
             for k, miembros in sorted(manual, key=lambda x: x[0]):
                 self.stdout.write('  ' + ' | '.join(
-                    f"{c['id']} {c['nombre']} DNI {c['DNI'] or '-'}" for c in sorted(miembros, key=lambda c: c['id'])))
+                    f"{c['id']} {c['nombre']} DNI {c['DNI'] or '-'} tel {c['telefono'] or '-'}"
+                    for c in sorted(miembros, key=lambda c: c['id'])))
 
             if not opt['ejecutar']:
                 transaction.set_rollback(True)
