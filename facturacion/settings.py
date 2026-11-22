@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "accounts",
     "whatsapp",
     "contabilidad",
+    "incentivos",
 
     # Cloudinary
     "cloudinary",

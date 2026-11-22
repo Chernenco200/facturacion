@@ -332,6 +332,13 @@
 
                             {% endif %}
 
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'incentivos:panel' %}">Mis Puntos IC</a></li>
+                            <li><a class="dropdown-item" href="{% url 'incentivos:marcar' %}">Marcar asistencia</a></li>
+                            {% if request.user|has_role:"ADMIN" %}
+                                <li><a class="dropdown-item" href="{% url 'incentivos:gerencia' %}">Puntos IC · Gerencia</a></li>
+                            {% endif %}
+
                         </ul>
 
                     </li>

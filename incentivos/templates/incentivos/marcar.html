@@ -1,0 +1,25 @@
+{% extends "core/base.html" %}
+{% block title %}Marcar asistencia{% endblock %}
+{% block content %}
+{% include "incentivos/_mensajes.html" %}
+<h3>Marcar asistencia · {{ ahora|date:"d/m/Y" }} <span id="reloj" class="text-muted">{{ ahora|time:"H:i" }}</span></h3>
+{% if not autorizado %}
+  <div class="alert alert-danger">Este equipo no está autorizado para marcar (IP {{ ip }}). Solo se marca desde la tablet o PC de la tienda. El intento queda registrado.</div>
+{% else %}
+  <p class="text-muted small">Equipo: {{ dispositivo }}. Escribe tu usuario y contraseña del sistema y elige qué marcas.</p>
+  <form method="post" class="row g-2 col-lg-8" autocomplete="off">{% csrf_token %}
+    <div class="col-md-6"><input name="usuario" class="form-control form-control-lg" placeholder="Usuario" required></div>
+    <div class="col-md-6"><input name="clave" type="password" class="form-control form-control-lg" placeholder="Contraseña" required></div>
+    <div class="col-6 col-md-3"><button name="accion" value="entrada" class="btn btn-success btn-lg w-100">Entrada</button></div>
+    <div class="col-6 col-md-3"><button name="accion" value="inicio_refrigerio" class="btn btn-warning btn-lg w-100">Salgo a refrigerio</button></div>
+    <div class="col-6 col-md-3"><button name="accion" value="fin_refrigerio" class="btn btn-info btn-lg w-100">Vuelvo de refrigerio</button></div>
+    <div class="col-6 col-md-3"><button name="accion" value="salida" class="btn btn-dark btn-lg w-100">Salida</button></div>
+  </form>
+{% endif %}
+<h5 class="mt-4">Marcaciones de hoy</h5>
+<table class="table table-sm col-lg-8"><thead><tr><th>Trabajador</th><th>Entrada</th><th>Refrigerio</th><th>Vuelta</th><th>Salida</th><th>Tarde</th></tr></thead><tbody>
+{% for a in marcaciones %}<tr><td>{{ a.usuario.username }}</td><td>{{ a.entrada|time:"H:i"|default:"-" }}</td><td>{{ a.inicio_refrigerio|time:"H:i"|default:"-" }}</td><td>{{ a.fin_refrigerio|time:"H:i"|default:"-" }}</td><td>{{ a.salida|time:"H:i"|default:"-" }}</td><td>{% if a.minutos_tarde %}{{ a.minutos_tarde }} min{% endif %}{% if a.falta %}Falta{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="text-muted">Nadie ha marcado todavía.</td></tr>{% endfor %}
+</tbody></table>
+<script>setInterval(function(){ var d=new Date(); document.getElementById('reloj').textContent=d.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit', timeZone:'America/Lima'}); }, 10000);</script>
+{% endblock %}

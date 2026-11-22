@@ -1,0 +1,10 @@
+{% extends "core/base.html" %}
+{% block content %}
+{% include "incentivos/_mensajes.html" %}
+<h3>{{ titulo }}</h3>
+<form method="post" class="col-md-6">{% csrf_token %}
+  {% for f in form %}<div class="mb-2"><label class="form-label">{{ f.label }}</label>{{ f }}{% for e in f.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>{% endfor %}
+  <button class="btn btn-primary">Guardar</button> <a href="{% url 'incentivos:gerencia' %}" class="btn btn-link">Volver</a>
+</form>
+<script>document.querySelectorAll('form input, form select').forEach(e=>{ if(e.type!=='hidden') e.classList.add('form-control'); });</script>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "core/base.html" %}
+{% block title %}Revisión de calidad{% endblock %}
+{% block content %}
+{% include "incentivos/_mensajes.html" %}
+{% with seccion="revision" %}{% include "incentivos/_nav_gerencia.html" %}{% endwith %}
+<h3>Pendientes de aprobar ({{ pendientes|length }})</h3>
+<p class="small text-muted">Eliminar quita los puntos. En FOTO también borra las 3 imágenes y la montura vuelve a la cola.</p>
+{% for t in pendientes %}
+<div class="card mb-2"><div class="card-body py-2">
+  <div class="row align-items-center g-2">
+    <div class="col-md-3"><b>{{ t.tipo.codigo }}</b> #{{ t.pk }} · {{ t.asignada_a.username }}<br><small>{{ t.fin|date:"d/m H:i" }} · {{ t.minutos_trabajados }} min · {{ t.puntos }} pts</small></div>
+    <div class="col-md-5">
+      {% if t.producto %}<small>{{ t.producto.cod }} · {{ t.producto.marca|default:"" }} {{ t.producto.descripcion|default:"" }}</small><br>
+        {% if t.producto.imagenF %}<img src="{{ t.producto.imagenF.url }}" style="height:80px">{% endif %}
+        {% if t.producto.imagenD %}<img src="{{ t.producto.imagenD.url }}" style="height:80px">{% endif %}
+        {% if t.producto.imagenL %}<img src="{{ t.producto.imagenL.url }}" style="height:80px">{% endif %}
+      {% elif t.exhibidor %}{{ t.exhibidor }}: {{ t.datos.contadas }} contadas, {{ t.datos.diferencias }} con diferencia<br><small>{{ t.evidencia }}</small>
+      {% else %}<small>{{ t.evidencia|urlize }}</small>{% endif %}
+    </div>
+    <div class="col-md-4">
+      <form method="post" class="d-flex gap-1">{% csrf_token %}<input type="hidden" name="id" value="{{ t.pk }}">
+        <button name="accion" value="aprobar" class="btn btn-sm btn-success">Aprobar</button>
+        <input name="motivo" class="form-control form-control-sm" placeholder="Motivo si eliminas">
+        <button name="accion" value="eliminar" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar y quitar los puntos?')">Eliminar</button>
+      </form>
+    </div>
+  </div>
+</div></div>
+{% empty %}<p class="text-muted">No hay nada pendiente.</p>{% endfor %}
+
+<h4 class="mt-4">Aprobadas en los últimos 7 días</h4>
+<p class="small text-muted">Incluye las que se aprueban solas (reels, citas, respuestas, fichas). Puedes eliminarlas si encuentras un problema.</p>
+<table class="table table-sm"><thead><tr><th>Fecha</th><th>Tipo</th><th>Trabajador</th><th>Detalle</th><th class="text-end">Pts</th><th></th></tr></thead><tbody>
+{% for t in recientes %}<tr><td>{{ t.fin|date:"d/m H:i" }}</td><td>{{ t.tipo.codigo }}</td><td>{{ t.asignada_a.username }}</td>
+<td class="small">{% if t.producto %}{{ t.producto.cod }}{% endif %} {{ t.exhibidor }} {{ t.evidencia|truncatechars:60|urlize }}</td><td class="text-end">{{ t.puntos }}</td>
+<td><form method="post" class="d-flex gap-1">{% csrf_token %}<input type="hidden" name="id" value="{{ t.pk }}"><input name="motivo" class="form-control form-control-sm" placeholder="Motivo" style="width:140px"><button name="accion" value="eliminar" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar y quitar los puntos?')">Eliminar</button></form></td></tr>
+{% endfor %}</tbody></table>
+{% endblock %}

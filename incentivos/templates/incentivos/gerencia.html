@@ -1,0 +1,82 @@
+{% extends "core/base.html" %}
+{% block title %}Puntos IC · Gerencia{% endblock %}
+{% block content %}
+{% include "incentivos/_mensajes.html" %}
+{% with seccion="gerencia" %}{% include "incentivos/_nav_gerencia.html" %}{% endwith %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h3 class="mb-0">Puntos IC · {{ periodo|date:"F Y"|capfirst }}</h3>
+  <div><a class="btn btn-sm btn-outline-secondary" href="?mes={{ mes_anterior|date:'Y-m' }}">←</a>
+       <a class="btn btn-sm btn-outline-secondary" href="?mes={{ mes_siguiente|date:'Y-m' }}">→</a></div>
+</div>
+
+{% if alertas %}
+<div class="alert alert-warning">
+  <div class="d-flex justify-content-between"><b>Alertas ({{ alertas|length }})</b>
+  <form method="post" action="{% url 'incentivos:alertas_vistas' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-dark">Marcar como vistas</button></form></div>
+  <ul class="mb-0 small">{% for a in alertas %}<li>{{ a.fecha|date:"d/m" }} · {{ a.usuario.username|default:"?" }} · {{ a.get_tipo_display }}: {{ a.detalle }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3 text-center">
+  <div class="col"><div class="card"><div class="card-body"><div class="fs-4 fw-bold">S/ {{ costo_total }}</div><small>Puntos IC estimado (con requisitos)</small><div class="small text-muted">S/ {{ costo_sin_requisitos }} si todos cumplieran · bono de ventas S/ {{ bono.total }}</div></div></div></div>
+  <div class="col"><div class="card"><div class="card-body"><div class="fs-4 fw-bold"><a href="{% url 'incentivos:revision' %}">{{ pend_revision }}</a></div><small>tareas por revisar</small></div></div></div>
+  <div class="col"><div class="card"><div class="card-body"><div class="fs-4 fw-bold">{{ sin_fotos }}</div><small>monturas con stock sin fotos</small><div class="small text-muted">{{ fotos_mes }} fotografiadas este mes</div></div></div></div>
+</div>
+
+<h5>Resumen por trabajador</h5>
+<div class="table-responsive"><table class="table table-sm align-middle">
+<thead><tr><th>#</th><th>Trabajador</th><th class="text-end">Puntos</th><th class="text-end">Suma metas</th><th>Días cumplidos</th><th>Requisitos</th><th class="text-end">Pago estimado</th></tr></thead><tbody>
+{% for f in filas %}<tr>
+  <td>{{ f.posicion }}</td><td><a href="{% url 'incentivos:panel_de' f.trabajador.pk %}">{{ f.trabajador.nombre_vendedor }}</a></td>
+  <td class="text-end">{{ f.puntos }}</td><td class="text-end">{{ f.meta }}</td><td>{{ f.dias_cumplidos }}/{{ f.dias_trabajados }}</td>
+  <td class="small">{% for k, r in f.requisitos.items %}<span title="{{ r.nombre }}: {{ r.valor }} ({{ r.meta }})">{% if r.ok %}🟢{% else %}🔴{% endif %}</span>{% endfor %}</td>
+  <td class="text-end">S/ {{ f.pago }} <small class="text-muted">(S/ {{ f.pago_calculado }})</small></td>
+</tr>{% empty %}<tr><td colspan="7" class="text-muted">No hay trabajadores registrados. Agrégalos en Admin → Trabajadores.</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="small text-muted">Pasa el mouse sobre cada círculo para ver el requisito.</p>
+
+<h5>Bono de ventas del equipo</h5>
+<p class="small">Venta del mes: <b>S/ {{ bono.venta|floatformat:0 }}</b> · parte igual S/ {{ bono.igual_total|floatformat:0 }} + adicional por puntos S/ {{ bono.adicional|floatformat:0 }}{% if bono.proximo_tramo %} · faltan S/ {{ bono.falta|floatformat:0 }} para S/ {{ bono.proximo_tramo|floatformat:0 }}{% endif %}</p>
+<table class="table table-sm"><thead><tr><th>Trabajador</th><th class="text-end">Puntos de venta</th><th class="text-end">Igual</th><th class="text-end">Por puntos</th><th class="text-end">Total</th><th>Ventas que suman</th></tr></thead><tbody>
+{% for f in bono.filas %}<tr><td>{{ f.trabajador.nombre_vendedor }}</td><td class="text-end">{{ f.puntos_venta }}</td><td class="text-end">S/ {{ f.igual }}</td><td class="text-end">S/ {{ f.adicional }}</td><td class="text-end"><b>S/ {{ f.total }}</b></td>
+<td class="small"><details><summary>{{ f.detalle|length }} líneas</summary>{% for d in f.detalle %}#{{ d.0 }} {{ d.1 }} → {{ d.2 }} ({{ d.3 }})<br>{% endfor %}</details></td></tr>{% endfor %}
+</tbody></table>
+
+<div class="row g-3">
+<div class="col-lg-7">
+<h5>Productividad</h5>
+<table class="table table-sm"><thead><tr><th>Trabajador</th><th>Tareas</th><th>Horas</th><th>Pts/hora</th><th>Min. promedio por tipo</th><th>Elim.</th><th>Aband.</th></tr></thead><tbody>
+{% for p in productividad %}<tr><td>{{ p.trabajador.nombre_vendedor }}</td><td>{{ p.tareas }}</td><td>{{ p.horas }}</td><td>{{ p.puntos_hora }}</td>
+<td class="small">{% for k, v in p.por_tipo.items %}{{ k }}: {{ v.prom }} ({{ v.n }}){% if not forloop.last %} · {% endif %}{% endfor %}</td><td>{{ p.eliminadas }}</td><td>{{ p.abandonos }}</td></tr>{% endfor %}
+</tbody></table>
+</div>
+<div class="col-lg-5">
+<h5>Cola</h5>
+<table class="table table-sm"><thead><tr><th>Tipo</th><th>Pendientes</th><th>En curso</th></tr></thead><tbody>
+{% for c in cola %}<tr><td>{{ c.tipo__nombre }}</td><td>{{ c.pendientes }}</td><td>{{ c.en_curso }}</td></tr>{% empty %}<tr><td colspan="3" class="text-muted">Cola vacía</td></tr>{% endfor %}
+</tbody></table>
+</div>
+<div class="col-lg-7">
+<h5>Asistencia del mes</h5>
+<table class="table table-sm"><thead><tr><th>Trabajador</th><th>Tardanzas</th><th>Minutos</th><th>Faltas</th><th>Justificadas</th><th>Refrigerio tarde</th></tr></thead><tbody>
+{% for a in asistencia %}<tr><td>{{ a.trabajador.nombre_vendedor }}</td><td>{{ a.tardanzas }}</td><td>{{ a.minutos }}</td><td>{{ a.faltas }}</td><td>{{ a.justificadas }}</td><td>{{ a.refrigerio }}</td></tr>{% endfor %}
+</tbody></table>
+<a href="{% url 'incentivos:asistencia' %}?mes={{ periodo|date:'Y-m' }}" class="small">Ver detalle y justificar →</a>
+</div>
+<div class="col-lg-5">
+<h5>Cierre del mes</h5>
+{% if cerrado %}
+  <p><span class="badge bg-success">Cerrado</span> <a class="btn btn-sm btn-outline-success" href="{% url 'incentivos:cierre_excel' %}?mes={{ periodo|date:'Y-m' }}">Descargar Excel</a></p>
+  <table class="table table-sm"><tbody>{% for c in cierres %}<tr><td>{{ c.posicion_ranking }}</td><td>{{ c.usuario.username }}</td><td class="text-end">{{ c.puntos }}</td><td class="text-end">S/ {{ c.pago }}</td><td>{% if c.domingo_extra %}Domingo extra{% endif %}</td></tr>{% endfor %}</tbody></table>
+{% else %}
+  <form method="post" action="{% url 'incentivos:cerrar' %}" onsubmit="return confirm('Cerrar el mes guarda los resultados y ya no se recalculan. ¿Continuar?')">{% csrf_token %}
+    <input type="hidden" name="mes" value="{{ periodo|date:'Y-m' }}">
+    {% if not puede_cerrar %}<p class="small text-muted mb-1">El mes aún no termina.</p>{% endif %}
+    <div class="form-check small"><input class="form-check-input" type="checkbox" name="forzar" id="forzar"><label for="forzar" class="form-check-label">Cerrar aunque haya tareas por revisar o el mes no haya terminado</label></div>
+    <button class="btn btn-danger mt-1">Cerrar mes</button>
+  </form>
+{% endif %}
+</div>
+</div>
+<script>setTimeout(function(){ location.reload(); }, 300000);</script>
+{% endblock %}

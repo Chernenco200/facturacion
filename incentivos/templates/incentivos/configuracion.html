@@ -1,0 +1,31 @@
+{% extends "core/base.html" %}
+{% block title %}Configuración Puntos IC{% endblock %}
+{% block content %}
+{% include "incentivos/_mensajes.html" %}
+{% with seccion="configuracion" %}{% include "incentivos/_nav_gerencia.html" %}{% endwith %}
+<h3>Puntos por tarea</h3>
+<table class="table table-sm align-middle"><thead><tr><th>Código</th><th>Tarea</th><th>Puntos</th><th>Min. estándar</th><th>Prioridad</th><th>Revisión</th><th>Activa</th><th></th></tr></thead><tbody>
+{% for t in tipos %}<tr><form method="post">{% csrf_token %}<input type="hidden" name="accion" value="tipo"><input type="hidden" name="id" value="{{ t.pk }}">
+<td>{{ t.codigo }}</td><td class="small">{{ t.nombre }}</td>
+<td><input name="puntos" value="{{ t.puntos }}" class="form-control form-control-sm" style="width:80px"></td>
+<td><input name="minutos_estandar" value="{{ t.minutos_estandar }}" class="form-control form-control-sm" style="width:70px"></td>
+<td><input name="prioridad" value="{{ t.prioridad }}" class="form-control form-control-sm" style="width:70px"></td>
+<td><input type="checkbox" name="requiere_aprobacion" {% if t.requiere_aprobacion %}checked{% endif %}></td>
+<td><input type="checkbox" name="activo" {% if t.activo %}checked{% endif %}></td>
+<td><button class="btn btn-sm btn-outline-primary">Guardar</button></td></form></tr>{% endfor %}
+</tbody></table>
+<p class="small text-muted">INV: puntos por unidad contada sin diferencia. TEL: puntos por cada 2 teléfonos corregidos. Prioridad menor sale primero en la cola.</p>
+
+<h3 class="mt-4">Parámetros</h3>
+<p class="small text-muted">Cada cambio se guarda con fecha de vigencia; los meses anteriores conservan sus valores.</p>
+<table class="table table-sm align-middle"><thead><tr><th>Parámetro</th><th>Descripción</th><th>Valor actual</th><th>Nuevo valor</th><th>Desde</th><th></th></tr></thead><tbody>
+{% for p in params %}<tr><form method="post">{% csrf_token %}<input type="hidden" name="accion" value="param"><input type="hidden" name="clave" value="{{ p.clave }}">
+<td class="small"><code>{{ p.clave }}</code></td><td class="small">{{ p.descripcion }}</td><td><b>{{ p.valor }}</b>{% if p.valor != p.defecto %} <small class="text-muted">(inicial {{ p.defecto }})</small>{% endif %}</td>
+<td><input name="valor" class="form-control form-control-sm" value="{{ p.valor }}"></td>
+<td><input type="date" name="vigente_desde" value="{{ hoy|date:'Y-m-d' }}" class="form-control form-control-sm"></td>
+<td><button class="btn btn-sm btn-outline-primary">Guardar</button></td></form></tr>{% endfor %}
+</tbody></table>
+
+<h5 class="mt-4">Historial de cambios</h5>
+<table class="table table-sm small"><tbody>{% for h in historial %}<tr><td>{{ h.creado|date:"d/m/Y H:i" }}</td><td>{{ h.creado_por.username|default:"" }}</td><td><code>{{ h.clave }}</code></td><td>{{ h.valor }}</td><td>desde {{ h.vigente_desde|date:"d/m/Y" }}</td></tr>{% empty %}<tr><td class="text-muted">Sin cambios: se usan los valores iniciales.</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

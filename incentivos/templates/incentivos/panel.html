@@ -1,0 +1,95 @@
+{% extends "core/base.html" %}
+{% block title %}Mis Puntos IC{% endblock %}
+{% block content %}
+{% include "incentivos/_mensajes.html" %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">Puntos IC · {{ trab.nombre_vendedor }}</h3>
+  <small class="text-muted">Se actualiza cada 5 min · {{ hoy|date:"d/m/Y" }}</small>
+</div>
+{% if solo_lectura %}<div class="alert alert-secondary py-2">Vista de gerencia (solo lectura).</div>{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-body">
+      <h5 class="card-title">Hoy</h5>
+      <div class="d-flex justify-content-between"><span><b>{{ res_hoy.puntos }}</b> de {{ res_hoy.meta }} pts</span><span>{{ res_hoy.tickets }} ticket{{ res_hoy.tickets|pluralize }}</span></div>
+      <div class="progress my-2" style="height:22px">
+        <div class="progress-bar {% if res_hoy.cumplido %}bg-success{% endif %}" style="width: {{ avance }}%">{{ avance }}%</div>
+      </div>
+      <p class="small text-muted mb-2">Meta del día = máx(10, base − 7 × tickets). {% if turno %}Turno {{ turno.hora_entrada|time:"H:i" }}–{{ turno.hora_salida|time:"H:i" }}.{% else %}Sin turno programado hoy.{% endif %}
+      {% if asistencia.entrada %} Entrada {{ asistencia.entrada|time:"H:i" }}{% if asistencia.minutos_tarde %} ({{ asistencia.minutos_tarde }} min tarde){% endif %}.{% endif %}</p>
+      {% if tarea %}
+        <div class="alert alert-warning py-2 mb-2">En curso: <b>{{ tarea.tipo.nombre }}</b> {% if tarea.producto %}· {{ tarea.producto.cod }}{% endif %}{% if tarea.exhibidor %}· {{ tarea.exhibidor }}{% endif %}{% if tarea.pausada_en %} (en pausa){% endif %}
+          {% if not solo_lectura %}<a class="btn btn-sm btn-dark ms-2" href="{% url 'incentivos:tarea' tarea.pk %}">Continuar</a>{% endif %}</div>
+      {% elif not solo_lectura %}
+        <form method="post" action="{% url 'incentivos:siguiente' %}">{% csrf_token %}
+          <button class="btn btn-primary btn-lg w-100">Siguiente tarea</button></form>
+      {% endif %}
+      {% if not solo_lectura %}<a class="btn btn-outline-secondary btn-sm mt-2" href="{% url 'incentivos:resultado' %}">Registrar reel, reseña o cita atendida</a>{% endif %}
+    </div></div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-body">
+      <h5 class="card-title">Mes</h5>
+      <div class="row text-center">
+        <div class="col"><div class="fs-3 fw-bold">{{ mes.puntos }}</div><small>puntos</small></div>
+        <div class="col"><div class="fs-3 fw-bold">{{ mes.meta }}</div><small>suma de metas</small></div>
+        <div class="col"><div class="fs-3 fw-bold">{{ mes.dias_cumplidos }}/{{ mes.dias_trabajados }}</div><small>días cumplidos</small></div>
+      </div>
+      <hr>
+      <p class="mb-1">Pago estimado: <b>S/ {{ mes.pago_calculado }}</b> <small class="text-muted">(tramo normal S/ {{ mes.tramo_normal }} + tramo alto S/ {{ mes.tramo_alto }}; tope S/ 450)</small></p>
+      {% if mes.cumple %}<span class="badge bg-success">Hoy cumples todos los requisitos</span>
+      {% else %}<span class="badge bg-danger">Si el mes cerrara hoy, faltaría algún requisito: pago S/ 0</span>{% endif %}
+      <hr>
+      <p class="mb-1"><b>Bono de ventas del equipo</b>: venta del mes S/ {{ bono.venta|floatformat:0 }}{% if bono.proximo_tramo %}; faltan S/ {{ bono.falta|floatformat:0 }} para el siguiente tramo (S/ {{ bono.proximo_tramo|floatformat:0 }}){% endif %}.</p>
+      <p class="mb-0 small">Tus puntos de venta: <b>{{ bono.mia.puntos_venta|default:0 }}</b> · tu parte hoy: <b>S/ {{ bono.mia.total|default:0 }}</b> (igual S/ {{ bono.mia.igual|default:0 }} + por puntos S/ {{ bono.mia.adicional|default:0 }})</p>
+    </div></div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-body">
+      <h5 class="card-title">Requisitos para cobrar</h5>
+      <table class="table table-sm mb-0"><tbody>
+      {% for k, r in mes.requisitos.items %}
+        <tr><td>{% if r.ok %}🟢{% else %}🔴{% endif %} {{ r.nombre }}</td><td>{{ r.valor }}</td><td class="text-muted small">{{ r.meta }}</td></tr>
+      {% endfor %}
+      </tbody></table>
+    </div></div>
+  </div>
+
+  <div class="col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <h5 class="card-title">Puntualidad</h5>
+      <p class="mb-1">A tiempo: <b>{{ mes.a_tiempo }}</b></p>
+      <p class="mb-1">Tardanzas: <b>{{ mes.tardanzas }}</b></p>
+      <p class="mb-1">Faltas: <b>{{ mes.faltas }}</b></p>
+      <p class="mb-0">Puntos: <b>{{ mes.puntos_puntualidad }}</b></p>
+    </div></div>
+  </div>
+
+  <div class="col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <h5 class="card-title">Ranking</h5>
+      <ol class="mb-0 ps-3">{% for r in ranking %}
+        <li class="{% if r.trabajador.pk == trab.pk %}fw-bold{% endif %}">{{ r.trabajador.nombre_vendedor }} · {{ r.puntos }}</li>
+      {% endfor %}</ol>
+      <small class="text-muted">El primero gana un domingo libre extra.</small>
+    </div></div>
+  </div>
+
+  <div class="col-12">
+    <div class="card"><div class="card-body">
+      <h5 class="card-title">Movimientos del mes</h5>
+      <div class="table-responsive" style="max-height:420px">
+      <table class="table table-sm table-striped mb-0">
+        <thead><tr><th>Fecha</th><th>Tipo</th><th class="text-end">Puntos</th><th>Detalle</th></tr></thead>
+        <tbody>{% for m in movimientos %}
+          <tr class="{% if m.puntos < 0 %}table-danger{% endif %}"><td>{{ m.fecha|date:"d/m" }}</td><td>{{ m.get_tipo_display }}</td><td class="text-end">{{ m.puntos }}</td><td>{{ m.detalle }}</td></tr>
+        {% empty %}<tr><td colspan="4" class="text-muted">Aún no hay movimientos este mes.</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div></div>
+  </div>
+</div>
+<script>setTimeout(function(){ location.reload(); }, 300000);</script>
+{% endblock %}

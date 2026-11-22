@@ -1,0 +1,18 @@
+{% extends "core/base.html" %}
+{% block content %}
+{% include "incentivos/_mensajes.html" %}
+{% with seccion="dispositivo" %}{% include "incentivos/_nav_gerencia.html" %}{% endwith %}
+<h3>Equipos autorizados para marcar</h3>
+<p>Este equipo: {% if este_ok %}<span class="badge bg-success">autorizado ({{ este }})</span>{% else %}<span class="badge bg-secondary">no autorizado</span>{% endif %} · IP {{ ip }}</p>
+<div class="card mb-3"><div class="card-body">
+  <p class="small mb-2">Abre esta página <b>en la tablet o PC de la tienda</b>, con tu usuario de gerencia, y presiona el botón. El equipo queda autorizado por 5 años (si se borran las cookies del navegador, hay que repetirlo).</p>
+  <form method="post" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="accion" value="registrar">
+    <input name="nombre" class="form-control" placeholder="Nombre del equipo (ej. Tablet mostrador)" style="max-width:320px" required>
+    <button class="btn btn-primary">Autorizar este equipo</button></form>
+</div></div>
+<table class="table table-sm"><thead><tr><th>Equipo</th><th>Registrado</th><th>Estado</th><th></th></tr></thead><tbody>
+{% for d in dispositivos %}<tr><td>{{ d.nombre }}</td><td>{{ d.creado|date:"d/m/Y H:i" }}</td><td>{{ d.activo|yesno:"Activo,Inactivo" }}</td>
+<td>{% if d.activo %}<form method="post">{% csrf_token %}<input type="hidden" name="accion" value="desactivar"><input type="hidden" name="id" value="{{ d.pk }}"><button class="btn btn-sm btn-outline-danger">Desactivar</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+<p class="small text-muted">Pantalla de marcación: <a href="{% url 'incentivos:marcar' %}">/incentivos/marcar/</a> (déjala abierta en la tablet).</p>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "core/base.html" %}
+{% block title %}Tarea {{ tarea.tipo.codigo }}{% endblock %}
+{% block content %}
+{% include "incentivos/_mensajes.html" %}
+<div class="d-flex justify-content-between align-items-start mb-2">
+  <div>
+    <h3 class="mb-0">{{ tarea.tipo.nombre }}</h3>
+    <small class="text-muted">Tarea #{{ tarea.pk }} · {{ tarea.tipo.puntos }} pts · estándar {{ tarea.tipo.minutos_estandar }} min · llevas {{ minutos }} min{% if tarea.pausada_en %} · <b>EN PAUSA</b>{% endif %}</small>
+  </div>
+  <form method="post" class="d-flex gap-1">{% csrf_token %}
+    {% if tarea.pausada_en %}<button name="accion" value="reanudar" class="btn btn-success btn-sm">Reanudar</button>
+    {% else %}<button name="accion" value="pausar" class="btn btn-outline-warning btn-sm">Pausa (atender cliente)</button>{% endif %}
+    <button name="accion" value="soltar" class="btn btn-outline-secondary btn-sm" onclick="return confirm('¿Devolver la tarea a la cola?')">Devolver</button>
+  </form>
+</div>
+<a href="{% url 'incentivos:panel' %}" class="small">← Mi panel</a>
+<hr>
+
+<form method="post" enctype="multipart/form-data">{% csrf_token %}
+{% if codigo == "FOTO" %}
+  <p><b>{{ tarea.producto.cod }}</b> · {{ tarea.producto.marca|default:"" }} {{ tarea.producto.descripcion|default:"" }} · S/ {{ tarea.producto.precio_venta|default:"-" }} · stock {{ tarea.producto.stock }}</p>
+  <p class="small text-muted">Sube las 3 fotos: frontal (F), diagonal (D) y lateral (L). Fondo blanco, sin reflejos. La gerencia las revisa; si se eliminan, se quitan los puntos.</p>
+  <div class="row g-3">
+    <div class="col-md-4"><label class="form-label">Frontal</label>{% if tarea.producto.imagenF %}<img src="{{ tarea.producto.imagenF.url }}" class="img-fluid mb-1 border">{% endif %}<input type="file" name="imagenF" accept="image/*" class="form-control"></div>
+    <div class="col-md-4"><label class="form-label">Diagonal</label>{% if tarea.producto.imagenD %}<img src="{{ tarea.producto.imagenD.url }}" class="img-fluid mb-1 border">{% endif %}<input type="file" name="imagenD" accept="image/*" class="form-control"></div>
+    <div class="col-md-4"><label class="form-label">Lateral</label>{% if tarea.producto.imagenL %}<img src="{{ tarea.producto.imagenL.url }}" class="img-fluid mb-1 border">{% endif %}<input type="file" name="imagenL" accept="image/*" class="form-control"></div>
+  </div>
+
+{% elif codigo == "COD" %}
+  <p><b>{{ tarea.producto.cod }}</b> · {{ tarea.producto.descripcion|default:"" }} · stock {{ tarea.producto.stock }}</p>
+  <div class="row g-2">{% for f in form %}
+    <div class="col-md-3"><label class="form-label small">{{ f.label }}</label>{{ f }}{% for e in f.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+  {% endfor %}</div>
+  <script>document.querySelectorAll('form input, form select').forEach(e=>{ if(e.type!=='file' && e.type!=='hidden') e.classList.add('form-control','form-control-sm'); });</script>
+
+{% elif codigo == "WA_LISTA" %}
+  <p>Envía hoy los mensajes de <a href="{% url 'seguimiento_whatsapp' %}" target="_blank">Seguimiento WhatsApp</a> (todas las encuestas y controles, más el mínimo diario de renovaciones y reactivaciones). Al terminar, presiona el botón: el sistema verifica que no quede nada pendiente.</p>
+  {% if lista %}<ul>
+    <li>Encuestas pendientes: {{ lista.encuestas }}</li><li>Controles de menores: {{ lista.controles }}</li>
+    <li>Renovaciones + reactivaciones enviadas hoy: <b>{{ lista.renovaciones_hoy|add:lista.reactivaciones_hoy }}</b> de {{ lista.minimo }} (en lista: {{ lista.renovaciones }} renovaciones y {{ lista.reactivaciones_pendientes }} reactivaciones)</li>
+  </ul>{% endif %}
+  {% if lista_error %}<div class="alert alert-warning">No se pudo contar la lista: {{ lista_error }}</div>{% endif %}
+
+{% elif codigo == "WA_RESP" %}
+  <p>Un cliente escribió a las <b>{{ tarea.referencia|time:"H:i" }}</b> y no tiene respuesta. Respóndele desde el chat (cuenta si respondes en 30 minutos).</p>
+  {% if tarea.conversacion %}<a class="btn btn-success mb-3" target="_blank" href="{% url 'chat_whatsapp' tarea.conversacion.pk %}">Abrir chat</a>{% endif %}
+
+{% elif codigo == "INV" %}
+  <p>Cuenta el exhibidor <b>{{ tarea.exhibidor }}</b> y compara con el sistema. Registra cuántas {{ unidad }}s contaste y cuántas tuvieron diferencia (faltante, sobrante o código equivocado).</p>
+  <div class="row g-2">
+    <div class="col-md-3"><label class="form-label">{{ unidad|capfirst }}s contadas</label><input type="number" min="0" name="contadas" class="form-control" required></div>
+    <div class="col-md-3"><label class="form-label">Con diferencia</label><input type="number" min="0" name="diferencias" value="0" class="form-control" required></div>
+    <div class="col-md-6"><label class="form-label">Detalle de diferencias</label><input type="text" name="nota" class="form-control" placeholder="Códigos con diferencia"></div>
+  </div>
+
+{% elif codigo == "TEL" %}
+  <p>Corrige los teléfonos (9 dígitos, empieza con 9). Deja vacío si no lo encuentras.</p>
+  <table class="table table-sm"><thead><tr><th>Cliente</th><th>DNI</th><th>Teléfono actual</th><th>Teléfono correcto</th></tr></thead><tbody>
+  {% for c in clientes %}<tr><td>{{ c.nombre }}</td><td>{{ c.DNI|default:"" }}</td><td>{{ c.telefono }}</td>
+    <td><input name="tel_{{ c.pk }}" class="form-control form-control-sm" inputmode="numeric" maxlength="12"></td></tr>{% endfor %}
+  </tbody></table>
+{% endif %}
+
+  <div class="mt-3 d-flex gap-2">
+    <button class="btn btn-primary" name="accion" value="terminar">Terminar</button>
+    <button class="btn btn-outline-primary" name="seguir" value="1">Terminar y siguiente</button>
+  </div>
+</form>
+{% endblock %}

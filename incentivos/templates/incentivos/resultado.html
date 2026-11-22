@@ -1,0 +1,12 @@
+{% extends "core/base.html" %}
+{% block content %}
+{% include "incentivos/_mensajes.html" %}
+<h3>Registrar resultado</h3>
+<p class="text-muted small">Reel publicado: 5 pts. Reseña de Google: 2 pts (la revisa la gerencia). Cliente con cita que llegó: 3 pts.</p>
+<form method="post" class="col-md-6">{% csrf_token %}
+  {% for f in form %}<div class="mb-2"><label class="form-label">{{ f.label }}</label>{{ f }}{% for e in f.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>{% endfor %}
+  {% for e in form.non_field_errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
+  <button class="btn btn-primary">Registrar</button> <a href="{% url 'incentivos:panel' %}" class="btn btn-link">Volver</a>
+</form>
+<script>document.querySelectorAll('form input, form select').forEach(e=>{ if(e.type!=='hidden') e.classList.add('form-control'); });</script>
+{% endblock %}

@@ -27,6 +27,7 @@ urlpatterns = [
     path(
         "contabilidad/",
         include("contabilidad.urls")),
+    path("incentivos/", include("incentivos.urls")),
     
 
 
