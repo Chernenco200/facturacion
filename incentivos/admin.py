@@ -16,8 +16,8 @@ from .models import (
 
 @admin.register(Trabajador)
 class TrabajadorAdmin(admin.ModelAdmin):
-    list_display = ("nombre_vendedor", "usuario", "participa", "orden_rotacion")
-    list_editable = ("participa", "orden_rotacion")
+    list_display = ("nombre_vendedor", "usuario", "participa", "es_biselador", "venta_minima_mes", "orden_rotacion")
+    list_editable = ("participa", "es_biselador", "venta_minima_mes", "orden_rotacion")
 
 
 @admin.register(TipoTarea)

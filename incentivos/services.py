@@ -105,6 +105,16 @@ def tickets_mes(nombre_vendedor, periodo, hasta, monto_minimo):
     ).count()
 
 
+def venta_vendedor(nombre_vendedor, periodo, hasta):
+    """Suma del total de los tickets (con IGV) emitidos por el vendedor en el mes."""
+    from core.models import TicketVenta
+
+    return TicketVenta.objects.filter(
+        _filtro_sistema(periodo.year), fecha_emision__gte=periodo, fecha_emision__lte=hasta,
+        vendedor__iexact=nombre_vendedor.strip(),
+    ).aggregate(s=Sum("total"))["s"] or D0
+
+
 def venta_tienda(desde, hasta):
     from core.models import TicketVenta
 
@@ -246,10 +256,51 @@ def trabajadores_con_turno(fecha):
     return [t for t in trabajadores() if t.usuario_id in ids]
 
 
+def _reasignar_wa_lista(fecha):
+    """Si el asignado no marcó entrada 30 min después de su turno, la lista pasa a otro presente."""
+    tarea = Tarea.objects.filter(tipo__codigo=TipoTarea.WA_LISTA, fecha_objetivo=fecha,
+                                 estado=Tarea.PENDIENTE).select_related("asignada_a").first()
+    if not tarea or not tarea.asignada_a_id:
+        return 0
+    if Asistencia.objects.filter(usuario=tarea.asignada_a, fecha=fecha, entrada__isnull=False).exists():
+        return 0
+    turno = Turno.objects.filter(usuario=tarea.asignada_a, fecha=fecha).first()
+    if turno and ahora() < combinar(fecha, turno.hora_entrada) + timedelta(minutes=30):
+        return 0
+    presentes = [t for t in trabajadores() if Asistencia.objects.filter(
+        usuario=t.usuario, fecha=fecha, entrada__isnull=False).exists()]
+    if not presentes:
+        return 0
+    nuevo = presentes[fecha.toordinal() % len(presentes)]
+    Tarea.objects.filter(pk=tarea.pk).update(asignada_a=nuevo.usuario)
+    return 1
+
+
+def puede_enviar_lista_wa(user, fecha=None):
+    """
+    Seguimiento WhatsApp: si hoy hay lista asignada en Puntos IC, solo la envía esa persona
+    (y la gerencia o un ADMIN/SUPERVISOR). Sin tarea del día, todos pueden enviar.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if es_gerencia(user):
+        return True
+    rol = (getattr(getattr(user, "profile", None), "rol", "") or "").upper()
+    if rol in ("ADMIN", "SUPERVISOR"):
+        return True
+    fecha = fecha or hoy()
+    tarea = Tarea.objects.filter(tipo__codigo=TipoTarea.WA_LISTA, fecha_objetivo=fecha).first()
+    if tarea is None or tarea.asignada_a_id is None:
+        return True
+    return tarea.asignada_a_id == user.pk
+
+
 def _generar_wa_lista(fecha):
     t = tipo(TipoTarea.WA_LISTA)
-    if not t.activo or Tarea.objects.filter(tipo=t, fecha_objetivo=fecha).exists():
+    if not t.activo:
         return 0
+    if Tarea.objects.filter(tipo=t, fecha_objetivo=fecha).exists():
+        return _reasignar_wa_lista(fecha)
     candidatos = trabajadores_con_turno(fecha) or trabajadores()
     if not candidatos:
         return 0
@@ -490,10 +541,31 @@ def reanudar(tarea):
         tarea.save(update_fields=["segundos_pausa", "pausada_en"])
 
 
+def devoluciones_hoy(usuario):
+    return Alerta.objects.filter(usuario=usuario, tipo=Alerta.DEVOLUCION, fecha=hoy()).count()
+
+
 def soltar(tarea):
-    """El trabajador devuelve la tarea a la cola (sin alerta)."""
-    if tarea.estado == Tarea.EN_CURSO:
-        _devolver_a_cola(tarea)
+    """
+    El trabajador devuelve la tarea a la cola. Máximo DEVOLUCIONES_MAX_DIA al día:
+    así nadie escoge solo las tareas fáciles. Devuelve (ok, mensaje).
+    """
+    if tarea.estado != Tarea.EN_CURSO:
+        return False, "La tarea ya no está en curso."
+    usuario = tarea.asignada_a
+    maximo = P("DEVOLUCIONES_MAX_DIA")
+    usadas = devoluciones_hoy(usuario)
+    if usadas >= maximo:
+        clave = f"devol-limite-{usuario.pk}-{hoy()}"
+        if not cache.get(clave):
+            cache.set(clave, 1, 6 * 3600)
+            Alerta.objects.create(fecha=hoy(), usuario=usuario, tipo=Alerta.OTRO, tarea=tarea,
+                                  detalle=f"Intentó devolver más de {maximo} tareas hoy")
+        return False, f"Ya devolviste {maximo} tareas hoy. Termina esta o pide ayuda a la gerencia."
+    _devolver_a_cola(tarea)
+    Alerta.objects.create(fecha=hoy(), usuario=usuario, tipo=Alerta.DEVOLUCION, tarea=tarea, vista=True,
+                          detalle=f"Devolvió {tarea.tipo.codigo} #{tarea.pk} ({usadas + 1} de {maximo} hoy)")
+    return True, f"La tarea volvió a la cola ({usadas + 1} de {maximo} devoluciones hoy)."
 
 
 def acreditar(tarea, puntos, detalle="", evidencia=None, datos=None):
@@ -684,12 +756,15 @@ def completar_tel(tarea, telefonos):
 
 # ---------- Resultados (no van en la cola) ----------
 
-def registrar_resultado(usuario, codigo, evidencia="", cita=None, registrado_por=None):
+def registrar_resultado(usuario, codigo, evidencia="", cita=None, registrado_por=None, ticket=None):
     t = tipo(codigo)
     momento = ahora()
+    datos = {"registrado_por": registrado_por.pk if registrado_por else usuario.pk}
+    if ticket:
+        datos["ticket"] = ticket
     tarea = Tarea.objects.create(
         tipo=t, asignada_a=usuario, estado=Tarea.EN_CURSO, inicio=momento, cita=cita, evidencia=evidencia,
-        datos={"registrado_por": registrado_por.pk if registrado_por else usuario.pk},
+        datos=datos,
     )
     if cita is not None:
         from whatsapp.models import CitaWhatsApp
@@ -808,7 +883,7 @@ def marcar(usuario, accion, dispositivo="", ip=None):
                 Alerta.objects.create(fecha=fecha, usuario=usuario, tipo=Alerta.OTRO,
                                       detalle="Marcó entrada sin turno programado")
         if accion == "fin_refrigerio":
-            permitido = turno.minutos_refrigerio if turno else P("LV_REFRIGERIO")
+            permitido = turno.minutos_refrigerio if turno else P("REFRIGERIO_LS")
             exceso = minutos_entre(asis.inicio_refrigerio, momento) - permitido
             if exceso > P("REFRIGERIO_TOLERANCIA_MIN"):
                 asis.minutos_refrigerio_exceso = exceso
@@ -842,20 +917,30 @@ def justificar(asistencia, motivo, por):
 # Día y mes
 # =====================================================================
 
-def meta_del_dia(fecha, tickets):
+def meta_del_dia(fecha, tickets, ordenes_biseladas=0):
     base = P("META_BASE_SABADO", fecha) if fecha.weekday() == 5 else P("META_BASE", fecha)
-    return max(P("META_MINIMA", fecha), base - P("META_POR_TICKET", fecha) * tickets)
+    descuento = P("META_POR_TICKET", fecha) * tickets + P("BISEL_META_POR_ORDEN", fecha) * ordenes_biseladas
+    return max(P("META_MINIMA", fecha), base - descuento)
+
+
+def ordenes_biseladas(fecha):
+    """Órdenes que pasaron a biselado ese día (el biselador es el único que bisela)."""
+    from core.models import OrdenTrabajo
+
+    ini, fin = rango_dia(fecha)
+    return OrdenTrabajo.objects.filter(ts_biselado__gte=ini, ts_biselado__lt=fin).count()
 
 
 def resultado_dia(trab, fecha, asis=None):
     """Calcula (sin guardar) tickets, meta, puntos y si cumplió."""
     tickets = tickets_del_dia(trab.nombre_vendedor, fecha)
-    meta = meta_del_dia(fecha, tickets)
+    biseladas = ordenes_biseladas(fecha) if trab.es_biselador else 0
+    meta = meta_del_dia(fecha, tickets, biseladas)
     puntos = MovimientoPuntos.suma(usuario=trab.usuario, fecha=fecha)
     cumplido = puntos >= meta
     if asis is not None and (asis.falta or asis.minutos_tarde > 15):
         cumplido = False
-    return {"tickets": tickets, "meta": meta, "puntos": puntos, "cumplido": cumplido}
+    return {"tickets": tickets, "meta": meta, "puntos": puntos, "cumplido": cumplido, "biseladas": biseladas}
 
 
 def procesar_dia(fecha, liberar=True):
@@ -886,8 +971,147 @@ def procesar_dia(fecha, liberar=True):
         resumen.append((trab.nombre_vendedor, r))
     if liberar:
         for t in Tarea.objects.filter(estado=Tarea.EN_CURSO, inicio__lt=rango_dia(fecha)[1]).select_related("tipo"):
-            _devolver_a_cola(t)
+            if t.tipo.codigo == TipoTarea.ASIGNADA:
+                Tarea.objects.filter(pk=t.pk).update(estado=Tarea.PENDIENTE, inicio=None)
+            else:
+                _devolver_a_cola(t)
+    try:
+        vencer_tareas_asignadas(fecha)
+    except Exception:
+        log.exception("Puntos IC: error venciendo tareas asignadas")
+    try:
+        procesar_ventas_whatsapp(fecha)
+    except Exception:
+        log.exception("Puntos IC: error calculando ventas por WhatsApp")
     return resumen
+
+
+# ---------- Tareas asignadas por la gerencia ----------
+
+def asignar_tarea(usuario, descripcion, puntos, fecha_limite, por):
+    return Tarea.objects.create(
+        tipo=tipo(TipoTarea.ASIGNADA), asignada_a=usuario, descripcion=descripcion[:255],
+        puntos=q2(puntos), fecha_limite=fecha_limite, prioridad=1,
+        datos={"asignada_por": por.pk if por else None},
+    )
+
+
+def tareas_asignadas_pendientes(usuario):
+    return Tarea.objects.filter(tipo__codigo=TipoTarea.ASIGNADA, asignada_a=usuario,
+                                estado__in=Tarea.ABIERTAS).order_by("fecha_limite", "id")
+
+
+def completar_asignada(tarea, evidencia):
+    if not tarea.inicio:
+        tarea.inicio = ahora()
+    return acreditar(tarea, tarea.puntos, f"Tarea asignada: {tarea.descripcion}", evidencia=evidencia)
+
+
+def vencer_tareas_asignadas(fecha):
+    """Las tareas asignadas que pasan su fecha límite sin hacerse restan puntos."""
+    n = 0
+    for t in Tarea.objects.filter(tipo__codigo=TipoTarea.ASIGNADA, estado__in=Tarea.ABIERTAS,
+                                  fecha_limite__lt=fecha + timedelta(days=1), fecha_limite__isnull=False):
+        if t.fecha_limite >= fecha + timedelta(days=1):
+            continue
+        Tarea.objects.filter(pk=t.pk).update(estado=Tarea.ELIMINADA, motivo_eliminacion="Vencida sin hacerse",
+                                             eliminada_en=ahora())
+        registrar_movimiento(t.asignada_a, t.fecha_limite, P("PTS_TAREA_VENCIDA", fecha), MovimientoPuntos.TARDANZA,
+                             tarea=t, detalle=f"Tarea asignada vencida: {t.descripcion}"[:255],
+                             clave=f"vencida-{t.pk}")
+        n += 1
+    return n
+
+
+# ---------- Venta cerrada por WhatsApp ----------
+
+def procesar_ventas_whatsapp(fecha):
+    """
+    3 puntos por cada venta (> S/ 100) de un cliente que escribió por WhatsApp en los
+    20 días anteriores y al que alguien del equipo le respondió a mano desde la bandeja.
+    Los puntos van a la última persona que le respondió; si solo respondió el bot,
+    al vendedor del ticket. No cuenta si el cliente tenía otro ticket en los 30 días
+    previos al chat (estaba esperando un pedido). Una vez por ticket y por cliente
+    dentro de la ventana.
+    """
+    from core.models import TicketVenta
+    from whatsapp.models import CitaWhatsApp, MensajeWhatsApp
+
+    t_tipo = tipo(TipoTarea.CITA)
+    if not t_tipo.activo:
+        return 0
+    dias = P("VENTA_WA_DIAS", fecha)
+    excluir = P("VENTA_WA_EXCLUIR_DIAS", fecha)
+    monto = P("VENTA_WA_MONTO_MIN", fecha)
+    por_vendedor = {t.nombre_vendedor.strip().lower(): t for t in trabajadores()}
+    por_usuario = {t.usuario_id: t for t in trabajadores()}
+    fin_dia = rango_dia(fecha)[1]
+    creadas = 0
+    tickets = (TicketVenta.objects.filter(_filtro_sistema(fecha.year), fecha_emision=fecha, total__gt=monto)
+               .exclude(cliente__isnull=True).select_related("cliente"))
+    for tk in tickets:
+        tel = telefono_normalizado(tk.cliente.telefono or "")
+        if not tel:
+            continue
+        clave = f"ventawa-{tk.pk}"
+        if MovimientoPuntos.objects.filter(clave=clave).exists():
+            continue
+        variantes = _variantes(tel)
+        desde = rango_dia(fecha - timedelta(days=dias))[0]
+        entrantes = MensajeWhatsApp.objects.filter(numero__in=variantes, tipo="ENTRANTE",
+                                                   creado__gte=desde, creado__lt=fin_dia)
+        primero = entrantes.order_by("creado").values_list("creado", flat=True).first()
+        if not primero:
+            continue
+        # ¿Esperaba un pedido? (tenía otro ticket en los 30 días previos al primer mensaje)
+        f_primero = fecha_local(primero)
+        if TicketVenta.objects.filter(cliente=tk.cliente, fecha_emision__gte=f_primero - timedelta(days=excluir),
+                                      fecha_emision__lte=f_primero).exclude(pk=tk.pk).exists():
+            continue
+        # Una sola vez por cliente dentro de la ventana
+        if Tarea.objects.filter(tipo=t_tipo, datos__cliente=tk.cliente_id,
+                                fin__gte=ahora() - timedelta(days=dias)).exists():
+            continue
+        respuesta = (MensajeWhatsApp.objects.filter(numero__in=variantes, tipo="SALIENTE",
+                                                    enviado_por__isnull=False, creado__gte=desde,
+                                                    creado__lt=fin_dia)
+                     .order_by("-creado").first())
+        trab = por_usuario.get(respuesta.enviado_por_id) if respuesta else None
+        if trab is None:
+            trab = por_vendedor.get((tk.vendedor or "").strip().lower())
+        if trab is None:
+            continue
+        momento = combinar(fecha, datetime.min.time()) + timedelta(hours=20)
+        tarea = Tarea.objects.create(
+            tipo=t_tipo, asignada_a=trab.usuario, estado=Tarea.APROBADA, inicio=momento, fin=momento,
+            aprobada_en=momento, puntos=t_tipo.puntos,
+            evidencia=f"Ticket {tk.numero} · S/ {tk.total}",
+            datos={"ticket": tk.numero, "cliente": tk.cliente_id,
+                   "respondio": "equipo" if respuesta else "bot (va al vendedor)"},
+        )
+        registrar_movimiento(trab.usuario, fecha, t_tipo.puntos, MovimientoPuntos.TAREA, tarea=tarea,
+                             detalle=f"Venta cerrada por WhatsApp: ticket {tk.numero}", clave=clave)
+        CitaWhatsApp.objects.filter(numero__in=variantes, atendido=False, creado__gte=desde).update(atendido=True)
+        creadas += 1
+    return creadas
+
+
+# ---------- Clientes esperando respuesta (TV y tablero) ----------
+
+def clientes_esperando():
+    """Conversaciones cuyo último mensaje es del cliente y lleva más de N minutos sin respuesta."""
+    from whatsapp.models import MensajeWhatsApp
+
+    limite = ahora() - timedelta(minutes=P("WA_ESPERA_AVISO_MIN"))
+    desde = ahora() - timedelta(hours=24)
+    ultimos = {}
+    for numero, tipo_m, creado in (MensajeWhatsApp.objects.filter(creado__gte=desde)
+                                   .order_by("creado").values_list("numero", "tipo", "creado")):
+        ultimos[_ultimos9(numero)] = (tipo_m, creado)
+    esperando = sorted(c for t, c in ultimos.values() if t == "ENTRANTE" and c <= limite)
+    if not esperando:
+        return {"cantidad": 0, "minutos": 0}
+    return {"cantidad": len(esperando), "minutos": int((ahora() - esperando[0]).total_seconds() // 60)}
 
 
 def _alerta_puntos_altos(trab, asis):
@@ -979,6 +1203,13 @@ def requisitos(trab, periodo, dias_trabajados, dias_cumplidos, hasta=None):
                     "valor": f"{aprobadas} aprobadas" + (f" + {por_revisar} por revisar" if por_revisar else ""),
                     "meta": f"≥ {minimo} (quedan {quedan} monturas sin fotos)",
                     "ok": aprobadas >= minimo or quedan == 0}
+
+    if P("REQ_VENTA_VENDEDOR_ACTIVO", periodo):
+        minimo_v = trab.venta_minima_mes if trab.venta_minima_mes is not None else P("REQ_VENTA_VENDEDOR_MIN", periodo)
+        venta_v = venta_vendedor(trab.nombre_vendedor, periodo, hasta)
+        res["venta_vendedor"] = {"nombre": "Tu venta del mes",
+                                 "valor": f"S/ {venta_v:,.0f}", "meta": f"≥ S/ {minimo_v:,.0f}",
+                                 "ok": venta_v >= minimo_v}
 
     if P("REQ_TICKETS_ACTIVO", periodo):
         minimo_t = P("REQ_TICKETS_MIN", periodo)
@@ -1266,42 +1497,31 @@ def cerrar_mes(periodo, por, forzar=False):
 
 def generar_turnos(periodo, config, reemplazar=False):
     """
-    config: {usuario_id: {"lv": "09:00-18:00" | "10:00-19:00" | "",   # turno de la 1.ª semana del mes
-                          "rotar": bool,          # mañana y tarde se alternan cada semana
-                          "sabado": bool,
-                          "domingos": [date, ...],
-                          "descanso": 0..4 | None  # día libre (lun=0) en la semana del domingo trabajado
-                          }}
+    Horario desde el 26/11/2026: lunes a sábado 9:00–19:45 (todo el equipo) y
+    domingos y feriados 10:30–18:00 (quienes se marquen).
+    config: {usuario_id: {"lunes_a_sabado": bool,
+                          "domingos": [date, ...],      # domingos y feriados que trabaja
+                          "descanso": 0..5 | None}}     # día libre en la semana del domingo trabajado
     """
-    from datetime import time as dtime
+    from .horario import es_domingo_o_feriado, horario_del_dia
 
-    def hm(t):
-        h, m = t.split(":")
-        return dtime(int(h), int(m))
-
-    turnos_lv = ["09:00-18:00", "10:00-19:00"]
-    lunes0 = periodo - timedelta(days=periodo.weekday())
     creados = 0
     for uid, cfg in config.items():
-        domingos = set(cfg.get("domingos", []))
+        especiales = set(cfg.get("domingos", []))
         libres = set()
         if cfg.get("descanso") not in (None, ""):
-            for dom in domingos:
-                libre = dom - timedelta(days=6) + timedelta(days=int(cfg["descanso"]))
-                libres.add(libre)
+            for d in especiales:
+                if d.weekday() == 6:
+                    libres.add(d - timedelta(days=6) + timedelta(days=int(cfg["descanso"])))
         for d in dias_del_mes(periodo):
-            wd = d.weekday()
             datos = None
-            if wd < 5 and cfg.get("lv") and d not in libres:
-                turno = cfg["lv"]
-                if cfg.get("rotar") and turno in turnos_lv and ((d - lunes0).days // 7) % 2 == 1:
-                    turno = turnos_lv[1 - turnos_lv.index(turno)]
-                e, s_ = turno.split("-")
-                datos = (hm(e), hm(s_), P("LV_REFRIGERIO", d), False)
-            elif wd == 5 and cfg.get("sabado", True):
-                datos = (P("SABADO_ENTRADA", d), P("SABADO_SALIDA", d), P("SABADO_REFRIGERIO", d), True)
-            elif wd == 6 and d in domingos:
-                datos = (P("DOMINGO_ENTRADA", d), P("DOMINGO_SALIDA", d), P("DOMINGO_REFRIGERIO", d), False)
+            if es_domingo_o_feriado(d):
+                if d in especiales:
+                    ini, fin = horario_del_dia(d)
+                    datos = (ini, fin, P("REFRIGERIO_DF", d), False)
+            elif cfg.get("lunes_a_sabado", True) and d not in libres:
+                ini, fin = horario_del_dia(d)
+                datos = (ini, fin, P("REFRIGERIO_LS", d), d.weekday() == 5)
             existe = Turno.objects.filter(usuario_id=uid, fecha=d)
             if datos is None:
                 if reemplazar:
@@ -1345,6 +1565,26 @@ def productividad(periodo):
             "abandonos": Alerta.objects.filter(usuario=trab.usuario, tipo=Alerta.ABANDONO,
                                                fecha__gte=periodo, fecha__lte=ultimo_dia(periodo)).count(),
         })
+    return filas
+
+
+def tiempos_por_tipo(periodo):
+    """Tiempo real (mediana, sin pausas) frente al estándar, por tipo de tarea."""
+    from statistics import median
+
+    ini_dt, fin_dt = rango_dia(periodo)[0], rango_dia(ultimo_dia(periodo))[1]
+    filas = []
+    for t in TipoTarea.objects.filter(codigo__in=TipoTarea.EN_COLA + (TipoTarea.ASIGNADA,)):
+        mins = [x.minutos_trabajados for x in Tarea.objects.filter(
+            tipo=t, fin__gte=ini_dt, fin__lt=fin_dt, inicio__isnull=False).exclude(estado=Tarea.ELIMINADA)]
+        if not mins:
+            continue
+        real = median(mins)
+        std = t.minutos_estandar or 0
+        desvio = round((real - std) * 100 / std) if std else None
+        filas.append({"tipo": t, "n": len(mins), "real": round(real, 1), "estandar": std, "desvio": desvio,
+                      "alerta": desvio is not None and abs(desvio) > 30,
+                      "puntos_sugeridos": round(real / 6, 1)})
     return filas
 
 

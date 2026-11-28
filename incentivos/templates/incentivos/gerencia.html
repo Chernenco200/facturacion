@@ -50,6 +50,21 @@
 <td class="small">{% for k, v in p.por_tipo.items %}{{ k }}: {{ v.prom }} ({{ v.n }}){% if not forloop.last %} · {% endif %}{% endfor %}</td><td>{{ p.eliminadas }}</td><td>{{ p.abandonos }}</td></tr>{% endfor %}
 </tbody></table>
 </div>
+<div class="col-lg-7">
+<h5>Tiempo real vs. estándar</h5>
+<table class="table table-sm"><thead><tr><th>Tarea</th><th>Hechas</th><th>Real (mediana)</th><th>Estándar</th><th>Desvío</th><th>Puntos sugeridos</th></tr></thead><tbody>
+{% for t in tiempos %}<tr class="{% if t.alerta %}table-danger{% endif %}"><td>{{ t.tipo.codigo }}</td><td>{{ t.n }}</td><td>{{ t.real }} min</td><td>{{ t.estandar }} min</td><td>{% if t.desvio is not None %}{{ t.desvio }}%{% endif %}</td><td>{{ t.puntos_sugeridos }} <small class="text-muted">(actual {{ t.tipo.puntos }})</small></td></tr>
+{% empty %}<tr><td colspan="6" class="text-muted">Aún no hay tareas terminadas este mes.</td></tr>{% endfor %}
+</tbody></table>
+<p class="small text-muted">En rojo, las que se desvían más de 30% del estándar. Puntos sugeridos = minutos reales ÷ 6. Se ajustan en Configuración.</p>
+</div>
+<div class="col-lg-5">
+<h5>Tareas asignadas abiertas <a class="btn btn-sm btn-outline-primary ms-2" href="{% url 'incentivos:asignar' %}">Asignar</a></h5>
+<table class="table table-sm"><tbody>
+{% for t in asignadas %}<tr><td>{{ t.asignada_a.username }}</td><td>{{ t.descripcion }}</td><td>{{ t.fecha_limite|date:"d/m" }}</td><td>{{ t.puntos }} pts</td></tr>
+{% empty %}<tr><td class="text-muted">Ninguna.</td></tr>{% endfor %}
+</tbody></table>
+</div>
 <div class="col-lg-5">
 <h5>Cola</h5>
 <table class="table table-sm"><thead><tr><th>Tipo</th><th>Pendientes</th><th>En curso</th></tr></thead><tbody>

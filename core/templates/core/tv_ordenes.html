@@ -1,116 +1,287 @@
-{% extends "core/base.html" %}
-{% block title %}Estado de Órdenes{% endblock %}
-{% block content %}
-
-  <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
-    <div class="tv-title">Estado de tus Lentes</div>
-
-    <div class="text-end">
-      <div class="fw-bold" style="font-size:20px;">Puntualidad de hoy</div>
-      <div class="tv-kpi">
-        <span id="kpi_ontime">0</span> / <span id="kpi_total">0</span> a tiempo ✅
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estado de tus lentes · Óptica IC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #EEF2F7; color: #0B1F3A;
+    font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+  .tv { height: 100vh; display: flex; flex-direction: column; }
+  header { height: 12vh; padding: 0 3vw; display: flex; align-items: center; justify-content: space-between;
+    background: #0B2545; color: #fff; }
+  .marca { display: flex; align-items: center; gap: 1.5vw; }
+  .logo { width: 4.2vw; height: 4.2vw; border-radius: 1vw; background: #fff; display: flex; align-items: center; justify-content: center; }
+  .marca-nombre { font-size: 2.1vw; font-weight: 800; letter-spacing: .5px; }
+  .marca-sub { font-size: 1.15vw; color: #B9CBE4; font-weight: 500; }
+  .der { display: flex; align-items: center; gap: 2vw; }
+  .reloj { text-align: right; }
+  .hora { font-size: 3.1vw; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .fecha { font-size: 1.05vw; color: #B9CBE4; margin-top: .4vh; }
+  .wa { display: none; align-items: center; gap: .8vw; padding: 1vh 1.2vw; border-radius: .9vw;
+    background: #F59E0B; color: #1F1300; font-weight: 700; }
+  .wa.visible { display: flex; animation: pulso 1.6s ease-in-out infinite; }
+  .wa-t1 { font-size: 1.3vw; } .wa-t2 { font-size: .95vw; font-weight: 600; }
+  @keyframes pulso { 50% { box-shadow: 0 0 0 .6vw rgba(245, 158, 11, .35); } }
+  main { flex: 1; min-height: 0; padding: 3.5vh 3vw; display: flex; gap: 2vw; }
+  .izq { width: 36%; display: flex; flex-direction: column; gap: 2.4vh; }
+  .der-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2.4vh; }
+  .rotulo { font-size: 1.15vw; font-weight: 700; letter-spacing: .18vw; }
+  .card { background: #fff; border-radius: 1.5vw; box-shadow: 0 2px 0 #D5DEEA, 0 12px 32px rgba(11, 37, 69, .08); }
+  .llamando { padding: 3vh 2.3vw; border-top: 1vh solid #15803D; display: flex; flex-direction: column; gap: 1vh; }
+  .llamando.vacio { border-top-color: #CBD5E1; }
+  .ll-top { display: flex; justify-content: space-between; align-items: center; }
+  .ll-ticket-lbl { font-size: 1.55vw; font-weight: 600; color: #4A5D78; }
+  .badge { display: flex; align-items: center; gap: .5vw; padding: .6vh 1vw; border-radius: 99px;
+    background: #DCFCE7; color: #14532D; font-size: 1.15vw; font-weight: 700; }
+  .ll-num { font-size: 8.3vw; font-weight: 800; line-height: 1; letter-spacing: -.2vw; color: #0B2545; font-variant-numeric: tabular-nums; }
+  .ll-nombre { font-size: 2.5vw; font-weight: 700; }
+  .ll-accion { margin-top: .6vh; padding: 1.6vh 1.3vw; border-radius: 1vw; background: #0B2545; color: #fff;
+    font-size: 1.9vw; font-weight: 700; }
+  .llamando.nuevo { animation: destello 1s ease-in-out 6; }
+  @keyframes destello { 50% { background: #DCFCE7; } }
+  .recientes { padding: 2vh 1.9vw; }
+  .rec-fila { display: flex; justify-content: space-between; padding: 1vh 0; border-bottom: 1px solid #E3E9F1; font-size: 1.45vw; }
+  .rec-fila:last-child { border-bottom: 0; }
+  .tabla { flex: 1; min-height: 0; padding: .8vh 2vw; display: flex; flex-direction: column; overflow: hidden; }
+  .fila { display: grid; grid-template-columns: 8vw minmax(0, 1fr) 21vw 9vw; gap: 1.3vw; align-items: center;
+    padding: 1.4vh 0; border-bottom: 1px solid #E3E9F1; }
+  .fila.cab { font-size: 1.05vw; font-weight: 700; letter-spacing: .08vw; color: #4A5D78; border-bottom-width: 2px; }
+  .f-ticket { font-size: 2vw; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .f-cliente { font-size: 1.8vw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .f-etapa { font-size: 1.15vw; font-weight: 600; color: #4A5D78; }
+  .pasos { display: flex; gap: .5vw; }
+  .paso { flex: 1; height: 1.6vh; border-radius: 1vh; background: #DCE3EC; }
+  .paso.hecho { background: #15803D; } .paso.actual { background: #1D4ED8; }
+  .f-hora { text-align: right; font-size: 1.8vw; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .f-dia { text-align: right; font-size: 1.05vw; color: #4A5D78; }
+  .leyenda { display: flex; gap: 1.4vw; font-size: 1.05vw; color: #4A5D78; font-weight: 600; }
+  footer { height: 8vh; padding: 0 3vw; display: flex; align-items: center; justify-content: space-between;
+    background: #fff; border-top: 1px solid #D5DEEA; font-size: 1.35vw; }
+  .muted { color: #4A5D78; }
+  #activar { position: fixed; inset: 0; background: rgba(11, 37, 69, .92); color: #fff; display: flex;
+    flex-direction: column; align-items: center; justify-content: center; gap: 2vh; z-index: 10; }
+  #activar button { font: inherit; font-size: 1.6vw; font-weight: 700; padding: 1.6vh 2.4vw; border-radius: 1vw; border: 0;
+    background: #fff; color: #0B2545; cursor: pointer; }
+  #activar .sec { background: transparent; color: #fff; border: 2px solid #B9CBE4; font-size: 1.2vw; }
+  #activar p { font-size: 1.2vw; color: #B9CBE4; margin: 0; max-width: 50vw; text-align: center; }
+</style>
+</head>
+<body>
+<div class="tv">
+  <header>
+    <div class="marca">
+      <div class="logo">
+        <svg width="62%" height="62%" viewBox="0 0 24 24" fill="none" stroke="#0B2545" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6.5" cy="14" r="3.5"/><circle cx="17.5" cy="14" r="3.5"/><path d="M10 14h4"/><path d="M3 14 4.5 7h2"/><path d="M21 14l-1.5-7h-2"/></svg>
       </div>
-      <div class="tv-sub" id="last_update"></div>
+      <div><div class="marca-nombre">Óptica IC</div><div class="marca-sub">Estado de tus lentes</div></div>
     </div>
-  </div>
+    <div class="der">
+      <div id="wa" class="wa" role="status">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1F1300" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12z"/></svg>
+        <div><div class="wa-t1" id="wa1"></div><div class="wa-t2" id="wa2"></div></div>
+      </div>
+      <div class="reloj"><div class="hora" id="hora">--:--</div><div class="fecha" id="fecha"></div></div>
+    </div>
+  </header>
 
+  <main>
+    <section class="izq">
+      <div class="rotulo" style="color:#15803D">LENTES LISTOS</div>
+      <div class="card llamando vacio" id="llamando">
+        <div class="ll-top"><div class="ll-ticket-lbl">Ticket</div><div class="badge" id="badge" style="visibility:hidden">Llamando</div></div>
+        <div class="ll-num" id="ll-num">—</div>
+        <div class="ll-nombre" id="ll-nombre">&nbsp;</div>
+        <div class="ll-accion">Acérquese a despacho</div>
+      </div>
+      <div class="card recientes">
+        <div class="rotulo muted" style="font-size:1vw;margin-bottom:.6vh">LISTOS PARA RECOGER</div>
+        <div id="recientes"></div>
+      </div>
+    </section>
 
-  <div class="table-responsive">
-    <table class="table table-bordered table-hover align-middle" style="font-size: 24px;">
-     <thead class="table-dark">
-      <tr>
-         <th style="width:12%;">Ticket</th>
-         <th style="width:22%;">Cliente</th>
-         <th style="width:30%;">Estado</th>
-         <th style="width:18%;">Entrega</th>
-         <th style="width:18%;" class="text-center">SLA</th>
-      </tr>
-     </thead>
-      <tbody id="rows"></tbody>
-    </table>
-  </div>
+    <section class="der-col">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div class="rotulo" style="color:#1D4ED8">EN PREPARACIÓN</div>
+        <div class="leyenda"><span>Laboratorio</span><span>Biselado</span><span>Control de calidad</span><span>Listo</span></div>
+      </div>
+      <div class="card tabla">
+        <div class="fila cab"><span>TICKET</span><span>CLIENTE</span><span>AVANCE</span><span style="text-align:right">ENTREGA</span></div>
+        <div id="filas"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div><b id="kpi">—</b></div>
+    <div class="muted">Pregunta por nuestras monturas de marca</div>
+    <div class="muted" style="font-size:1vw" id="actualizado"></div>
+  </footer>
 </div>
 
-<style>
-  /* Look más “pantalla TV” */
-  .tv-title { font-size: 64px; font-weight: 800; letter-spacing: .5px; }
-  .tv-kpi { font-size: 34px; font-weight: 800; }
-  .tv-sub { font-size: 16px; opacity: .75; }
-
-  /* Semáforo */
-  .dot {
-    display: inline-block;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    margin-right: 10px;
-    vertical-align: middle;
-  }
-  .dot.green { background: #22c55e; }   /* verde */
-  .dot.yellow { background: #f59e0b; }  /* amarillo */
-  .dot.red { background: #ef4444; }     /* rojo */
-
-  /* Estados visuales */
-  .row-red { background: rgba(239, 68, 68, 0.12) !important; }
-  .row-yellow { background: rgba(245, 158, 11, 0.12) !important; }
-  .row-green { background: rgba(34, 197, 94, 0.10) !important; }
-
-  /* Tablas grandes */
-  .tv-table { font-size: 28px; }
-  .tv-table td, .tv-table th { padding: 18px 14px; }
-</style>
-
-
-
+<div id="activar">
+  <button type="button" id="btn-activar">Activar sonido y voz</button>
+  <button type="button" class="sec" id="btn-probar">Probar voz</button>
+  <p id="voz-info">Los navegadores exigen tocar la pantalla una vez para permitir sonido.</p>
+</div>
 
 <script>
-async function loadTV(){
-  const res = await fetch("{% url 'tv_ordenes_data' %}");
-  const json = await res.json();
+(function () {
+  var URL_DATOS = "{% url 'tv_ordenes_data' %}";
+  var ETAPA = { LAB_PEDIDO: 0, LAB_EN_PROCESO: 0, BISELADO: 1, UV: 2, LISTO: 3 };
+  var NOMBRE_ETAPA = ["En laboratorio", "Biselado", "Control de calidad", "Listo"];
+  var vistos = null;            // tickets LISTO ya anunciados
+  var waPrevio = 0, waUltimoAviso = 0;
+  var sonido = false, audio = null, voz = null;
 
-  document.getElementById("kpi_total").textContent = json.kpi.entregados_hoy;
-  document.getElementById("kpi_ontime").textContent = json.kpi.a_tiempo_hoy;
-  document.getElementById("last_update").textContent = "Actualizado: " + new Date().toLocaleTimeString();
+  function esc(t) { var d = document.createElement("div"); d.textContent = t == null ? "" : String(t); return d.innerHTML; }
 
-  const tbody = document.getElementById("rows");
-  tbody.innerHTML = "";
+  // ---------- Sonido ----------
+  function timbre(notas) {
+    if (!sonido || !audio) return;
+    var t = audio.currentTime;
+    notas.forEach(function (f, i) {
+      var o = audio.createOscillator(), g = audio.createGain();
+      o.type = "sine"; o.frequency.value = f; o.connect(g); g.connect(audio.destination);
+      g.gain.setValueAtTime(0.0001, t + i * 0.28);
+      g.gain.exponentialRampToValueAtTime(0.35, t + i * 0.28 + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.28 + 0.6);
+      o.start(t + i * 0.28); o.stop(t + i * 0.28 + 0.65);
+    });
+  }
+  function elegirVoz() {
+    if (!("speechSynthesis" in window)) return null;
+    var vs = speechSynthesis.getVoices();
+    return vs.find(function (v) { return /es[-_]PE/i.test(v.lang); }) ||
+           vs.find(function (v) { return /es[-_](419|US|MX)/i.test(v.lang); }) ||
+           vs.find(function (v) { return /^es/i.test(v.lang); }) || null;
+  }
+  function hablar(texto, veces) {
+    if (!sonido || !("speechSynthesis" in window)) return;
+    voz = voz || elegirVoz();
+    for (var i = 0; i < (veces || 1); i++) {
+      var u = new SpeechSynthesisUtterance(texto);
+      u.lang = voz ? voz.lang : "es-PE"; if (voz) u.voice = voz; u.rate = 0.92;
+      speechSynthesis.speak(u);
+    }
+  }
+  function numeroHablado(n) { return String(n).replace(/^0+/, ""); }
+  if ("speechSynthesis" in window) { speechSynthesis.onvoiceschanged = function () { voz = elegirVoz(); }; }
 
-  for(const it of json.items){
+  document.getElementById("btn-activar").onclick = function () {
+    try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = null; }
+    sonido = true;
+    document.getElementById("activar").style.display = "none";
+    timbre([660, 880]);
+  };
+  document.getElementById("btn-probar").onclick = function () {
+    try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    sonido = true;
+    var info = document.getElementById("voz-info");
+    if (!("speechSynthesis" in window)) { info.textContent = "Este televisor no tiene voz: solo sonarán los timbres. Para la voz, usa un TV box Android con Chrome."; timbre([660, 880]); return; }
+    timbre([660, 880]);
+    setTimeout(function () { hablar("Prueba de voz de Óptica I C. Ticket dos mil quinientos cuarenta y cinco. Sus lentes están listos."); }, 700);
+    info.textContent = elegirVoz() ? "Voz encontrada: " + elegirVoz().name : "No se encontró una voz en español: puede sonar en otro idioma o no sonar.";
+  };
 
-    // Texto SLA
-    let slaText = "-";
-    if(it.estado_code === "ENTREGADO"){
-      slaText = it.semaforo === "green" ? "A tiempo ✅" : ("Tarde +" + it.min_atraso + " min ⛔");
+  // ---------- Reloj ----------
+  function reloj() {
+    var d = new Date();
+    document.getElementById("hora").textContent = d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Lima" });
+    var f = d.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Lima" });
+    document.getElementById("fecha").textContent = f.charAt(0).toUpperCase() + f.slice(1);
+  }
+
+  // ---------- Datos ----------
+  function pintar(json) {
+    var items = json.items || [];
+    var listos = items.filter(function (it) { return it.estado_code === "LISTO"; })
+      .sort(function (a, b) { return (b.ts_listo || "").localeCompare(a.ts_listo || ""); });
+    var prep = items.filter(function (it) { return ETAPA[it.estado_code] !== undefined && it.estado_code !== "LISTO"; });
+
+    // Llamando: el último que pasó a LISTO
+    var box = document.getElementById("llamando");
+    if (listos.length) {
+      var u = listos[0];
+      box.classList.remove("vacio");
+      document.getElementById("ll-num").textContent = u.ticket;
+      document.getElementById("ll-nombre").textContent = u.cliente;
+      document.getElementById("badge").style.visibility = "visible";
     } else {
-      if(it.vencido){
-        slaText = "RETRASO +" + it.min_atraso + " min ⛔";
-      } else {
-        slaText = "En proceso";
-      }
+      box.classList.add("vacio");
+      document.getElementById("ll-num").textContent = "—";
+      document.getElementById("ll-nombre").innerHTML = "&nbsp;";
+      document.getElementById("badge").style.visibility = "hidden";
+    }
+    document.getElementById("recientes").innerHTML = listos.slice(1, 5).map(function (it) {
+      return '<div class="rec-fila"><b>' + esc(it.ticket) + '</b><span style="flex:1;margin-left:1.5vw;font-weight:600">' + esc(it.cliente) + '</span></div>';
+    }).join("") || '<div class="rec-fila muted">—</div>';
+
+    // Anunciar los nuevos LISTO (no los que ya estaban al encender la TV)
+    var actuales = listos.map(function (it) { return String(it.ticket); });
+    if (vistos === null) { vistos = new Set(actuales); }
+    else {
+      actuales.filter(function (t) { return !vistos.has(t); }).forEach(function (t, i) {
+        vistos.add(t);
+        box.classList.remove("nuevo"); void box.offsetWidth; box.classList.add("nuevo");
+        setTimeout(function () {
+          timbre([523, 659, 784]);
+          setTimeout(function () { hablar("Ticket " + numeroHablado(t) + ". Sus lentes están listos. Por favor, acérquese a despacho.", 2); }, 1100);
+        }, i * 9000);
+      });
     }
 
-    const tr = document.createElement("tr");
+    // En preparación
+    document.getElementById("filas").innerHTML = prep.slice(0, 9).map(function (it) {
+      var n = ETAPA[it.estado_code];
+      var pasos = [0, 1, 2, 3].map(function (i) { return '<div class="paso ' + (i < n ? "hecho" : (i === n ? "actual" : "")) + '"></div>'; }).join("");
+      var partes = (it.due_str || "").split(" ");
+      return '<div class="fila"><span class="f-ticket">' + esc(it.ticket) + '</span>' +
+        '<div style="min-width:0"><div class="f-cliente">' + esc(it.cliente) + '</div><div class="f-etapa">' + NOMBRE_ETAPA[n] + '</div></div>' +
+        '<div class="pasos">' + pasos + '</div>' +
+        '<div><div class="f-hora">' + esc(partes[1] || "—") + '</div><div class="f-dia">' + esc(partes[0] || "") + '</div></div></div>';
+    }).join("");
 
-    // Clases por semáforo
-    tr.classList.add(it.semaforo === "red" ? "row-red" : it.semaforo === "yellow" ? "row-yellow" : "row-green");
+    // Puntualidad del día
+    var k = json.kpi || {};
+    document.getElementById("kpi").textContent = k.entregados_hoy ? ("Hoy entregamos a tiempo " + k.a_tiempo_hoy + " de " + k.entregados_hoy + " pedidos") : "Gracias por confiar en Óptica IC";
+    document.getElementById("actualizado").textContent = "Actualizado " + new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit", timeZone: "America/Lima" });
 
-    tr.innerHTML = `
-      <td class="fw-bold">#${it.ticket}</td>
-      <td class="fw-bold">${it.cliente}</td>
-      <td class="fw-bold">
-        <span class="dot ${it.semaforo}"></span>${it.estado}
-      </td>
-      <td class="fw-bold">${it.due_str || "-"}</td>
-      <td class="text-center fw-bold">${slaText}</td>
-    `;
-
-    tbody.appendChild(tr);
+    // WhatsApp: clientes esperando respuesta
+    var wa = json.whatsapp || { cantidad: 0, minutos: 0 };
+    var waBox = document.getElementById("wa");
+    if (wa.cantidad > 0) {
+      document.getElementById("wa1").textContent = wa.cantidad === 1 ? "1 cliente espera respuesta" : wa.cantidad + " clientes esperan respuesta";
+      document.getElementById("wa2").textContent = "WhatsApp · el primero hace " + wa.minutos + " min";
+      waBox.classList.add("visible");
+      var ahora = Date.now();
+      var repetir = {{ wa_repetir_min|default:10 }} * 60000;
+      if (wa.cantidad > waPrevio || ahora - waUltimoAviso > repetir) {
+        waUltimoAviso = ahora;
+        timbre([988, 740]);
+        setTimeout(function () {
+          hablar(wa.cantidad === 1 ? "Hay un cliente esperando respuesta por WhatsApp." : "Hay " + wa.cantidad + " clientes esperando respuesta por WhatsApp.");
+        }, 800);
+      }
+    } else {
+      waBox.classList.remove("visible");
+    }
+    waPrevio = wa.cantidad;
   }
-}
 
-loadTV();
-setInterval(loadTV, 5000);
+  function cargar() {
+    fetch(URL_DATOS, { credentials: "same-origin" })
+      .then(function (r) { if (r.redirected || !r.ok) throw new Error("sesión"); return r.json(); })
+      .then(pintar)
+      .catch(function () { document.getElementById("actualizado").textContent = "Sin conexión: reintentando…"; });
+  }
+
+  reloj(); setInterval(reloj, 15000);
+  cargar(); setInterval(cargar, 10000);
+})();
 </script>
-
-
-{% endblock %}
+</body>
+</html>

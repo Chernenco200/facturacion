@@ -1,0 +1,19 @@
+{% comment %}
+Uso: {% include "core/_paginacion.html" with pagina=objeto_page filtros=filtros param="page" etiqueta="clientes" %}
+"filtros" es la query string sin el parámetro de página (ver core/paginacion.py).
+{% endcomment %}
+{% if pagina.paginator.num_pages > 1 %}
+<nav aria-label="Paginación">
+  <ul class="pagination justify-content-center flex-wrap my-3">
+    {% if pagina.has_previous %}
+      <li class="page-item"><a class="page-link" href="?{{ filtros }}{% if filtros %}&{% endif %}{{ param|default:'page' }}=1">&laquo; Primera</a></li>
+      <li class="page-item"><a class="page-link" href="?{{ filtros }}{% if filtros %}&{% endif %}{{ param|default:'page' }}={{ pagina.previous_page_number }}">Anterior</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }} ({{ pagina.paginator.count }} {{ etiqueta|default:"registros" }})</span></li>
+    {% if pagina.has_next %}
+      <li class="page-item"><a class="page-link" href="?{{ filtros }}{% if filtros %}&{% endif %}{{ param|default:'page' }}={{ pagina.next_page_number }}">Siguiente</a></li>
+      <li class="page-item"><a class="page-link" href="?{{ filtros }}{% if filtros %}&{% endif %}{{ param|default:'page' }}={{ pagina.paginator.num_pages }}">Última &raquo;</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}

@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from unittest import mock
 
@@ -47,8 +47,13 @@ class PuntosICTests(TestCase):
         with a_las(martes, 9, 20):
             S.marcar(self.u, "entrada")
         a = Asistencia.objects.get(usuario=self.u, fecha=martes)
-        self.assertEqual(a.minutos_tarde, 20)
-        self.assertEqual(MovimientoPuntos.suma(usuario=self.u, fecha=martes), Decimal("-5"))
+        self.assertEqual(a.minutos_tarde, 15)  # tolerancia de 5 min que se descuenta (opción B)
+        self.assertEqual(MovimientoPuntos.suma(usuario=self.u, fecha=martes), Decimal("-3"))
+        miercoles = date(2026, 12, 9)
+        Turno.objects.create(usuario=self.u, fecha=miercoles, hora_entrada=time(9), hora_salida=time(19, 45))
+        with a_las(miercoles, 9, 5):
+            S.marcar(self.u, "entrada")
+        self.assertEqual(MovimientoPuntos.suma(usuario=self.u, fecha=miercoles), Decimal("1"))  # 9:05 a tiempo
 
     def test_falta_y_justificacion(self):
         with a_las(self.lunes, 23, 0):
@@ -135,10 +140,126 @@ class BonoVentasTests(TestCase):
         b = S.bono_ventas(self.periodo)
         self.assertTrue(all(f["adicional"] == Decimal("75.00") for f in b["filas"]))
 
-    def test_turnos_rotan_y_descanso(self):
+    def test_turnos_horario_nuevo(self):
         u = self.trabs[0].usuario
-        S.generar_turnos(self.periodo, {u.id: {"lv": "09:00-18:00", "rotar": True, "sabado": True,
-                                               "domingos": [date(2026, 12, 6)], "descanso": 2}})
+        S.generar_turnos(self.periodo, {u.id: {"lunes_a_sabado": True, "descanso": 2,
+                                               "domingos": [date(2026, 12, 6), date(2026, 12, 8)]}})
         self.assertFalse(Turno.objects.filter(usuario=u, fecha=date(2026, 12, 2)).exists())  # miércoles libre
         self.assertEqual(Turno.objects.get(usuario=u, fecha=date(2026, 12, 6)).hora_entrada, time(10, 30))
-        self.assertEqual(Turno.objects.get(usuario=u, fecha=date(2026, 12, 7)).hora_entrada, time(10))  # rota
+        self.assertEqual(Turno.objects.get(usuario=u, fecha=date(2026, 12, 7)).hora_salida, time(19, 45))
+        self.assertEqual(Turno.objects.get(usuario=u, fecha=date(2026, 12, 8)).hora_entrada, time(10, 30))  # feriado
+        self.assertFalse(Turno.objects.filter(usuario=u, fecha=date(2026, 12, 9)).exists())  # feriado no marcado
+        self.assertFalse(Turno.objects.filter(usuario=u, fecha=date(2026, 12, 13)).exists())  # domingo no marcado
+
+
+class Version2Tests(TestCase):
+    def setUp(self):
+        self.u = User.objects.create_user("ana", password="x")
+        self.t = Trabajador.objects.create(usuario=self.u, nombre_vendedor="Ana")
+
+    def test_tienda_abierta_y_feriados(self):
+        from incentivos.horario import tienda_abierta
+        lunes = datetime(2026, 12, 7, 19, 50, tzinfo=LIMA)
+        self.assertEqual(tienda_abierta(lunes), (False, "mañana martes a las 10:30 a. m."))  # 8/12 feriado
+        self.assertTrue(tienda_abierta(datetime(2026, 12, 8, 11, 0, tzinfo=LIMA))[0])
+        self.assertFalse(tienda_abierta(datetime(2026, 12, 8, 9, 30, tzinfo=LIMA))[0])
+
+    def test_acceso_por_horario(self):
+        from incentivos.middleware import dentro_de_horario
+        self.assertTrue(dentro_de_horario(self.u, datetime(2026, 12, 7, 9, 0, tzinfo=LIMA)))
+        self.assertTrue(dentro_de_horario(self.u, datetime(2026, 12, 7, 19, 55, tzinfo=LIMA)))  # margen 15 min
+        self.assertFalse(dentro_de_horario(self.u, datetime(2026, 12, 7, 8, 50, tzinfo=LIMA)))
+        self.assertFalse(dentro_de_horario(self.u, datetime(2026, 12, 13, 12, 0, tzinfo=LIMA)))  # domingo sin turno
+        Turno.objects.create(usuario=self.u, fecha=date(2026, 12, 13), hora_entrada=time(10, 30),
+                             hora_salida=time(18))
+        self.assertTrue(dentro_de_horario(self.u, datetime(2026, 12, 13, 12, 0, tzinfo=LIMA)))
+
+    def test_middleware_cierra_sesion_fuera_de_horario(self):
+        from django.test import Client
+        c = Client()
+        c.force_login(self.u)
+        with a_las(date(2026, 12, 7), 21, 0):
+            r = c.get("/incentivos/", secure=True)
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/accounts/login", r["Location"])
+
+    def test_limite_de_devoluciones(self):
+        tipo_inv = TipoTarea.objects.get(codigo="INV")
+        for i in range(4):
+            Tarea.objects.create(tipo=tipo_inv, exhibidor=f"E{i}")
+        with mock.patch.object(S, "generar_tareas", return_value={}):
+            for i in range(3):
+                t, _ = S.siguiente_tarea(self.u)
+                ok, _ = S.soltar(t)
+                self.assertTrue(ok)
+                Tarea.objects.filter(pk=t.pk).update(prioridad=99)
+            t, _ = S.siguiente_tarea(self.u)
+            ok, msg = S.soltar(t)
+        self.assertFalse(ok)
+        self.assertEqual(Tarea.objects.get(pk=t.pk).estado, Tarea.EN_CURSO)
+
+    def test_tarea_asignada_vencida_resta(self):
+        t = S.asignar_tarea(self.u, "Reel de Ray-Ban", Decimal("5"), date(2026, 12, 10), None)
+        with a_las(date(2026, 12, 10), 23, 0):
+            S.vencer_tareas_asignadas(date(2026, 12, 10))
+        self.assertEqual(Tarea.objects.get(pk=t.pk).estado, Tarea.ELIMINADA)
+        self.assertEqual(MovimientoPuntos.suma(usuario=self.u), Decimal("-4"))
+
+    def test_meta_biselador(self):
+        self.assertEqual(S.meta_del_dia(date(2026, 12, 7), 1, 5), Decimal("33"))  # 50 - 7 - 2x5
+
+    def test_lista_wa_solo_para_asignado(self):
+        otro = User.objects.create_user("karen", password="x")
+        Trabajador.objects.create(usuario=otro, nombre_vendedor="Karen")
+        Tarea.objects.create(tipo=TipoTarea.objects.get(codigo="WA_LISTA"), fecha_objetivo=S.hoy(), asignada_a=self.u)
+        self.assertTrue(S.puede_enviar_lista_wa(self.u))
+        self.assertFalse(S.puede_enviar_lista_wa(otro))
+
+    def test_venta_cerrada_por_whatsapp(self):
+        from core.models import Cliente, TicketVenta
+        from whatsapp.models import MensajeWhatsApp
+        cli = Cliente.objects.create(nombre="Juan Pérez", telefono="987654321")
+        dia = date(2026, 12, 10)
+        with a_las(dia - timedelta(days=3), 11, 0):
+            MensajeWhatsApp.objects.create(numero="51987654321", tipo="ENTRANTE", mensaje="¿Precio de multifocal?")
+        with a_las(dia - timedelta(days=3), 11, 5):
+            MensajeWhatsApp.objects.create(numero="51987654321", tipo="SALIENTE", mensaje="Desde S/ 350",
+                                           enviado_por=self.u)
+        TicketVenta.objects.create(numero=9001, cliente=cli, vendedor="Karen", fecha_emision=dia,
+                                   total=Decimal("450"), a_cuenta=Decimal("450"), saldo=0)
+        with a_las(dia, 23, 0):
+            self.assertEqual(S.procesar_ventas_whatsapp(dia), 1)
+            self.assertEqual(S.procesar_ventas_whatsapp(dia), 0)  # no se repite
+        self.assertEqual(MovimientoPuntos.suma(usuario=self.u), Decimal("3"))
+
+    def test_venta_whatsapp_no_cuenta_si_esperaba_pedido(self):
+        from core.models import Cliente, TicketVenta
+        from whatsapp.models import MensajeWhatsApp
+        cli = Cliente.objects.create(nombre="Rosa", telefono="912345678")
+        dia = date(2026, 12, 10)
+        TicketVenta.objects.create(numero=9000, cliente=cli, vendedor="Ana", fecha_emision=dia - timedelta(days=12),
+                                   total=Decimal("300"), a_cuenta=0, saldo=Decimal("300"))
+        with a_las(dia - timedelta(days=2), 11, 0):
+            MensajeWhatsApp.objects.create(numero="912345678", tipo="ENTRANTE", mensaje="¿Ya están mis lentes?")
+        TicketVenta.objects.create(numero=9002, cliente=cli, vendedor="Ana", fecha_emision=dia,
+                                   total=Decimal("200"), a_cuenta=Decimal("200"), saldo=0)
+        with a_las(dia, 23, 0):
+            self.assertEqual(S.procesar_ventas_whatsapp(dia), 0)
+
+
+class VentaMinimaTests(TestCase):
+    def test_requisito_venta_del_mes(self):
+        from core.models import TicketVenta
+        u = User.objects.create_user("ana", password="x")
+        t = Trabajador.objects.create(usuario=u, nombre_vendedor="Ana", venta_minima_mes=Decimal("1000"))
+        p = date(2026, 12, 1)
+        TicketVenta.objects.create(numero=7001, vendedor="Ana", fecha_emision=date(2026, 12, 3),
+                                   total=Decimal("600"), a_cuenta=Decimal("600"), saldo=0)
+        r = S.requisitos(t, p, 10, 10, date(2026, 12, 31))
+        self.assertFalse(r["venta_vendedor"]["ok"])
+        self.assertNotIn("tickets", r)
+        TicketVenta.objects.create(numero=7002, vendedor="ana", fecha_emision=date(2026, 12, 4),
+                                   total=Decimal("400"), a_cuenta=Decimal("400"), saldo=0)
+        self.assertTrue(S.requisitos(t, p, 10, 10, date(2026, 12, 31))["venta_vendedor"]["ok"])
+        t.venta_minima_mes = None
+        self.assertFalse(S.requisitos(t, p, 10, 10, date(2026, 12, 31))["venta_vendedor"]["ok"])  # general 10,000

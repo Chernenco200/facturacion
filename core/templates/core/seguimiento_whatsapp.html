@@ -11,7 +11,13 @@
         {% endfor %}
     {% endif %}
 
+    {% if solo_lectura_lista %}
+        <div class="alert alert-warning">Hoy la lista de WhatsApp la envía la persona asignada en Puntos IC. Puedes verla, pero no enviar ni eliminar.</div>
+    {% endif %}
+
     <hr>
+
+    <fieldset {% if solo_lectura_lista %}disabled{% endif %}>
 
     <h4>Encuestas 7 días</h4>
 
@@ -111,7 +117,7 @@
 
     <p>
         Clientes cuya última compra tiene entre 12 y 18 meses.
-        Total: <strong>{{ renovaciones|length }}</strong>
+        Total: <strong>{{ pag_renov.paginator.count }}</strong>
     </p>
 
     <table class="table table-sm table-bordered">
@@ -156,6 +162,7 @@
             {% endfor %}
         </tbody>
     </table>
+    {% include "core/_paginacion.html" with pagina=pag_renov filtros=filtros_renov param="p_renov" etiqueta="clientes" %}
 
 
 
@@ -164,7 +171,7 @@
 
     <p>
         Total encontrados:
-        <strong>{{ clientes_reactivacion|length }}</strong>
+        <strong>{{ pag_react.paginator.count }}</strong>
     </p>
 
     <table>
@@ -238,6 +245,9 @@
             {% endfor %}
         </tbody>
     </table>
+    {% include "core/_paginacion.html" with pagina=pag_react filtros=filtros_react param="p_react" etiqueta="clientes" %}
+
+    </fieldset>
 
     <form id="form-excluir-reactivacion" method="post" style="display:none;">
         {% csrf_token %}

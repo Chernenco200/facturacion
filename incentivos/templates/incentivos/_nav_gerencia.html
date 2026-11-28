@@ -3,6 +3,7 @@
   <li class="nav-item"><a class="nav-link {% if seccion == 'revision' %}active{% endif %}" href="{% url 'incentivos:revision' %}">Revisión</a></li>
   <li class="nav-item"><a class="nav-link {% if seccion == 'turnos' %}active{% endif %}" href="{% url 'incentivos:turnos' %}">Turnos</a></li>
   <li class="nav-item"><a class="nav-link {% if seccion == 'asistencia' %}active{% endif %}" href="{% url 'incentivos:asistencia' %}">Asistencia</a></li>
+  <li class="nav-item"><a class="nav-link" href="{% url 'incentivos:asignar' %}">Asignar tarea</a></li>
   <li class="nav-item"><a class="nav-link" href="{% url 'incentivos:examen' %}">Examen</a></li>
   <li class="nav-item"><a class="nav-link {% if seccion == 'configuracion' %}active{% endif %}" href="{% url 'incentivos:configuracion' %}">Configuración</a></li>
   <li class="nav-item"><a class="nav-link {% if seccion == 'dispositivo' %}active{% endif %}" href="{% url 'incentivos:dispositivo' %}">Equipos de marcación</a></li>

@@ -33,6 +33,13 @@ class Trabajador(models.Model):
     orden_rotacion = models.PositiveSmallIntegerField(
         default=0, help_text="Orden para rotar la lista de WhatsApp del día"
     )
+    es_biselador = models.BooleanField(
+        default=False, help_text="Su meta baja por cada orden que pasa a biselado ese día"
+    )
+    venta_minima_mes = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Requisito para cobrar: venta mínima del mes con IGV (vacío = valor general de Configuración)",
+    )
 
     class Meta:
         verbose_name = "Trabajador"
@@ -54,9 +61,11 @@ class TipoTarea(models.Model):
     RESENA = "RESENA"
     TEL = "TEL"
     EXAMEN = "EXAMEN"
+    ASIGNADA = "ASIGNADA"
 
     EN_COLA = (FOTO, COD, WA_LISTA, WA_RESP, INV, TEL)
     RESULTADOS = (REEL, CITA, RESENA, EXAMEN)
+    # CITA = "Venta cerrada por WhatsApp" (la calcula el sistema cada noche)
 
     codigo = models.CharField(max_length=20, unique=True)
     nombre = models.CharField(max_length=120)
@@ -112,6 +121,9 @@ class Tarea(models.Model):
     referencia = models.DateTimeField(
         null=True, blank=True, help_text="WA_RESP: hora del mensaje del cliente"
     )
+    descripcion = models.CharField(max_length=255, blank=True, default="",
+                                   help_text="Tarea asignada por la gerencia: qué hay que hacer")
+    fecha_limite = models.DateField(null=True, blank=True, help_text="Tarea asignada: fecha límite")
 
     asignada_a = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
@@ -344,6 +356,7 @@ class Alerta(models.Model):
     PUNTOS_ALTOS = "PUNTOS_ALTOS"
     FOTO_REPETIDA = "FOTO_REPETIDA"
     ABANDONO = "ABANDONO"
+    DEVOLUCION = "DEVOLUCION"
     OTRO = "OTRO"
     TIPOS = [
         (TAREA_RAPIDA, "Tarea demasiado rápida"),
@@ -352,6 +365,7 @@ class Alerta(models.Model):
         (PUNTOS_ALTOS, "Puntos del día muy altos"),
         (FOTO_REPETIDA, "Foto repetida en otro producto"),
         (ABANDONO, "Tarea abandonada"),
+        (DEVOLUCION, "Tarea devuelta a la cola"),
         (OTRO, "Otro"),
     ]
 

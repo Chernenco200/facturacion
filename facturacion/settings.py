@@ -68,6 +68,8 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # Puntos IC: los trabajadores solo usan el sistema en horario de atención
+    "incentivos.middleware.HorarioAccesoMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 

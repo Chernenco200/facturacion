@@ -94,8 +94,35 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# ============================================================
+# Lista de WhatsApp del día (Puntos IC): solo la envía el asignado
+# ============================================================
+
+def _lista_wa_solo_lectura(user):
+    """True si hoy la lista de Seguimiento WhatsApp la envía otra persona."""
+    try:
+        from incentivos.services import puede_enviar_lista_wa
+        return not puede_enviar_lista_wa(user)
+    except Exception:  # si el módulo de incentivos falla, no bloquea nada
+        logger.exception("No se pudo revisar la asignación de la lista de WhatsApp")
+        return False
+
+
+def lista_wa_asignada(view_func):
+    from functools import wraps
+
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if request.method == "POST" and _lista_wa_solo_lectura(request.user):
+            messages.error(request, "Hoy la lista de WhatsApp la envía la persona asignada en Puntos IC.")
+            return redirect("seguimiento_whatsapp")
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
 from contabilidad.services import procesar_venta_contablemente
 from contabilidad.services import contabilizar_cobros_ticket
+from whatsapp.privacidad import enmascarar_para_ticket
 
 
 def index(request):
@@ -598,7 +625,7 @@ def generar_ticket_pdf(request):
         # ====== Datos del cliente ======
         p.setFont("Helvetica", 9.5)
         p.drawString(LEFT_X, y * mm, f"Cliente: {cliente}"); y -= 5
-        p.drawString(LEFT_X, y * mm, f"Teléfono: {telefono}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Teléfono: {enmascarar_para_ticket(telefono)}"); y -= 5
         p.drawString(LEFT_X, y * mm, f"Vendedor: {vendedor}"); y -= 5
         p.drawString(LEFT_X, y * mm, f"Emisión: {fecha_sistema} {hora_sistema}"); y -= 5
         p.drawString(LEFT_X, y * mm, f"Entrega: {fecha_entrega} {hora_entrega}"); y -= 6
@@ -2224,8 +2251,14 @@ def lista_clientes(request):
         except ValueError:
             pass
 
+    # Paginación: hay casi 10 mil clientes; cargarlos todos hacía lenta la página.
+    from core.paginacion import paginar
+    pagina, filtros = paginar(request, clientes, 50)
+
     return render(request, 'core/lista_clientes.html', {
-        'clientes': clientes
+        'clientes': pagina,
+        'pagina': pagina,
+        'filtros': filtros,
     })
 
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR")
@@ -3065,7 +3098,7 @@ def imprimir_ticket_pdf(request):
         # Datos cliente
         p.setFont("Helvetica", 9.5)
         p.drawString(LEFT_X, y * mm, f"Cliente: {cliente_nombre}"); y -= 5
-        p.drawString(LEFT_X, y * mm, f"Teléfono: {cliente_telefono}"); y -= 5
+        p.drawString(LEFT_X, y * mm, f"Teléfono: {enmascarar_para_ticket(cliente_telefono)}"); y -= 5
         p.drawString(LEFT_X, y * mm, f"Vendedor: {vendedor}"); y -= 5
         p.drawString(LEFT_X, y * mm, f"Emisión: {fecha_sistema} {hora_sistema}"); y -= 5
         p.drawString(LEFT_X, y * mm, f"Entrega: {fecha_entrega} {hora_entrega}"); y -= 6
@@ -3164,25 +3197,28 @@ def imprimir_ticket_pdf(request):
 @role_required("ADMIN", "SUPERVISOR")
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR")
 def kardex_resumen(request):
-    productos = Producto.objects.filter(activo=True).order_by("descripcion")
+    from django.db.models import OuterRef, Subquery
+
+    # Último costo promedio del kardex de cada producto en UNA sola consulta
+    # (antes se hacía una consulta por producto: más de 2 mil consultas).
+    ultimo_costo = (KardexMovimiento.objects
+                    .filter(producto=OuterRef("pk"))
+                    .order_by("-fecha", "-id")
+                    .values("costo_promedio")[:1])
+    productos = (Producto.objects.filter(activo=True)
+                 .annotate(ultimo_costo=Subquery(ultimo_costo))
+                 .order_by("descripcion"))
+
+    q = (request.GET.get("q") or "").strip()
+    if q:
+        productos = productos.filter(Q(descripcion__icontains=q) | Q(cod__icontains=q))
 
     data = []
     for p in productos:
         stock = p.stock or 0
-
         # ✅ toma el último costo_promedio del kardex; si no existe, usa precio_compra del producto
-        ultimo = (KardexMovimiento.objects
-                  .filter(producto=p)
-                  .order_by("-fecha", "-id")
-                  .first())
-
-        if ultimo:
-            costo_prom = ultimo.costo_promedio
-        else:
-            costo_prom = p.precio_compra or Decimal("0")
-
+        costo_prom = p.ultimo_costo if p.ultimo_costo is not None else (p.precio_compra or Decimal("0"))
         valor = Decimal(stock) * Decimal(costo_prom)
-
         data.append({
             "producto": p,
             "stock": stock,
@@ -3190,10 +3226,17 @@ def kardex_resumen(request):
             "valor": valor,
         })
 
+    # El total se calcula sobre todos los productos; la tabla se muestra por páginas.
     total_valor = sum((x["valor"] for x in data), Decimal("0"))
 
+    from core.paginacion import paginar
+    pagina, filtros = paginar(request, data, 100)
+
     return render(request, "core/kardex_resumen.html", {
-        "data": data,
+        "data": pagina,
+        "pagina": pagina,
+        "filtros": filtros,
+        "q": q,
         "total_valor": total_valor,
     })
 
@@ -3692,7 +3735,12 @@ def caja_reporte_pdf(request, fecha):
 # Pantalla TV
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR","TALLER")
 def tv_ordenes(request):
-    return render(request, "core/tv_ordenes.html")
+    try:
+        from incentivos.params import P
+        repetir = P("WA_ESPERA_REPETIR_MIN")
+    except Exception:
+        repetir = 10
+    return render(request, "core/tv_ordenes.html", {"wa_repetir_min": repetir})
 
 @role_required("ADMIN", "SUPERVISOR", "CAJA","VENDEDOR","TALLER")
 def tv_ordenes_data(request):
@@ -3758,6 +3806,7 @@ def tv_ordenes_data(request):
             "vencido": vencido and ot.estado != "ENTREGADO",
             "min_atraso": min_atraso,
             "a_tiempo": (min_atraso == 0),
+            "ts_listo": ot.ts_listo.isoformat() if ot.ts_listo else None,
             "semaforo": semaforo,
         })
 
@@ -3769,12 +3818,20 @@ def tv_ordenes_data(request):
     total_hoy = entregados_hoy.count()
     ontime_hoy = sum(1 for ot in entregados_hoy if ot.a_tiempo())
 
+    # Clientes de WhatsApp esperando respuesta (lo calcula Puntos IC)
+    try:
+        from incentivos.services import clientes_esperando
+        whatsapp = clientes_esperando()
+    except Exception:
+        whatsapp = {"cantidad": 0, "minutos": 0}
+
     return JsonResponse({
         "items": data,
         "kpi": {
             "entregados_hoy": total_hoy,
             "a_tiempo_hoy": ontime_hoy,
-        }
+        },
+        "whatsapp": whatsapp,
     })
 
 
@@ -4325,16 +4382,27 @@ def seguimiento_whatsapp(request):
 
     clientes_reactivacion = clientes_reactivacion_lista(hoy)
 
+    # Paginación: renovaciones y reactivaciones tienen cientos de clientes.
+    from core.paginacion import paginar
+    pag_renov, filtros_renov = paginar(request, renovaciones, 50, param="p_renov")
+    pag_react, filtros_react = paginar(request, clientes_reactivacion, 50, param="p_react")
+
     return render(request, "core/seguimiento_whatsapp.html", {
         "encuestas": encuestas,
         "controles_menores": controles_menores,
-        "renovaciones": renovaciones,
-        "clientes_reactivacion": clientes_reactivacion,
+        "renovaciones": pag_renov,
+        "pag_renov": pag_renov,
+        "filtros_renov": filtros_renov,
+        "clientes_reactivacion": pag_react,
+        "pag_react": pag_react,
+        "filtros_react": filtros_react,
+        "solo_lectura_lista": _lista_wa_solo_lectura(request.user),
     })
 
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+@lista_wa_asignada
 def enviar_encuesta_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
@@ -4358,6 +4426,7 @@ def enviar_encuesta_manual(request, orden_id):
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+@lista_wa_asignada
 def enviar_control_menor_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
@@ -4391,6 +4460,7 @@ def enviar_control_menor_manual(request, orden_id):
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+@lista_wa_asignada
 def enviar_renovacion_manual(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
 
@@ -4418,6 +4488,7 @@ def enviar_renovacion_manual(request, cliente_id):
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+@lista_wa_asignada
 def eliminar_encuesta_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
@@ -4431,6 +4502,7 @@ def eliminar_encuesta_manual(request, orden_id):
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+@lista_wa_asignada
 def eliminar_control_menor_manual(request, orden_id):
     orden = get_object_or_404(OrdenTrabajo, id=orden_id)
 
@@ -4450,6 +4522,7 @@ def eliminar_control_menor_manual(request, orden_id):
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+@lista_wa_asignada
 def eliminar_renovacion_manual(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
 
@@ -4499,6 +4572,7 @@ def buscar_clientes_por_nombre(request):
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+@lista_wa_asignada
 def excluir_cliente_reactivacion(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id)
 
@@ -4527,6 +4601,7 @@ def obtener_categoria_reactivacion(monto_maximo):
 
 @login_required
 @role_required("ADMIN", "SUPERVISOR", "CAJA", "VENDEDOR")
+@lista_wa_asignada
 def enviar_reactivacion_whatsapp(request, cliente_id):
     if request.method != "POST":
         return redirect("seguimiento_whatsapp")

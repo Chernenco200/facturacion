@@ -7,6 +7,24 @@
   <small class="text-muted">Se actualiza cada 5 min · {{ hoy|date:"d/m/Y" }}</small>
 </div>
 {% if solo_lectura %}<div class="alert alert-secondary py-2">Vista de gerencia (solo lectura).</div>{% endif %}
+<div id="esperando" class="alert alert-warning py-2 d-none" role="status"></div>
+{% if asignadas %}
+<div class="card mb-3 border-primary"><div class="card-body">
+  <h5 class="card-title">Tareas asignadas por la gerencia</h5>
+  {% for t in asignadas %}
+  <div class="d-flex flex-wrap align-items-center gap-2 py-2 border-bottom">
+    <div class="flex-grow-1"><b>{{ t.descripcion }}</b> · {{ t.puntos }} pts · vence el {{ t.fecha_limite|date:"d/m" }}</div>
+    {% if not solo_lectura %}
+    <form method="post" action="{% url 'incentivos:asignada_hecha' t.pk %}" class="d-flex gap-2">{% csrf_token %}
+      <input name="evidencia" class="form-control form-control-sm" placeholder="Qué hiciste o link" required>
+      <button class="btn btn-sm btn-primary">Listo</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <small class="text-muted">Si una tarea asignada vence sin hacerse, resta puntos.</small>
+</div></div>
+{% endif %}
 
 <div class="row g-3">
   <div class="col-lg-6">
@@ -91,5 +109,24 @@
     </div></div>
   </div>
 </div>
-<script>setTimeout(function(){ location.reload(); }, 300000);</script>
+<script>
+(function(){
+  var previo = 0;
+  function bip(){ try { var c = new (window.AudioContext||window.webkitAudioContext)(); var o = c.createOscillator(); var g = c.createGain();
+    o.frequency.value = 880; o.connect(g); g.connect(c.destination); g.gain.value = 0.15; o.start(); o.stop(c.currentTime + 0.25); } catch(e) {} }
+  function revisar(){
+    fetch("{% url 'incentivos:esperando_json' %}", {credentials: "same-origin"}).then(function(r){ return r.json(); }).then(function(d){
+      var el = document.getElementById("esperando");
+      if (d.cantidad > 0) {
+        el.textContent = (d.cantidad === 1 ? "1 cliente espera" : d.cantidad + " clientes esperan") + " respuesta por WhatsApp · el primero hace " + d.minutos + " min. Presiona Siguiente tarea.";
+        el.classList.remove("d-none");
+        if (d.cantidad > previo) bip();
+      } else { el.classList.add("d-none"); }
+      previo = d.cantidad;
+    }).catch(function(){});
+  }
+  revisar(); setInterval(revisar, 60000);
+  setTimeout(function(){ location.reload(); }, 300000);
+})();
+</script>
 {% endblock %}

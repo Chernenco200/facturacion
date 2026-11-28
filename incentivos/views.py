@@ -100,6 +100,9 @@ def panel(request):
     avance = int(min(100, (res_hoy["puntos"] / res_hoy["meta"] * 100))) if res_hoy["meta"] else 0
     mes = S.calcular_mes(trab, periodo)
     ctx = {
+        "asignadas": S.tareas_asignadas_pendientes(trab.usuario),
+        "devoluciones": S.devoluciones_hoy(trab.usuario),
+        "devoluciones_max": P("DEVOLUCIONES_MAX_DIA"),
         "bono": _bono_de(trab, periodo),
         "trab": trab,
         "hoy": hoy_,
@@ -152,9 +155,9 @@ def tarea_detalle(request, pk):
             S.reanudar(tarea)
             return redirect("incentivos:tarea", pk=pk)
         if accion == "soltar":
-            S.soltar(tarea)
-            messages.info(request, "La tarea volvió a la cola.")
-            return redirect("incentivos:panel")
+            ok, msg = S.soltar(tarea)
+            (messages.info if ok else messages.error)(request, msg)
+            return redirect("incentivos:panel" if ok else "incentivos:tarea", **({} if ok else {"pk": pk}))
         if tarea.pausada_en:
             S.reanudar(tarea)
         ok, msg = False, "Acción no reconocida."
@@ -211,26 +214,26 @@ class ResultadoForm(forms.Form):
     tipo = forms.ChoiceField(choices=[
         (TipoTarea.REEL, "Publicación o reel publicado"),
         (TipoTarea.RESENA, "Reseña nueva en Google"),
-        (TipoTarea.CITA, "Cliente con cita llegó a la tienda"),
     ])
-    evidencia = forms.CharField(label="Link o detalle", max_length=500, required=False,
-                                widget=forms.TextInput(attrs={"placeholder": "Link del reel o nombre del cliente"}))
-    cita = forms.ModelChoiceField(queryset=None, required=False, label="Cita (solo para 'cliente con cita')")
-
-    def __init__(self, *a, **kw):
-        super().__init__(*a, **kw)
-        from whatsapp.models import CitaWhatsApp
-
-        usadas = Tarea.objects.filter(cita__isnull=False).values_list("cita_id", flat=True)
-        self.fields["cita"].queryset = CitaWhatsApp.objects.filter(
-            atendido=False, creado__gte=ahora() - timedelta(days=45)).exclude(id__in=usadas).order_by("-creado")
+    evidencia = forms.CharField(label="Link del reel o nombre con el que el cliente firmó la reseña",
+                                max_length=500, required=False)
+    ticket = forms.IntegerField(label="Número de ticket del cliente (solo reseñas)", required=False, min_value=1)
 
     def clean(self):
+        from core.models import TicketVenta
+
         c = super().clean()
-        if c.get("tipo") == TipoTarea.CITA and not c.get("cita"):
-            self.add_error("cita", "Elige la cita del cliente que llegó.")
-        if c.get("tipo") in (TipoTarea.REEL, TipoTarea.RESENA) and not c.get("evidencia"):
+        if not c.get("evidencia"):
             self.add_error("evidencia", "Pon el link o el detalle.")
+        if c.get("tipo") == TipoTarea.RESENA:
+            n = c.get("ticket")
+            if not n:
+                self.add_error("ticket", "Escribe el número de ticket del cliente.")
+            elif not TicketVenta.objects.filter(numero=n).exists():
+                self.add_error("ticket", "Ese ticket no existe.")
+            elif Tarea.objects.filter(tipo__codigo=TipoTarea.RESENA, datos__ticket=n).exclude(
+                    estado=Tarea.ELIMINADA).exists():
+                self.add_error("ticket", "Ya se registró una reseña para ese ticket.")
         return c
 
 
@@ -239,7 +242,7 @@ def resultado(request):
     form = ResultadoForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         t = S.registrar_resultado(request.user, form.cleaned_data["tipo"], form.cleaned_data["evidencia"] or "",
-                                  cita=form.cleaned_data.get("cita"))
+                                  ticket=form.cleaned_data.get("ticket"))
         messages.success(request, f"Registrado: {t.tipo.nombre} ({t.puntos} pts"
                          + (", pendiente de revisión)" if t.estado == Tarea.TERMINADA else ")"))
         return redirect("incentivos:panel")
@@ -329,6 +332,9 @@ def gerencia(request):
         "costo_total": sum(f["pago"] for f in filas),
         "costo_sin_requisitos": sum(f["pago_calculado"] for f in filas),
         "productividad": S.productividad(periodo),
+        "tiempos": S.tiempos_por_tipo(periodo),
+        "asignadas": Tarea.objects.filter(tipo__codigo=TipoTarea.ASIGNADA, estado__in=Tarea.ABIERTAS)
+        .select_related("asignada_a").order_by("fecha_limite"),
         "pend_revision": S.pendientes_revision().count(),
         "sin_fotos": S.monturas_sin_fotos().count(),
         "fotos_mes": Tarea.objects.filter(tipo__codigo=TipoTarea.FOTO, estado__in=[Tarea.TERMINADA, Tarea.APROBADA],
@@ -422,33 +428,34 @@ def configuracion(request):
 
 @gerencia_required
 def turnos(request):
+    from .horario import es_feriado
+
     periodo = parse_periodo(request.GET.get("mes") or request.POST.get("mes"), primer_dia(hoy() + timedelta(days=10)))
     trabs = S.trabajadores()
-    domingos = [d for d in dias_del_mes(periodo) if d.weekday() == 6]
+    especiales = [d for d in dias_del_mes(periodo) if d.weekday() == 6 or es_feriado(d)]
     if request.method == "POST":
         config = {}
         for t in trabs:
             config[t.usuario_id] = {
-                "lv": request.POST.get(f"lv_{t.pk}", ""),
-                "rotar": bool(request.POST.get(f"rot_{t.pk}")),
+                "lunes_a_sabado": bool(request.POST.get(f"ls_{t.pk}")),
                 "descanso": request.POST.get(f"desc_{t.pk}", ""),
-                "sabado": bool(request.POST.get(f"sab_{t.pk}")),
-                "domingos": [d for d in domingos if request.POST.get(f"dom_{t.pk}_{d.isoformat()}")],
+                "domingos": [d for d in especiales if request.POST.get(f"dom_{t.pk}_{d.isoformat()}")],
             }
         n = S.generar_turnos(periodo, config, reemplazar=bool(request.POST.get("reemplazar")))
         messages.success(request, f"{n} turnos creados o actualizados para {periodo:%m/%Y}.")
         return redirect(f"{request.path}?mes={periodo:%Y-%m}")
-    tabla = []
     turnos_mes = {(x.usuario_id, x.fecha): x for x in Turno.objects.filter(fecha__gte=periodo,
                                                                             fecha__lte=ultimo_dia(periodo))}
     dias = list(dias_del_mes(periodo))
-    for t in trabs:
-        tabla.append({"trabajador": t, "celdas": [turnos_mes.get((t.usuario_id, d)) for d in dias]})
+    tabla = [{"trabajador": t, "celdas": [turnos_mes.get((t.usuario_id, d)) for d in dias]} for t in trabs]
     return render(request, "incentivos/turnos.html", {
-        "periodo": periodo, "trabajadores": trabs, "domingos": domingos, "dias": dias, "tabla": tabla,
-        "opciones_lv": ["09:00-18:00", "10:00-19:00"],
-        "dias_semana": [(0, "Lunes"), (1, "Martes"), (2, "Miércoles"), (3, "Jueves"), (4, "Viernes")],
-        "domingo_horario": f"{P('DOMINGO_ENTRADA'):%H:%M}–{P('DOMINGO_SALIDA'):%H:%M}",
+        "periodo": periodo, "trabajadores": trabs, "especiales": [
+            {"fecha": d, "feriado": es_feriado(d)} for d in especiales],
+        "dias": [{"fecha": d, "especial": d.weekday() == 6 or es_feriado(d)} for d in dias], "tabla": tabla,
+        "dias_semana": [(0, "Lunes"), (1, "Martes"), (2, "Miércoles"), (3, "Jueves"), (4, "Viernes"),
+                        (5, "Sábado")],
+        "horario_ls": f"{P('HORARIO_LS_INICIO'):%H:%M}–{P('HORARIO_LS_FIN'):%H:%M}",
+        "horario_df": f"{P('HORARIO_DF_INICIO'):%H:%M}–{P('HORARIO_DF_FIN'):%H:%M}",
     })
 
 
@@ -546,6 +553,48 @@ def panel_de(request, trabajador_id):
         "asistencia": Asistencia.objects.filter(usuario=trab.usuario, fecha=hoy_).first(),
         "turno": Turno.objects.filter(usuario=trab.usuario, fecha=hoy_).first(),
         "mes": S.calcular_mes(trab, periodo), "ranking": S.ranking(periodo), "bono": _bono_de(trab, periodo),
+        "asignadas": S.tareas_asignadas_pendientes(trab.usuario),
         "movimientos": MovimientoPuntos.objects.filter(usuario=trab.usuario, fecha__gte=periodo)
         .select_related("tarea__tipo")[:200],
     })
+
+
+class AsignarForm(forms.Form):
+    trabajador = forms.ModelChoiceField(queryset=Trabajador.objects.filter(participa=True))
+    descripcion = forms.CharField(max_length=255, label="Qué hay que hacer")
+    puntos = forms.DecimalField(max_digits=6, decimal_places=2, initial=5, min_value=0)
+    fecha_limite = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+
+
+@gerencia_required
+def asignar(request):
+    form = AsignarForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        c = form.cleaned_data
+        S.asignar_tarea(c["trabajador"].usuario, c["descripcion"], c["puntos"], c["fecha_limite"], request.user)
+        messages.success(request, f"Tarea asignada a {c['trabajador'].nombre_vendedor} hasta el {c['fecha_limite']:%d/%m}. "
+                                  f"Si vence sin hacerse resta {P('PTS_TAREA_VENCIDA')} puntos.")
+        return redirect("incentivos:gerencia")
+    return render(request, "incentivos/form_simple.html", {"form": form, "titulo": "Asignar una tarea"})
+
+
+@trabajador_required
+@require_POST
+def asignada_hecha(request, pk):
+    tarea = get_object_or_404(Tarea, pk=pk, asignada_a=request.user, tipo__codigo=TipoTarea.ASIGNADA,
+                              estado__in=Tarea.ABIERTAS)
+    evidencia = request.POST.get("evidencia", "").strip()
+    if not evidencia:
+        messages.error(request, "Escribe qué hiciste o pega el link.")
+        return redirect("incentivos:panel")
+    S.completar_asignada(tarea, evidencia)
+    messages.success(request, "Tarea enviada a revisión de la gerencia.")
+    return redirect("incentivos:panel")
+
+
+@login_required
+def esperando_json(request):
+    """Clientes de WhatsApp esperando respuesta (para el tablero y la TV)."""
+    from django.http import JsonResponse
+
+    return JsonResponse(S.clientes_esperando())

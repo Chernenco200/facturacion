@@ -107,3 +107,58 @@ class PrivacidadBandejaTests(TestCase):
 
         self.conversacion.refresh_from_db()
         self.assertEqual(self.conversacion.modo, "HUMANO")
+
+
+
+class MejorasBotTests(TestCase):
+    def test_numero_se_guarda_normalizado(self):
+        from whatsapp.models import MensajeWhatsApp
+        m = MensajeWhatsApp.objects.create(numero="987654321", tipo="BOT", mensaje="Tus lentes están listos")
+        self.assertEqual(m.numero, "51987654321")
+
+    def test_calificacion(self):
+        from whatsapp.views import extraer_calificacion
+        self.assertEqual(extraer_calificacion("5"), "5")
+        self.assertEqual(extraer_calificacion("5️⃣"), "5")
+        self.assertEqual(extraer_calificacion("le pongo un 4"), "4")
+        self.assertEqual(extraer_calificacion("⭐⭐⭐"), "3")
+        self.assertIsNone(extraer_calificacion("todo bien gracias"))
+        self.assertIsNone(extraer_calificacion("entre 3 y 4"))
+
+    def test_palabras_completas(self):
+        from whatsapp.views import contiene_palabra
+        self.assertFalse(contiene_palabra("todo normal", ["mal"]))
+        self.assertTrue(contiene_palabra("veo mal de lejos", ["mal"]))
+
+    def test_mascara_ticket(self):
+        from whatsapp.privacidad import enmascarar_para_ticket
+        self.assertEqual(enmascarar_para_ticket("959123913"), "95****913")
+        self.assertEqual(enmascarar_para_ticket("51959123913"), "95****913")
+
+    def test_encuesta_tardia_se_reconoce(self):
+        """Una calificación enviada horas después ya no se pierde como opción del menú."""
+        from datetime import timedelta
+        from unittest import mock
+        from django.utils import timezone
+        from whatsapp.models import ConversacionWhatsApp
+        from whatsapp import views
+        conv = ConversacionWhatsApp.objects.create(numero="51987654321", estado="ESPERANDO_ENCUESTA")
+        ConversacionWhatsApp.objects.filter(pk=conv.pk).update(estado_desde=timezone.now() - timedelta(hours=5))
+        with mock.patch.object(views, "enviar_whatsapp_texto_y_guardar") as enviar:
+            views.responder_mensaje("51987654321", "5")
+        self.assertIn("5/5", enviar.call_args[0][1])
+
+    def test_historial_incluye_mensajes_sin_51(self):
+        from unittest import mock
+        from whatsapp.models import MensajeWhatsApp
+        from whatsapp import ai
+        MensajeWhatsApp.objects.bulk_create([  # bulk_create no normaliza: simula datos antiguos
+            MensajeWhatsApp(numero="987654321", tipo="BOT", mensaje="Tus lentes del ticket 2545 ya están listos"),
+        ])
+        MensajeWhatsApp.objects.create(numero="51987654321", tipo="ENTRANTE", mensaje="ok voy mañana")
+        respuesta = mock.Mock()
+        respuesta.choices = [mock.Mock(message=mock.Mock(content="¡Te esperamos!"))]
+        with mock.patch.object(ai.client.chat.completions, "create", return_value=respuesta) as crear:
+            ai.responder_con_openai("51987654321", "ok voy mañana")
+        enviados = crear.call_args.kwargs["messages"]
+        self.assertTrue(any("ya están listos" in (m["content"] or "") for m in enviados))

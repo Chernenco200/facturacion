@@ -2,7 +2,13 @@
 
 {% block content %}
 
-<h2>Bandeja WhatsApp</h2>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+  <h2 class="mb-0">Bandeja WhatsApp</h2>
+  <form method="get" class="d-flex gap-2">
+    <input name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Nombre o celular">
+    <button class="btn btn-sm btn-outline-secondary">Buscar</button>
+  </form>
+</div>
 
 <table class="table table-hover">
     <thead>
@@ -55,5 +61,7 @@
         {% endfor %}
     </tbody>
 </table>
+
+{% include "core/_paginacion.html" with pagina=pagina filtros=filtros etiqueta="conversaciones" %}
 
 {% endblock %}

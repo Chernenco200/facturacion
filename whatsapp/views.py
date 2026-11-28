@@ -45,6 +45,43 @@ def enviar_menu_principal(numero):
     enviar_whatsapp_texto_y_guardar(numero, mensaje)
 
 
+# ==============================================================
+# Ayudas del bot
+# ==============================================================
+
+HUMANO_CADUCA = timedelta(hours=12)
+AVISO_FUERA_HORARIO = "Gracias por escribirnos. En este momento la tienda está cerrada."
+PEDIDO_CALIFICACION = "Por favor responde con un número del 1 al 5"
+
+
+def extraer_calificacion(texto):
+    """'5', '5️⃣', 'le pongo 4', '⭐⭐⭐⭐' -> '5'/'4'; None si no hay una sola nota del 1 al 5."""
+    import re as _re
+    t = (texto or "").replace("\ufe0f", "").replace("\u20e3", "")
+    estrellas = t.count("⭐") + t.count("🌟")
+    if 1 <= estrellas <= 5 and not _re.search(r"\d", t):
+        return str(estrellas)
+    numeros = _re.findall(r"(?<!\d)([1-5])(?!\d)", t)
+    if len(set(numeros)) == 1 and len(t) <= 60:
+        return numeros[0]
+    return None
+
+
+def contiene_palabra(texto, palabras):
+    """Busca palabras o frases completas ('mal' no coincide con 'normal')."""
+    import re as _re
+    return any(_re.search(r"(?<!\w)" + _re.escape(p) + r"(?!\w)", texto) for p in palabras)
+
+
+def tienda_abierta(ahora=None):
+    """(abierta, texto de la próxima apertura). Usa el horario de Puntos IC si está instalado."""
+    try:
+        from incentivos.horario import tienda_abierta as _abierta
+        return _abierta(ahora)
+    except Exception:
+        return True, "en breve"
+
+
 def responder_mensaje(numero, texto):
 
     numero = normalizar_numero(numero)
@@ -127,22 +164,29 @@ def responder_mensaje(numero, texto):
     # ==========================================================
     # 4. CONTROL DE INACTIVIDAD
     # ==========================================================
+    # Cada estado de espera caduca a su tiempo. Antes la encuesta caducaba
+    # a los 30 minutos y una calificación enviada más tarde ("5") se tomaba
+    # como opción del menú; y el seguimiento de lentes no caducaba nunca.
 
-    ESTADOS_ESPERANDO = [
-        "ESPERANDO_TICKET",
-        "ESPERANDO_DATOS_CITA",
-        "ESPERANDO_ENCUESTA",
-        "ESPERANDO_CONFIRMACION_ASESOR",
-    ]
+    CADUCIDAD_ESTADOS = {
+        "ESPERANDO_TICKET": timedelta(minutes=30),
+        "ESPERANDO_CONFIRMACION_ASESOR": timedelta(minutes=30),
+        "ESPERANDO_DATOS_CITA": timedelta(hours=2),
+        "ESPERANDO_ENCUESTA": timedelta(hours=72),
+        "ESPERANDO_CONFIRMACION_SEGUIMIENTO": timedelta(hours=72),
+    }
 
     if not created:
 
-        tiempo_inactivo = timezone.now() - conversacion.actualizado
+        desde = conversacion.estado_desde or conversacion.actualizado
+        tiempo_en_estado = timezone.now() - desde
+
+        caducidad = CADUCIDAD_ESTADOS.get(conversacion.estado)
 
         if (
             conversacion.modo == "BOT"
-            and tiempo_inactivo > timedelta(minutes=30)
-            and conversacion.estado in ESTADOS_ESPERANDO
+            and caducidad
+            and tiempo_en_estado > caducidad
         ):
 
             conversacion.estado = "INICIO"
@@ -152,6 +196,20 @@ def responder_mensaje(numero, texto):
                 f"Estado pendiente vencido para {numero}. "
                 "Se procesará el mensaje actual normalmente."
             )
+
+        # Atención humana sin respuesta del equipo por mucho tiempo:
+        # el bot vuelve a atender para que el cliente no quede sin respuesta.
+        if conversacion.modo == "HUMANO":
+            ultima_humana = (
+                MensajeWhatsApp.objects.filter(numero=numero, tipo="SALIENTE")
+                .order_by("-creado").values_list("creado", flat=True).first()
+            )
+            referencia = max(filter(None, [ultima_humana, desde]))
+            if timezone.now() - referencia > HUMANO_CADUCA:
+                conversacion.modo = "BOT"
+                conversacion.estado = "INICIO"
+                conversacion.save()
+                print(f"Atención humana vencida para {numero}: vuelve el bot.")
 
     # ==========================================================
     # 5. REINICIAR CONVERSACIÓN FINALIZADA
@@ -199,7 +257,21 @@ def responder_mensaje(numero, texto):
             "El cliente está siendo atendido por un asesor."
         )
 
-        # No responder automáticamente.
+        # Fuera del horario de atención, avisar al cliente una sola vez
+        # cuándo le responderemos (para que no quede sin respuesta).
+        abierta, proxima = tienda_abierta()
+        if not abierta:
+            ya_avisado = MensajeWhatsApp.objects.filter(
+                numero=numero,
+                mensaje__startswith=AVISO_FUERA_HORARIO,
+                creado__gte=timezone.now() - timedelta(hours=10),
+            ).exists()
+            if not ya_avisado:
+                enviar_whatsapp_texto_y_guardar(
+                    numero,
+                    f"{AVISO_FUERA_HORARIO} Te responderemos {proxima}. 😊"
+                )
+
         return
 
     # ==========================================================
@@ -295,7 +367,7 @@ def responder_mensaje(numero, texto):
             "no estoy bien",
         ]
 
-        if any(palabra in texto for palabra in PALABRAS_PROBLEMA):
+        if contiene_palabra(texto, PALABRAS_PROBLEMA):
 
             pasar_a_humano(
                 "CLIENTE REPORTA PROBLEMA CON SUS LENTES",
@@ -319,17 +391,9 @@ def responder_mensaje(numero, texto):
 
     if conversacion.estado == "ESPERANDO_ENCUESTA":
 
-        if texto in [
-            "1", "1️⃣",
-            "2", "2️⃣",
-            "3", "3️⃣",
-            "4", "4️⃣",
-            "5", "5️⃣",
-        ]:
+        calificacion = extraer_calificacion(texto_original)
 
-            calificacion = (
-                texto.replace("\ufe0f", "").replace("\u20e3", "")
-            )
+        if calificacion:
 
             conversacion.estado = "FINALIZADO"
             conversacion.save(update_fields=["estado"])
@@ -343,11 +407,24 @@ def responder_mensaje(numero, texto):
             )
             return
 
-        enviar_whatsapp_texto_y_guardar(
-            numero,
-            "Por favor responde con un número del 1 al 5 😊"
-        )
-        return
+        # Si ya se le pidió el número una vez, no insistir: se atiende el
+        # mensaje con normalidad (la IA ve en el historial que hubo encuesta).
+        ultimo_saliente = (
+            MensajeWhatsApp.objects.filter(numero=numero).exclude(tipo="ENTRANTE")
+            .order_by("-creado", "-pk").values_list("mensaje", flat=True).first()
+        ) or ""
+        respuesta_corta = len(texto_original) <= 25 and texto not in [
+            "hola", "hi", "buenos dias", "buenos días", "buenas tardes", "buenas noches",
+        ]
+        if respuesta_corta and not ultimo_saliente.startswith(PEDIDO_CALIFICACION):
+            enviar_whatsapp_texto_y_guardar(
+                numero,
+                f"{PEDIDO_CALIFICACION} 😊"
+            )
+            return
+
+        conversacion.estado = "INICIO"
+        conversacion.save(update_fields=["estado"])
 
     # ==========================================================
     # 11. RECEPCIÓN DE DATOS PARA CITA
@@ -441,9 +518,7 @@ def responder_mensaje(numero, texto):
             numero,
             "Nuestro horario de atención es:\n\n"
             "Lunes a sábado: 9:00 a.m. a 7:45 p.m.\n"
-            "Domingos: 10:30 a.m. a 6:00 p.m.\n\n"
-            "Los horarios especiales por feriados "
-            "se confirman por separado."
+            "Domingos y feriados: 10:30 a.m. a 6:00 p.m."
         )
         return
 
@@ -626,12 +701,17 @@ def responder_mensaje(numero, texto):
             )
         )
 
-        # Activar atención humana
+        # Activar atención humana y avisar al cliente (antes quedaba sin respuesta)
         conversacion.modo = "HUMANO"
         conversacion.estado = "ASESOR"
         conversacion.save()
 
-        # NO enviar mensaje automático al cliente
+        abierta, proxima = tienda_abierta()
+        enviar_whatsapp_texto_y_guardar(
+            numero,
+            "Gracias por escribirnos 😊 Un asesor de Óptica IC te responderá "
+            + ("en breve." if abierta else f"{proxima}.")
+        )
         return
 
     print("RESPUESTA OPENAI:", respuesta_ia)
@@ -668,9 +748,7 @@ def responder_mensaje(numero, texto):
             numero,
             "Nuestro horario de atención es:\n\n"
             "Lunes a sábado: 9:00 a.m. a 7:45 p.m.\n"
-            "Domingos: 10:30 a.m. a 6:00 p.m.\n\n"
-            "Los horarios especiales por feriados "
-            "se confirman por separado."
+            "Domingos y feriados: 10:30 a.m. a 6:00 p.m."
         )
         return
 
@@ -1103,21 +1181,14 @@ def whatsapp_webhook(request):
                                 message_id
                             )
 
-                            # Mantener separación BOT/HUMANO
-
-                            if conversacion.modo == "BOT":
-
-                                responder_mensaje(
-                                    numero,
-                                    texto
-                                )
-
-                            else:
-
-                                print(
-                                    "Conversación en modo HUMANO. "
-                                    "El bot no responde."
-                                )
+                            # responder_mensaje() decide: si la conversación
+                            # está en modo HUMANO no responde (solo avisa), salvo
+                            # que la atención humana haya caducado o sea fuera
+                            # del horario de atención.
+                            responder_mensaje(
+                                numero,
+                                texto
+                            )
 
                         # ======================================
                         # 6. MENSAJE DE IMAGEN
@@ -1357,72 +1428,83 @@ def consultar_estado_ticket(numero, texto_ticket):
 
 @login_required
 def bandeja_whatsapp(request):
-    try:
-        mensajes = MensajeWhatsApp.objects.all().order_by("-creado")
+    """
+    Bandeja por páginas. Antes se leían todos los mensajes y se hacían
+    3 consultas por conversación (miles de consultas por carga).
+    Ahora se pide a la base solo la página visible.
+    """
+    from django.db.models import Count, Max, Q
+    from core.paginacion import paginar
 
-        grupos = {}
+    q = (request.GET.get("q") or "").strip()
 
-        for msg in mensajes:
-            try:
-                numero_normalizado = normalizar_numero(msg.numero)
-            except ValueError:
-                print("Número inválido ignorado en bandeja:", msg.numero)
-                continue
+    ultimos = (
+        MensajeWhatsApp.objects.values("numero")
+        .annotate(ultimo=Max("creado"))
+        .order_by("-ultimo")
+    )
 
-            if numero_normalizado not in grupos:
-                grupos[numero_normalizado] = msg
+    if q:
+        digitos = "".join(c for c in q if c.isdigit())
+        numeros_clientes = []
+        if not digitos:
+            numeros_clientes = [
+                "51" + t[-9:] for t in Cliente.objects.filter(nombre__icontains=q)
+                .exclude(telefono__isnull=True).values_list("telefono", flat=True)[:200]
+                if t and len("".join(c for c in t if c.isdigit())) >= 9
+            ]
+            ultimos = ultimos.filter(Q(numero__in=numeros_clientes) | Q(nombre__icontains=q))
+        else:
+            ultimos = ultimos.filter(numero__contains=digitos[-9:])
 
-        lista = []
+    pagina, filtros = paginar(request, ultimos, 30)
+    numeros = [r["numero"] for r in pagina]
 
-        for numero, ultimo_msg in grupos.items():
-            numero_sin_51 = numero[2:] if numero.startswith("51") else numero
+    no_leidos = dict(
+        MensajeWhatsApp.objects.filter(numero__in=numeros, tipo="ENTRANTE", leido=False)
+        .values("numero").annotate(n=Count("id")).values_list("numero", "n")
+    )
+    conversaciones = {c.numero: c for c in ConversacionWhatsApp.objects.filter(numero__in=numeros)}
+    clientes = {}
+    for c in Cliente.objects.filter(telefono__in=[n[2:] if n.startswith("51") else n for n in numeros]):
+        clientes.setdefault(c.telefono, c)
 
-            cliente = Cliente.objects.filter(
-                telefono=numero_sin_51
-            ).first()
-
-            conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-                numero=numero,
-                defaults={
-                    "modo": "BOT",
-                    "estado": "INICIO",
-                }
+    lista = []
+    for r in pagina:
+        numero = r["numero"]
+        ultimo_msg = (
+            MensajeWhatsApp.objects.filter(numero=numero).order_by("-creado", "-pk").first()
+        )
+        conversacion = conversaciones.get(numero)
+        if conversacion is None:
+            conversacion, _ = ConversacionWhatsApp.objects.get_or_create(
+                numero=numero, defaults={"modo": "BOT", "estado": "INICIO"}
             )
-
-            no_leidos = MensajeWhatsApp.objects.filter(
-                numero__in=[numero, numero_sin_51],
-                tipo="ENTRANTE",
-                leido=False
-            ).count()
-
-            nombre_mostrar = (
-                nombre_corto_cliente(cliente.nombre)
-                if cliente
-                else ultimo_msg.nombre if ultimo_msg and ultimo_msg.nombre
-                else "Cliente"
-            )
-
-            lista.append({
-                # El número completo solo se envía a la plantilla
-                # si el rol del usuario lo permite.
-                "numero_mostrar": numero_para_usuario(numero, request.user),
-                "conversacion_id": conversacion.id,
-                "nombre": nombre_mostrar,
-                "ultimo_mensaje": ultimo_msg.mensaje if ultimo_msg else "",
-                "ultimo": ultimo_msg.creado if ultimo_msg else None,
-                "modo": conversacion.modo,
-                "no_leidos": no_leidos,
-            })
-
-        return render(request, "whatsapp/bandeja.html", {
-            "conversaciones": lista
+        numero_sin_51 = numero[2:] if numero.startswith("51") else numero
+        cliente = clientes.get(numero_sin_51)
+        nombre_mostrar = (
+            nombre_corto_cliente(cliente.nombre) if cliente
+            else ultimo_msg.nombre if ultimo_msg and ultimo_msg.nombre
+            else "Cliente"
+        )
+        lista.append({
+            # El número completo solo se envía a la plantilla
+            # si el rol del usuario lo permite.
+            "numero_mostrar": numero_para_usuario(numero, request.user),
+            "conversacion_id": conversacion.id,
+            "nombre": nombre_mostrar,
+            "ultimo_mensaje": ultimo_msg.mensaje if ultimo_msg else "",
+            "ultimo": ultimo_msg.creado if ultimo_msg else None,
+            "modo": conversacion.modo,
+            "no_leidos": no_leidos.get(numero, 0),
         })
 
-    except Exception as e:
-        print("ERROR EN BANDEJA WHATSAPP:")
-        print(e)
-        traceback.print_exc()
-        raise
+    return render(request, "whatsapp/bandeja.html", {
+        "conversaciones": lista,
+        "pagina": pagina,
+        "filtros": filtros,
+        "q": q,
+    })
 
 # ============================================================
 # CHAT WHATSAPP
@@ -1608,6 +1690,7 @@ def chat_whatsapp(request, conversacion_id):
                         archivo=archivo,
                         wa_message_id=wa_message_id,
                         estado="ENVIADO",
+                        enviado_por=request.user,
                     )
 
                     print(
@@ -1651,6 +1734,7 @@ def chat_whatsapp(request, conversacion_id):
                     mensaje=texto,
                     wa_message_id=wa_message_id,
                     estado="ENVIADO",
+                    enviado_por=request.user,
                 )
 
                 print(

@@ -52,3 +52,18 @@ def numero_para_usuario(numero, user):
     if puede_ver_numero_completo(user):
         return numero
     return enmascarar_numero(numero)
+
+
+def enmascarar_para_ticket(numero):
+    """
+    Formato impreso en el ticket del cliente: 95****913
+    51959123913 -> 95****913 ; 959123913 -> 95****913
+    """
+    if not numero:
+        return ""
+    digitos = "".join(c for c in str(numero) if c.isdigit())
+    if len(digitos) == 11 and digitos.startswith("51"):
+        digitos = digitos[2:]
+    if len(digitos) < 6:
+        return "*" * len(digitos)
+    return digitos[:2] + "*" * (len(digitos) - 5) + digitos[-3:]

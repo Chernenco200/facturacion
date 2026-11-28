@@ -10,6 +10,8 @@ urlpatterns = [
     path("siguiente/", views.siguiente, name="siguiente"),
     path("tarea/<int:pk>/", views.tarea_detalle, name="tarea"),
     path("resultado/", views.resultado, name="resultado"),
+    path("asignada/<int:pk>/hecha/", views.asignada_hecha, name="asignada_hecha"),
+    path("esperando.json", views.esperando_json, name="esperando_json"),
     # Marcación (equipo de la tienda)
     path("marcar/", views.marcar, name="marcar"),
     # Gerencia
@@ -18,6 +20,7 @@ urlpatterns = [
     path("gerencia/trabajador/<int:trabajador_id>/", views.panel_de, name="panel_de"),
     path("revision/", views.revision, name="revision"),
     path("examen/", views.examen, name="examen"),
+    path("asignar/", views.asignar, name="asignar"),
     path("configuracion/", views.configuracion, name="configuracion"),
     path("turnos/", views.turnos, name="turnos"),
     path("asistencia/", views.asistencia, name="asistencia"),
